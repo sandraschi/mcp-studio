@@ -1,0 +1,10 @@
+-e .[dev]
+pytest
+pytest-asyncio
+black
+isort
+mypy
+pylint
+pytest-cov
+pre-commit
+codecov
