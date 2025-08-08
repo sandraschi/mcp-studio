@@ -1,0 +1,23 @@
+{
+  "id": "1",
+  "username": "testuser",
+  "email": "test@example.com",
+  "firstName": "Test",
+  "lastName": "User",
+  "role": "user",
+  "permissions": [
+    "execution:read",
+    "execution:create",
+    "execution:cancel"
+  ],
+  "preferences": {
+    "theme": "light",
+    "timezone": "UTC",
+    "notifications": {
+      "email": true,
+      "push": true
+    }
+  },
+  "createdAt": "2023-01-01T00:00:00.000Z",
+  "updatedAt": "2023-01-01T00:00:00.000Z"
+}

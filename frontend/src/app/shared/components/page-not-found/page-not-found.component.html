@@ -1,0 +1,44 @@
+<div class="not-found-container">
+  <mat-card class="not-found-card">
+    <mat-card-header>
+      <div mat-card-avatar class="not-found-icon">
+        <i class="bi bi-exclamation-octagon-fill"></i>
+      </div>
+      <mat-card-title>404 - Page Not Found</mat-card-title>
+      <mat-card-subtitle>The requested page could not be found</mat-card-subtitle>
+    </mat-card-header>
+    
+    <mat-card-content>
+      <div class="text-center py-4">
+        <img 
+          src="assets/images/404-error.svg" 
+          alt="Page not found" 
+          class="not-found-image"
+          width="300"
+          height="300">
+        <p class="mt-4">
+          The page you are looking for might have been removed, had its name changed, 
+          or is temporarily unavailable.
+        </p>
+      </div>
+    </mat-card-content>
+    
+    <mat-card-actions class="d-flex justify-content-center">
+      <button 
+        mat-raised-button 
+        color="primary" 
+        routerLink="/dashboard"
+        class="me-2">
+        <i class="bi bi-house-door me-2"></i>
+        Go to Dashboard
+      </button>
+      <button 
+        mat-button 
+        routerLink="/"
+        class="ms-2">
+        <i class="bi bi-arrow-left me-2"></i>
+        Back to Home
+      </button>
+    </mat-card-actions>
+  </mat-card>
+</div>

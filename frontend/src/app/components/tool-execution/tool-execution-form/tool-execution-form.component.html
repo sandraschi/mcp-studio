@@ -1,0 +1,209 @@
+<div class="tool-execution-form">
+  <h2>{{ tool?.name || 'Tool Execution' }}</h2>
+  
+  <p *ngIf="tool?.description" class="tool-description">
+    {{ tool.description }}
+  </p>
+  
+  <form [formGroup]="executionForm" (ngSubmit)="onSubmit()" *ngIf="!isExecuting && !executionResult && !executionError">
+    <div class="form-fields">
+      <ng-container *ngIf="tool?.parameters">
+        <div class="form-group" *ngFor="let param of getParamsArray()">
+          <label [for]="param.name">
+            {{ param.name }}
+            <span class="required" *ngIf="param.required">*</span>
+            <span class="param-type">({{ param.type }})</span>
+          </label>
+          
+          <ng-container [ngSwitch]="getParamType(param)">
+            <!-- Text Input -->
+            <input *ngSwitchCase="'text'"
+                   [id]="param.name"
+                   type="text"
+                   [formControlName]="param.name"
+                   [placeholder]="param.description || param.name"
+                   [attr.aria-describedby]="param.name + '-help'"
+                   class="form-control">
+                   
+            <!-- Textarea -->
+            <textarea *ngSwitchCase="'textarea'"
+                     [id]="param.name"
+                     [formControlName]="param.name"
+                     [placeholder]="param.description || param.name"
+                     [attr.aria-describedby]="param.name + '-help'"
+                     class="form-control"
+                     rows="4">
+            </textarea>
+            
+            <!-- Number Input -->
+            <input *ngSwitchCase="'number'"
+                   [id]="param.name"
+                   type="number"
+                   [formControlName]="param.name"
+                   [placeholder]="param.description || param.name"
+                   [attr.aria-describedby]="param.name + '-help'"
+                   class="form-control">
+                   
+            <!-- Checkbox -->
+            <div *ngSwitchCase="'checkbox'" class="form-check">
+              <input type="checkbox"
+                     [id]="param.name"
+                     [formControlName]="param.name"
+                     class="form-check-input">
+              <label [for]="param.name" class="form-check-label">
+                {{ param.description || param.name }}
+              </label>
+            </div>
+            
+            <!-- Select Dropdown -->
+            <select *ngSwitchCase="'select'"
+                   [id]="param.name"
+                   [formControlName]="param.name"
+                   class="form-select">
+              <option *ngFor="let option of getEnumOptions(param)" [value]="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+            
+            <!-- Date/Time Inputs -->
+            <input *ngSwitchCase="'date'"
+                   [id]="param.name"
+                   type="date"
+                   [formControlName]="param.name"
+                   class="form-control">
+                   
+            <input *ngSwitchCase="'datetime-local'"
+                   [id]="param.name"
+                   type="datetime-local"
+                   [formControlName]="param.name"
+                   class="form-control">
+                   
+            <input *ngSwitchCase="'time'"
+                   [id]="param.name"
+                   type="time"
+                   [formControlName]="param.name"
+                   class="form-control">
+                   
+            <!-- Email, URL, Password -->
+            <input *ngSwitchCase="'email'"
+                   [id]="param.name"
+                   type="email"
+                   [formControlName]="param.name"
+                   [placeholder]="param.description || 'Enter email address'"
+                   class="form-control">
+                   
+            <input *ngSwitchCase="'url'"
+                   [id]="param.name"
+                   type="url"
+                   [formControlName]="param.name"
+                   [placeholder]="param.description || 'Enter URL'"
+                   class="form-control">
+                   
+            <input *ngSwitchCase="'password'"
+                   [id]="param.name"
+                   type="password"
+                   [formControlName]="param.name"
+                   [placeholder]="param.description || 'Enter password'"
+                   class="form-control">
+                   
+            <!-- File Input -->
+            <input *ngSwitchCase="'file'"
+                   [id]="param.name"
+                   type="file"
+                   (change)="onFileChange($event, param.name)"
+                   class="form-control">
+          </ng-container>
+          
+          <!-- Parameter Description -->
+          <small *ngIf="param.description" [id]="param.name + '-help'" class="form-text text-muted">
+            {{ param.description }}
+          </small>
+          
+          <!-- Validation Errors -->
+          <div *ngIf="executionForm.get(param.name)?.invalid && executionForm.get(param.name)?.touched" class="invalid-feedback d-block">
+            <div *ngIf="executionForm.get(param.name)?.errors?.['required']">
+              This field is required
+            </div>
+            <div *ngIf="executionForm.get(param.name)?.errors?.['email']">
+              Please enter a valid email address
+            </div>
+            <div *ngIf="executionForm.get(param.name)?.errors?.['pattern']">
+              Please enter a valid value
+            </div>
+          </div>
+        </div>
+      </ng-container>
+      
+      <div *ngIf="!tool?.parameters || Object.keys(tool.parameters).length === 0" class="alert alert-info">
+        This tool doesn't require any parameters.
+      </div>
+    </div>
+    
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary" [disabled]="executionForm.invalid">
+        <i class="bi bi-play-fill"></i> Execute
+      </button>
+      <button type="button" class="btn btn-outline-secondary" (click)="resetForm()">
+        <i class="bi bi-arrow-counterclockwise"></i> Reset
+      </button>
+    </div>
+  </form>
+  
+  <!-- Execution Progress -->
+  <div *ngIf="showProgress" class="execution-progress">
+    <div class="progress mb-3">
+      <div class="progress-bar progress-bar-striped progress-bar-animated"
+           role="progressbar"
+           [style.width.%]="executionProgress"
+           [attr.aria-valuenow]="executionProgress"
+           aria-valuemin="0"
+           aria-valuemax="100">
+        {{ executionProgress }}%
+      </div>
+    </div>
+    
+    <div class="status-message" [ngClass]="{
+      'text-info': executionStatus === 'pending' || executionStatus === 'running',
+      'text-success': executionStatus === 'completed',
+      'text-danger': executionStatus === 'failed'
+    }">
+      <i *ngIf="executionStatus === 'pending'" class="bi bi-hourglass-split"></i>
+      <i *ngIf="executionStatus === 'running'" class="bi bi-arrow-repeat spin"></i>
+      <i *ngIf="executionStatus === 'completed'" class="bi bi-check-circle"></i>
+      <i *ngIf="executionStatus === 'failed'" class="bi bi-exclamation-circle"></i>
+      
+      <span class="ms-2">
+        {{ executionMessage || (executionStatus | titlecase) }}
+        <span *ngIf="executionId" class="text-muted small d-block">
+          Execution ID: {{ executionId }}
+        </span>
+      </span>
+    </div>
+    
+    <!-- Execution Result -->
+    <div *ngIf="executionResult" class="execution-result mt-4">
+      <h5>Result</h5>
+      <div class="result-content">
+        <pre *ngIf="isObjectOrArray(executionResult)">{{ executionResult | json }}</pre>
+        <div *ngIf="!isObjectOrArray(executionResult)">{{ executionResult }}</div>
+      </div>
+    </div>
+    
+    <!-- Execution Error -->
+    <div *ngIf="executionError" class="execution-error mt-4">
+      <div class="alert alert-danger">
+        <h5 class="alert-heading">Error</h5>
+        <p>{{ executionError }}</p>
+      </div>
+    </div>
+    
+    <div class="execution-actions mt-4">
+      <button type="button" class="btn btn-primary" (click)="resetForm()">
+        <i class="bi bi-arrow-left"></i> Back to Form
+      </button>
+      <button *ngIf="executionResult" type="button" class="btn btn-outline-secondary ms-2" (click)="downloadResult()">
+        <i class="bi bi-download"></i> Download Result
+      </button>
+    </div>
+  </div>
+</div>
