@@ -1,0 +1,444 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - MCP Studio{% endblock %}
+
+{% block content %}
+<div x-data="dashboard()" x-init="init()" class="space-y-6">
+    <!-- Page header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Welcome back! Here's what's happening with your MCP servers.
+            </p>
+        </div>
+        <div class="mt-4 flex space-x-3 md:mt-0">
+            <a href="/servers/new" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <i class="fas fa-plus mr-2"></i>
+                Add Server
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <!-- Total Servers -->
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 bg-primary-500 rounded-md p-3">
+                        <i class="fas fa-server text-white text-xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                Total Servers
+                            </dt>
+                            <dd>
+                                <div class="text-lg font-medium text-gray-900 dark:text-white" x-text="stats.total_servers">0</div>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700 px-5 py-3">
+                <div class="text-sm">
+                    <a href="/servers" class="font-medium text-primary-700 hover:text-primary-900 dark:text-primary-500 dark:hover:text-primary-400">
+                        View all
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Online Servers -->
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 bg-green-500 rounded-md p-3">
+                        <i class="fas fa-check-circle text-white text-xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                Online Servers
+                            </dt>
+                            <dd>
+                                <div class="text-lg font-medium text-gray-900 dark:text-white" x-text="stats.online_servers">0</div>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700 px-5 py-3">
+                <div class="text-sm">
+                    <a href="/servers?status=online" class="font-medium text-green-700 hover:text-green-900 dark:text-green-500 dark:hover:text-green-400">
+                        View online
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Tools -->
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 bg-yellow-500 rounded-md p-3">
+                        <i class="fas fa-tools text-white text-xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                Available Tools
+                            </dt>
+                            <dd>
+                                <div class="text-lg font-medium text-gray-900 dark:text-white" x-text="stats.total_tools">0</div>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700 px-5 py-3">
+                <div class="text-sm">
+                    <a href="/tools" class="font-medium text-yellow-700 hover:text-yellow-900 dark:text-yellow-500 dark:hover:text-yellow-400">
+                        Browse tools
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Executions -->
+        <div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+            <div class="p-5">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 bg-purple-500 rounded-md p-3">
+                        <i class="fas fa-history text-white text-xl"></i>
+                    </div>
+                    <div class="ml-5 w-0 flex-1">
+                        <dl>
+                            <dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
+                                Recent Executions
+                            </dt>
+                            <dd>
+                                <div class="text-lg font-medium text-gray-900 dark:text-white" x-text="stats.recent_executions">0</div>
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-700 px-5 py-3">
+                <div class="text-sm">
+                    <a href="/activity" class="font-medium text-purple-700 hover:text-purple-900 dark:text-purple-500 dark:hover:text-purple-400">
+                        View activity
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Recent Activity -->
+        <div class="lg:col-span-2">
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">Recent Activity</h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">The most recent executions across all servers</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 overflow-hidden">
+                    <div x-show="activities.length === 0" class="p-6 text-center text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-inbox text-4xl mb-2 opacity-50"></i>
+                        <p>No recent activity</p>
+                    </div>
+                    <ul x-show="activities.length > 0" class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-for="(activity, index) in activities" :key="index">
+                            <li class="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                                        <i :class="getActivityIcon(activity.type)" class="text-primary-500"></i>
+                                    </div>
+                                    <div class="ml-4">
+                                        <p class="text-sm font-medium text-gray-900 dark:text-white" x-text="activity.title"></p>
+                                        <p class="text-sm text-gray-500 dark:text-gray-400" x-text="activity.description"></p>
+                                    </div>
+                                    <div class="ml-auto text-right">
+                                        <p class="text-xs text-gray-500 dark:text-gray-400" x-text="formatTimeAgo(activity.timestamp)"></p>
+                                        <span :class="getStatusBadgeClass(activity.status)" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium">
+                                            <span x-text="activity.status"></span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-700 px-6 py-3 flex justify-end">
+                    <a href="/activity" class="text-sm font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300">
+                        View all activity
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Server Status -->
+        <div>
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">Server Status</h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Status of your MCP servers</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 overflow-hidden">
+                    <div x-show="servers.length === 0" class="p-6 text-center text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-server text-4xl mb-2 opacity-50"></i>
+                        <p>No servers found</p>
+                        <a href="/servers/new" class="mt-2 inline-flex items-center text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300 text-sm font-medium">
+                            Add your first server
+                        </a>
+                    </div>
+                    <ul x-show="servers.length > 0" class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-for="(server, index) in servers" :key="server.id">
+                            <li class="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0">
+                                        <span :class="getServerStatusBadgeClass(server.status)" class="h-2.5 w-2.5 rounded-full"></span>
+                                    </div>
+                                    <div class="ml-3">
+                                        <a :href="`/servers/${server.id}`" class="text-sm font-medium text-gray-900 hover:text-primary-600 dark:text-white dark:hover:text-primary-400" x-text="server.name"></a>
+                                        <p class="text-sm text-gray-500 dark:text-gray-400" x-text="server.type"></p>
+                                    </div>
+                                    <div class="ml-auto">
+                                        <span class="text-xs text-gray-500 dark:text-gray-400" x-text="`${server.tools} tools`"></span>
+                                    </div>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-700 px-6 py-3 flex justify-between items-center">
+                    <span class="text-xs text-gray-500 dark:text-gray-400" x-text="`${servers.filter(s => s.status === 'online').length} of ${servers.length} servers online`"></span>
+                    <a href="/servers" class="text-sm font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300">
+                        Manage servers
+                    </a>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="mt-6 bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">Quick Actions</h3>
+                </div>
+                <div class="p-4 space-y-3">
+                    <a href="/tools/execute" class="group flex items-center p-3 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        <div class="flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 group-hover:bg-blue-200 dark:group-hover:bg-blue-800 transition-colors">
+                            <i class="fas fa-play"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-900 dark:text-white">Execute a Tool</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Run a tool from any connected server</p>
+                        </div>
+                    </a>
+                    <a href="/templates/new" class="group flex items-center p-3 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        <div class="flex-shrink-0 h-10 w-10 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center text-green-600 dark:text-green-300 group-hover:bg-green-200 dark:group-hover:bg-green-800 transition-colors">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-900 dark:text-white">Create Template</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Save a tool configuration as a template</p>
+                        </div>
+                    </a>
+                    <a href="/settings/integrations" class="group flex items-center p-3 rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                        <div class="flex-shrink-0 h-10 w-10 rounded-full bg-purple-100 dark:bg-purple-900 flex items-center justify-center text-purple-600 dark:text-purple-300 group-hover:bg-purple-200 dark:group-hover:bg-purple-800 transition-colors">
+                            <i class="fas fa-plug"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-900 dark:text-white">Add Integration</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Connect to external services</p>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function dashboard() {
+    return {
+        loading: true,
+        stats: {
+            total_servers: 0,
+            online_servers: 0,
+            total_tools: 0,
+            recent_executions: 0
+        },
+        servers: [],
+        activities: [],
+        
+        async init() {
+            // Simulate loading data from API
+            await this.loadDashboardData();
+            
+            // Set up polling for real-time updates
+            this.pollingInterval = setInterval(() => {
+                this.loadDashboardData();
+            }, 30000); // Poll every 30 seconds
+            
+            // Clean up on component destroy
+            this.$el.addEventListener('alpine:initialized', () => {
+                this.$watch('$store.sidebarOpen', (value) => {
+                    // Handle sidebar state if needed
+                });
+            });
+        },
+        
+        async loadDashboardData() {
+            try {
+                // In a real app, these would be API calls
+                // For now, we'll use mock data
+                await this.loadStats();
+                await this.loadServers();
+                await this.loadRecentActivity();
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        async loadStats() {
+            // Simulate API call
+            await new Promise(resolve => setTimeout(resolve, 300));
+            
+            this.stats = {
+                total_servers: 5,
+                online_servers: 3,
+                total_tools: 24,
+                recent_executions: 12
+            };
+        },
+        
+        async loadServers() {
+            // Simulate API call
+            await new Promise(resolve => setTimeout(resolve, 400));
+            
+            this.servers = [
+                { id: '1', name: 'Local MCP Server', type: 'Local', status: 'online', tools: 8 },
+                { id: '2', name: 'Production API', type: 'Remote', status: 'online', tools: 12 },
+                { id: '3', name: 'Staging', type: 'Docker', status: 'offline', tools: 4 },
+                { id: '4', name: 'Legacy System', type: 'SSH', status: 'error', tools: 0 },
+                { id: '5', name: 'Development', type: 'Local', status: 'online', tools: 8 }
+            ];
+        },
+        
+        async loadRecentActivity() {
+            // Simulate API call
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            const now = new Date();
+            const oneHourAgo = new Date(now.getTime() - 3600000);
+            
+            this.activities = [
+                {
+                    id: '1',
+                    type: 'tool_execution',
+                    title: 'Tool executed: fetch_data',
+                    description: 'Executed on Production API',
+                    status: 'success',
+                    timestamp: new Date(now.getTime() - 5 * 60000) // 5 minutes ago
+                },
+                {
+                    id: '2',
+                    type: 'server_connection',
+                    title: 'Server connected',
+                    description: 'Local MCP Server connected',
+                    status: 'info',
+                    timestamp: new Date(now.getTime() - 15 * 60000) // 15 minutes ago
+                },
+                {
+                    id: '3',
+                    type: 'tool_execution',
+                    title: 'Tool failed: process_data',
+                    description: 'Error: Connection timeout',
+                    status: 'error',
+                    timestamp: new Date(now.getTime() - 45 * 60000) // 45 minutes ago
+                },
+                {
+                    id: '4',
+                    type: 'server_disconnected',
+                    title: 'Server disconnected',
+                    description: 'Staging server lost connection',
+                    status: 'warning',
+                    timestamp: oneHourAgo
+                }
+            ];
+        },
+        
+        getActivityIcon(type) {
+            const icons = {
+                'tool_execution': 'fas fa-play',
+                'server_connection': 'fas fa-link',
+                'server_disconnected': 'fas fa-unlink',
+                'error': 'fas fa-exclamation-circle',
+                'warning': 'fas fa-exclamation-triangle',
+                'info': 'fas fa-info-circle',
+                'success': 'fas fa-check-circle'
+            };
+            
+            return icons[type] || 'fas fa-circle';
+        },
+        
+        getStatusBadgeClass(status) {
+            const classes = {
+                'success': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+                'error': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+                'warning': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+                'info': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+                'pending': 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+            };
+            
+            return classes[status.toLowerCase()] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+        },
+        
+        getServerStatusBadgeClass(status) {
+            const classes = {
+                'online': 'bg-green-400',
+                'offline': 'bg-gray-400',
+                'error': 'bg-red-500',
+                'starting': 'bg-yellow-400',
+                'stopping': 'bg-yellow-400',
+                'unknown': 'bg-gray-400'
+            };
+            
+            return classes[status.toLowerCase()] || 'bg-gray-400';
+        },
+        
+        formatTimeAgo(timestamp) {
+            const now = new Date();
+            const diffInSeconds = Math.floor((now - new Date(timestamp)) / 1000);
+            
+            if (diffInSeconds < 60) {
+                return 'Just now';
+            }
+            
+            const diffInMinutes = Math.floor(diffInSeconds / 60);
+            if (diffInMinutes < 60) {
+                return `${diffInMinutes} ${diffInMinutes === 1 ? 'minute' : 'minutes'} ago`;
+            }
+            
+            const diffInHours = Math.floor(diffInMinutes / 60);
+            if (diffInHours < 24) {
+                return `${diffInHours} ${diffInHours === 1 ? 'hour' : 'hours'} ago`;
+            }
+            
+            const diffInDays = Math.floor(diffInHours / 24);
+            return `${diffInDays} ${diffInDays === 1 ? 'day' : 'days'} ago`;
+        },
+        
+        // Clean up on component destroy
+        destroy() {
+            if (this.pollingInterval) {
+                clearInterval(this.pollingInterval);
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

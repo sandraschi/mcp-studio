@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}Servers - MCP Studio{% endblock %}
+
+{% block content %}
+<div x-data="serversList()" x-init="init()" class="space-y-6">
+    <!-- Page header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">MCP Servers</h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Manage your MCP servers and monitor their status
+            </p>
+        </div>
+        <div class="mt-4 flex space-x-3 md:mt-0">
+            <button @click="showAddServerModal = true" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <i class="fas fa-plus mr-2"></i>
+                Add Server
+            </button>
+        </div>
+    </div>
+
+    <!-- Server List -->
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+            <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">MCP Servers</h3>
+            <div class="flex items-center">
+                <div class="relative">
+                    <input 
+                        type="text" 
+                        class="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                        placeholder="Search servers..."
+                        x-model="searchQuery"
+                        @input="filterServers()"
+                    >
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i class="fas fa-search text-gray-400"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 overflow-hidden">
+            <div x-show="servers.length === 0" class="p-6 text-center text-gray-500 dark:text-gray-400">
+                <i class="fas fa-server text-4xl mb-2 opacity-50"></i>
+                <p>No servers found</p>
+                <button 
+                    @click="showAddServerModal = true" 
+                    class="mt-2 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                >
+                    <i class="fas fa-plus mr-2"></i>
+                    Add your first server
+                </button>
+            </div>
+            
+            <ul x-show="servers.length > 0" class="divide-y divide-gray-200 dark:divide-gray-700">
+                <template x-for="server in filteredServers" :key="server.id">
+                    <li class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <a :href="`/servers/${server.id}`" class="block">
+                            <div class="px-4 py-4 sm:px-6">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0">
+                                            <span 
+                                                class="h-3 w-3 rounded-full flex items-center justify-center"
+                                                :class="{
+                                                    'bg-green-400': server.status === 'online',
+                                                    'bg-red-500': server.status === 'error',
+                                                    'bg-gray-400': server.status === 'offline',
+                                                    'bg-yellow-400': server.status === 'starting' || server.status === 'stopping',
+                                                }"
+                                                :title="server.status.charAt(0).toUpperCase() + server.status.slice(1)"
+                                            ></span>
+                                        </div>
+                                        <div class="ml-4">
+                                            <div class="text-sm font-medium text-primary-600 dark:text-primary-400 truncate" x-text="server.name"></div>
+                                            <div class="text-sm text-gray-500 dark:text-gray-400" x-text="server.type"></div>
+                                        </div>
+                                    </div>
+                                    <div class="ml-2 flex-shrink-0 flex">
+                                        <div class="text-sm text-gray-500 dark:text-gray-400 mr-4">
+                                            <span x-text="`${server.tools} tools`"></span>
+                                        </div>
+                                        <div class="text-sm text-gray-500 dark:text-gray-400">
+                                            <span x-text="formatTimeAgo(server.last_seen)"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    </li>
+                </template>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+function serversList() {
+    return {
+        loading: true,
+        searchQuery: '',
+        showAddServerModal: false,
+        servers: [],
+        filteredServers: [],
+        
+        async init() {
+            await this.loadServers();
+            this.loading = false;
+        },
+        
+        async loadServers() {
+            try {
+                // Simulate API call
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Mock data
+                this.servers = [
+                    { 
+                        id: '1', 
+                        name: 'Local MCP Server', 
+                        type: 'Local', 
+                        status: 'online', 
+                        tools: 8, 
+                        last_seen: new Date()
+                    },
+                    { 
+                        id: '2', 
+                        name: 'Production API', 
+                        type: 'Remote', 
+                        status: 'online', 
+                        tools: 12, 
+                        last_seen: new Date(Date.now() - 5 * 60 * 1000)
+                    },
+                    { 
+                        id: '3', 
+                        name: 'Staging', 
+                        type: 'Docker', 
+                        status: 'offline', 
+                        tools: 4, 
+                        last_seen: new Date(Date.now() - 24 * 60 * 60 * 1000)
+                    }
+                ];
+                
+                this.filterServers();
+                
+            } catch (error) {
+                console.error('Error loading servers:', error);
+                this.showNotification('Failed to load servers', 'error');
+            }
+        },
+        
+        filterServers() {
+            if (!this.searchQuery) {
+                this.filteredServers = [...this.servers];
+                return;
+            }
+            
+            const query = this.searchQuery.toLowerCase();
+            this.filteredServers = this.servers.filter(server => 
+                server.name.toLowerCase().includes(query) ||
+                server.type.toLowerCase().includes(query) ||
+                server.status.toLowerCase().includes(query)
+            );
+        },
+        
+        formatTimeAgo(timestamp) {
+            const now = new Date();
+            const diffInSeconds = Math.floor((now - new Date(timestamp)) / 1000);
+            
+            if (diffInSeconds < 60) {
+                return 'Just now';
+            }
+            
+            const diffInMinutes = Math.floor(diffInSeconds / 60);
+            if (diffInMinutes < 60) {
+                return `${diffInMinutes} ${diffInMinutes === 1 ? 'minute' : 'minutes'} ago`;
+            }
+            
+            const diffInHours = Math.floor(diffInMinutes / 60);
+            if (diffInHours < 24) {
+                return `${diffInHours} ${diffInHours === 1 ? 'hour' : 'hours'} ago`;
+            }
+            
+            const diffInDays = Math.floor(diffInHours / 24);
+            return `${diffInDays} ${diffInDays === 1 ? 'day' : 'days'} ago`;
+        },
+        
+        showNotification(message, type = 'info') {
+            // Implement notification system
+            console.log(`[${type}] ${message}`);
+        }
+    };
+}
+</script>
+{% endblock %}
