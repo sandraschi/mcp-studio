@@ -1,28 +1,13 @@
 """Pydantic models for MCP-related data structures."""
 
 from datetime import datetime
-from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, HttpUrl, validator
 
-class ServerStatus(str, Enum):
-    """Status of an MCP server."""
-    ONLINE = "online"
-    OFFLINE = "offline"
-    ERROR = "error"
-    STARTING = "starting"
-    STOPPING = "stopping"
+from ..core.enums import ParameterType, ServerStatus
 
-class ParameterType(str, Enum):
-    """Supported parameter types for MCP tools."""
-    STRING = "string"
-    INTEGER = "integer"
-    NUMBER = "number"
-    BOOLEAN = "boolean"
-    ARRAY = "array"
-    OBJECT = "object"
-    FILE = "file"
+# ServerStatus and ParameterType enums moved to core.enums
 
 class MCPToolParameter(BaseModel):
     """Parameter definition for an MCP tool."""

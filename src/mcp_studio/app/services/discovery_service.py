@@ -1,4 +1,4 @@
-""MCP server discovery service."""
+"""MCP server discovery service."""
 
 import asyncio
 import importlib
@@ -12,15 +12,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import aiohttp
-import structlog
 from fastapi import HTTPException
 from fastmcp import FastMCP, MCPClient
 from pydantic import AnyHttpUrl, ValidationError
 
 from ..core.config import settings
+from ..core.logging_utils import get_logger
 from ..models.mcp import MCPServer, MCPTool, MCPToolParameter, ServerStatus
 
-logger = structlog.get_logger(__name__)
+logger = get_logger(__name__)
 
 # In-memory cache of discovered MCP servers
 discovered_servers: Dict[str, MCPServer] = {}
@@ -119,62 +119,103 @@ async def _discover_server(server_path: Path, server_type: str) -> None:
             discovering_servers.discard(server_id)
 
 async def _discover_python_server(server_path: Path) -> None:
-    """Discover a Python-based MCP server."""
+    """Discover a Python-based MCP server by launching it and connecting via stdio."""
+    server_id = f"python:{server_path}"
+    
     try:
-        # Import the module
-        module_name = server_path.stem
-        if server_path.parent.is_dir():
-            sys.path.insert(0, str(server_path.parent))
-            
-        spec = importlib.util.spec_from_file_location(module_name, str(server_path))
-        if spec is None or spec.loader is None:
-            logger.warning("Could not load Python module", path=str(server_path))
-            return
-            
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
-        spec.loader.exec_module(module)
+        # Skip if already registered and recently checked
+        if server_id in discovered_servers:
+            server = discovered_servers[server_id]
+            if (datetime.utcnow() - server.last_seen).total_seconds() < 300:  # 5 minutes
+                return
         
-        # Find the FastMCP instance
-        mcp = None
-        for name, obj in inspect.getmembers(module):
-            if isinstance(obj, FastMCP):
-                mcp = obj
-                break
+        # Launch the server process
+        process = await asyncio.create_subprocess_exec(
+            sys.executable, str(server_path),
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
         
-        if mcp is None:
-            logger.warning("No FastMCP instance found in module", module=module_name)
-            return
-        
-        # Create server info
+        # Create MCP server model
         server = MCPServer(
-            id=f"python:{server_path}",
-            name=getattr(mcp, "name", module_name),
-            version=getattr(mcp, "version", "0.1.0"),
-            description=getattr(mcp, "description", ""),
+            id=server_id,
+            name=f"Python Server: {server_path.name}",
             path=str(server_path),
-            type="python",
-            status=ServerStatus.ONLINE,
-            tools=[],
+            args=[],
+            cwd=str(server_path.parent),
+            env=os.environ.copy(),
+            status=ServerStatus.STARTING,
+            metadata={
+                "type": "python",
+                "path": str(server_path),
+                "discovered_at": datetime.utcnow().isoformat(),
+                "last_seen": datetime.utcnow().isoformat()
+            }
         )
         
-        # Extract tools
-        for tool_name, tool_func in mcp._tools.items():
-            tool = _extract_tool_info(tool_name, tool_func)
-            if tool:
-                server.tools.append(tool)
+        # Get transport and connect
+        transport = await transport_manager.get_transport(server)
+        if not transport:
+            logger.error("Failed to get transport for server", server_id=server_id)
+            return
+            
+        connected = await transport.connect()
+        if not connected:
+            logger.error("Failed to connect to server", server_id=server_id)
+            return
         
-        # Register the server
-        discovered_servers[server.id] = server
-        logger.info("Discovered Python MCP server", server_id=server.id, tool_count=len(server.tools))
+        # Get server info via MCP protocol
+        try:
+            # List tools using MCP protocol
+            tools_response = await transport.execute_tool("list_tools", {})
+            if not tools_response or not tools_response.get("success"):
+                logger.error("Failed to list tools from server", server_id=server_id)
+                return
+                
+            tools_data = tools_response.get("result", {})
+            tools = []
+            
+            for tool_name, tool_info in tools_data.items():
+                tools.append(
+                    MCPTool(
+                        name=tool_name,
+                        description=tool_info.get("description", ""),
+                        parameters=[
+                            MCPToolParameter(
+                                name=param_name,
+                                type=param_info.get("type", "string"),
+                                description=param_info.get("description", ""),
+                                required=param_info.get("required", True),
+                                default=param_info.get("default"),
+                            )
+                            for param_name, param_info in tool_info.get("parameters", {}).items()
+                        ],
+                    )
+                )
+            
+            # Update server status and tools
+            server.status = ServerStatus.ONLINE
+            server.tools = tools
+            server.metadata.update({
+                "version": tools_response.get("version", "1.0.0"),
+                "last_seen": datetime.utcnow().isoformat()
+            })
+            
+            # Register the server
+            discovered_servers[server_id] = server
+            logger.info("Discovered MCP server", 
+                      server_id=server_id, 
+                      tools=len(tools),
+                      status=server.status.value)
         
-    except Exception as e:
-        logger.error(
-            "Error discovering Python MCP server",
-            path=str(server_path),
-            error=str(e),
-            exc_info=True,
-        )
+        except Exception as e:
+            logger.error(
+                "Error discovering Python MCP server",
+                path=str(server_path),
+                error=str(e),
+                exc_info=True,
+            )
     finally:
         # Clean up
         if server_path.parent.is_dir() and str(server_path.parent) in sys.path:

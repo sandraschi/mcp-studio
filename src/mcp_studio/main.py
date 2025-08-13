@@ -1,11 +1,10 @@
-""\nMCP Studio - Main application entry point.
+"""MCP Studio - Main application entry point.
 
 This module initializes and configures the FastAPI application for MCP Studio,
 including routing, middleware, and event handlers.
 """
 
 import asyncio
-import logging
 import signal
 import sys
 from contextlib import asynccontextmanager
@@ -14,7 +13,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import fastapi
 import fastapi.middleware.cors
-import structlog
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -22,14 +20,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .app.core.config import settings
-from .app.core.logging import configure_logging
+from .app.core.logging_utils import get_logger, configure_uvicorn_logging
 from .app.core.lifespan import lifespan
 from .app.api import router as api_router
 from .app.services import discovery_service, server_service
 
 # Configure logging
-configure_logging(level=settings.LOG_LEVEL, json_logs=settings.JSON_LOGS)
-logger = structlog.get_logger(__name__)
+configure_uvicorn_logging()
+logger = get_logger(__name__)
 
 # Create the FastAPI application
 app = FastAPI(

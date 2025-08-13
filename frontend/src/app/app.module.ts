@@ -26,6 +26,9 @@ import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 // NgBootstrap
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
@@ -33,9 +36,15 @@ import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 // Icons
 import { IconsModule } from './core/icons/icons.module';
 
+// Components
+import { ServerDashboardComponent } from './server-dashboard/server-dashboard.component';
+import { ServerDetailComponent } from './server-detail/server-detail.component';
+
 @NgModule({
   declarations: [
-    AppComponent
+    AppComponent,
+    ServerDashboardComponent,
+    ServerDetailComponent
   ],
   imports: [
     // Angular Modules
@@ -58,6 +67,9 @@ import { IconsModule } from './core/icons/icons.module';
     MatToolbarModule,
     MatIconModule,
     MatButtonModule,
+    MatCardModule,
+    MatProgressSpinnerModule,
+    MatTooltipModule,
     
     // NgBootstrap
     NgbModule,

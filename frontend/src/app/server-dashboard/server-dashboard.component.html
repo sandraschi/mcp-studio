@@ -1,0 +1,90 @@
+<div class="server-dashboard">
+  <div class="dashboard-header">
+    <h2>MCP Servers</h2>
+    <div class="actions">
+      <button mat-raised-button color="primary" (click)="refresh()" [disabled]="loading">
+        <mat-icon>refresh</mat-icon>
+        <span>Refresh</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading indicator -->
+  <div *ngIf="loading" class="loading-indicator">
+    <mat-spinner diameter="40"></mat-spinner>
+    <span>Loading servers...</span>
+  </div>
+
+  <!-- Error message -->
+  <div *ngIf="error" class="error-message">
+    <mat-icon color="warn">error_outline</mat-icon>
+    <span>{{ error }}</span>
+  </div>
+
+  <!-- No servers message -->
+  <div *ngIf="!loading && servers.length === 0" class="no-servers">
+    <mat-icon>info</mat-icon>
+    <span>No MCP servers found.</span>
+  </div>
+
+  <!-- Servers list -->
+  <div class="servers-grid">
+    <mat-card *ngFor="let server of servers" class="server-card" [routerLink]="['/servers', server.id]" routerLinkActive="active">
+      <mat-card-header>
+        <mat-card-title>
+          <i [class]="getTypeIcon(server.type)"></i>
+          {{ server.name || server.id }}
+        </mat-card-title>
+        <mat-card-subtitle>
+          <span class="server-id">ID: {{ server.id }}</span>
+          <span class="server-type">{{ getTypeDisplayName(server.type) }}</span>
+        </mat-card-subtitle>
+      </mat-card-header>
+      
+      <mat-card-content>
+        <div class="server-status">
+          <div class="status-indicator" [ngClass]="getStatusClass(server.status)"></div>
+          <span class="status-text">{{ server.status | titlecase }}</span>
+        </div>
+        
+        <div class="server-details">
+          <div class="detail">
+            <span class="detail-label">Command:</span>
+            <span class="detail-value">{{ server.command }} {{ server.args?.join(' ') }}</span>
+          </div>
+          <div class="detail" *ngIf="server.cwd">
+            <span class="detail-label">Working Directory:</span>
+            <span class="detail-value">{{ server.cwd }}</span>
+          </div>
+          <div class="detail" *ngIf="server.env?.length">
+            <span class="detail-label">Environment:</span>
+            <span class="detail-value">{{ server.env?.join(', ') }}</span>
+          </div>
+        </div>
+      </mat-card-content>
+      
+      <mat-card-actions align="end">
+        <button mat-button color="primary" 
+                *ngIf="server.status !== 'online'" 
+                (click)="startServer(server.id, $event)"
+                [disabled]="loading">
+          <mat-icon>play_arrow</mat-icon>
+          Start
+        </button>
+        <button mat-button color="warn" 
+                *ngIf="server.status === 'online'" 
+                (click)="stopServer(server.id, $event)"
+                [disabled]="loading">
+          <mat-icon>stop</mat-icon>
+          Stop
+        </button>
+        <button mat-button color="accent" 
+                [routerLink]="['/servers', server.id]" 
+                (click)="$event.stopPropagation()">
+          <mat-icon>open_in_new</mat-icon>
+          Details
+        </button>
+      </mat-card-actions>
+    </mat-card>
+  </div>
+</div>

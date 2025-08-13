@@ -1,20 +1,35 @@
-"""STDIO transport for MCP server communication."""
+"""STDIO transport for MCP server communication.
+
+This module implements a robust STDIO transport for communicating with MCP servers
+using JSON-RPC over standard input/output streams. It handles binary data, large
+responses, and connection management.
+"""
 
 import asyncio
 import json
-import logging
+import os
 import sys
-from asyncio import StreamReader, StreamWriter
-from typing import Any, AsyncGenerator, Callable, Dict, Optional, Tuple, Union
+import time
+import uuid
+from asyncio import StreamReader, StreamWriter, TimeoutError as AsyncTimeoutError
+from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Tuple, Union, cast
 
 import structlog
-from fastmcp import FastMCP, MCPClient
+from fastmcp import FastMCP, MCPClient, MCPError
 from pydantic import ValidationError
 
 from .config import settings
+from .enums import ServerStatus
+from .logging_utils import get_logger
 from ..models.mcp import MCPServer, ToolExecutionRequest, ToolExecutionResult
 
-logger = structlog.get_logger(__name__)
+logger = get_logger(__name__)
+
+# Maximum message size (1MB)
+MAX_MESSAGE_SIZE = 1024 * 1024
+
+# Message delimiter for JSON-RPC over stdio
+MESSAGE_DELIMITER = b"\n"
 
 class StdioTransport:
     """STDIO transport for MCP server communication."""
@@ -87,20 +102,46 @@ class StdioTransport:
             return False
     
     async def _read_stdout(self) -> None:
-        """Read data from the subprocess stdout and feed it to the reader."""
-        if self.process is None or self.process.stdout is None:
+        """Read data from the subprocess stdout and feed it to the reader.
+        
+        This method handles the low-level reading of data from the subprocess stdout
+        and feeds it to the StreamReader for processing. It handles connection resets
+        and other I/O errors gracefully.
+        """
+        if self.process is None or self.process.stdout is None or self.reader is None:
             return
             
+        buffer = bytearray()
         try:
             while True:
-                data = await self.process.stdout.read(4096)
-                if not data:
+                # Read data in chunks
+                chunk = await self.process.stdout.read(4096)
+                if not chunk:  # EOF
                     break
                     
-                if self.reader:
-                    self.reader.feed_data(data)
-        except ConnectionResetError:
-            pass  # Process was terminated
+                # Add to buffer and process complete messages
+                buffer.extend(chunk)
+                
+                # Process all complete messages in the buffer
+                while True:
+                    # Find message boundary
+                    message_end = buffer.find(MESSAGE_DELIMITER)
+                    if message_end == -1:
+                        # No complete message yet, keep reading
+                        if len(buffer) > MAX_MESSAGE_SIZE:
+                            raise RuntimeError("Message size exceeds maximum allowed size")
+                        break
+                        
+                    # Extract message
+                    message_bytes = buffer[:message_end]
+                    buffer = buffer[message_end + len(MESSAGE_DELIMITER):]
+                    
+                    # Feed complete message to reader
+                    self.reader.feed_data(message_bytes + MESSAGE_DELIMITER)
+        
+        except (ConnectionResetError, BrokenPipeError):
+            # Process was terminated or connection was reset
+            logger.debug("Connection to MCP server reset", server_id=self.server.id)
         except Exception as e:
             logger.error(
                 "Error reading from MCP server stdout",
@@ -109,6 +150,7 @@ class StdioTransport:
                 exc_info=True,
             )
         finally:
+            # Signal EOF to the reader
             if self.reader:
                 self.reader.feed_eof()
     
@@ -133,6 +175,9 @@ class StdioTransport:
     ) -> ToolExecutionResult:
         """Execute a tool on the MCP server.
         
+        This method sends a JSON-RPC request to the MCP server and waits for a response.
+        It handles timeouts, connection errors, and invalid responses.
+        
         Args:
             tool_name: Name of the tool to execute
             parameters: Parameters to pass to the tool
@@ -148,67 +193,165 @@ class StdioTransport:
         if not self._is_connected or self.client is None:
             raise RuntimeError("Not connected to MCP server")
         
+        start_time = time.monotonic()
+        request_id = str(uuid.uuid4())
+        
         try:
-            # Create execution request
-            request = ToolExecutionRequest(
+            # Log the request
+            logger.debug(
+                "Executing tool",
                 server_id=self.server.id,
                 tool_name=tool_name,
+                request_id=request_id,
                 parameters=parameters,
-                timeout=timeout,
             )
             
-            # Execute the tool
-            result = await asyncio.wait_for(
+            # Prepare JSON-RPC request
+            request = {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": tool_name,
+                "params": parameters or {},
+            }
+            
+            # Send request and wait for response
+            response = await asyncio.wait_for(
                 self.client.call(tool_name, **parameters),
                 timeout=timeout,
             )
             
-            return ToolExecutionResult(
-                success=True,
-                result=result,
-                execution_time=0.0,  # TODO: Measure actual execution time
+            # Calculate execution time
+            execution_time = time.monotonic() - start_time
+            
+            # Log successful execution
+            logger.debug(
+                "Tool execution completed",
+                server_id=self.server.id,
+                tool_name=tool_name,
+                request_id=request_id,
+                execution_time=f"{execution_time:.3f}s",
             )
             
-        except asyncio.TimeoutError:
-            raise TimeoutError(f"Tool execution timed out after {timeout} seconds")
-        except Exception as e:
+            return ToolExecutionResult(
+                success=True,
+                result=response,
+                execution_time=execution_time,
+            )
+            
+        except AsyncTimeoutError as e:
+            error_msg = f"Tool execution timed out after {timeout} seconds"
+            logger.warning(
+                error_msg,
+                server_id=self.server.id,
+                tool_name=tool_name,
+                request_id=request_id,
+            )
+            raise TimeoutError(error_msg) from e
+            
+        except MCPError as e:
+            error_msg = f"MCP error: {str(e)}"
+            logger.error(
+                error_msg,
+                server_id=self.server.id,
+                tool_name=tool_name,
+                request_id=request_id,
+                exc_info=True,
+            )
             return ToolExecutionResult(
                 success=False,
-                error=str(e),
-                execution_time=0.0,
+                error=error_msg,
+                execution_time=time.monotonic() - start_time,
+            )
+            
+        except Exception as e:
+            error_msg = f"Unexpected error: {str(e)}"
+            logger.error(
+                error_msg,
+                server_id=self.server.id,
+                tool_name=tool_name,
+                request_id=request_id,
+                exc_info=True,
+            )
+            return ToolExecutionResult(
+                success=False,
+                error=error_msg,
+                execution_time=time.monotonic() - start_time,
             )
     
     async def close(self) -> None:
-        """Close the connection to the MCP server."""
+        """Close the connection to the MCP server and clean up resources.
+        
+        This method ensures all resources are properly cleaned up, including:
+        - Closing the writer
+        - Terminating the subprocess
+        - Cleaning up references
+        """
+        self._is_connected = False
+        
+        # Close writer if it exists
         if self.writer:
-            self.writer.close()
             try:
-                await self.writer.wait_closed()
-            except Exception:
-                pass
-            
+                if not self.writer.is_closing():
+                    self.writer.close()
+                    try:
+                        await asyncio.wait_for(
+                            self.writer.wait_closed(),
+                            timeout=2.0
+                        )
+                    except (asyncio.TimeoutError, Exception) as e:
+                        logger.debug(
+                            "Timeout waiting for writer to close",
+                            server_id=self.server.id,
+                            error=str(e),
+                        )
+            except Exception as e:
+                logger.warning(
+                    "Error closing writer",
+                    server_id=self.server.id,
+                    error=str(e),
+                    exc_info=True,
+                )
+            finally:
+                self.writer = None
+        
+        # Terminate process if it exists
         if self.process:
             try:
-                self.process.terminate()
-                await asyncio.wait_for(self.process.wait(), timeout=5.0)
-            except (asyncio.TimeoutError, ProcessLookupError):
-                try:
-                    self.process.kill()
-                    await self.process.wait()
-                except (ProcessLookupError, asyncio.CancelledError):
-                    pass
+                # Try to terminate gracefully first
+                if self.process.returncode is None:
+                    self.process.terminate()
+                    
+                    try:
+                        # Wait for process to terminate
+                        await asyncio.wait_for(
+                            self.process.wait(),
+                            timeout=5.0
+                        )
+                    except asyncio.TimeoutError:
+                        # Force kill if it doesn't terminate in time
+                        if self.process.returncode is None:
+                            self.process.kill()
+                            await self.process.wait()
+                            
+            except ProcessLookupError:
+                # Process already terminated
+                pass
+                
             except Exception as e:
                 logger.warning(
                     "Error terminating MCP server process",
                     server_id=self.server.id,
                     error=str(e),
+                    exc_info=True,
                 )
+            finally:
+                self.process = None
         
-        self._is_connected = False
+        # Clean up remaining references
         self.reader = None
-        self.writer = None
-        self.process = None
         self.client = None
+        
+        logger.debug("Closed connection to MCP server", server_id=self.server.id)
 
 class StdioTransportManager:
     """Manager for STDIO transport connections to MCP servers."""

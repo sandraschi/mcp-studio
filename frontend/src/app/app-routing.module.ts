@@ -7,6 +7,8 @@ import { AuthGuard } from './core/guards/auth.guard';
 // Components
 import { LoginComponent } from './auth/login/login.component';
 import { PageNotFoundComponent } from './shared/components/page-not-found/page-not-found.component';
+import { ServerDashboardComponent } from './server-dashboard/server-dashboard.component';
+import { ServerDetailComponent } from './server-detail/server-detail.component';
 
 const routes: Routes = [
   {
@@ -24,6 +26,18 @@ const routes: Routes = [
     path: 'dashboard',
     loadChildren: () => import('./dashboard/dashboard.module').then(m => m.DashboardModule),
     canActivate: [AuthGuard]
+  },
+  {
+    path: 'servers',
+    component: ServerDashboardComponent,
+    canActivate: [AuthGuard],
+    data: { title: 'MCP Servers' }
+  },
+  {
+    path: 'servers/:id',
+    component: ServerDetailComponent,
+    canActivate: [AuthGuard],
+    data: { title: 'Server Details' }
   },
   {
     path: '**',

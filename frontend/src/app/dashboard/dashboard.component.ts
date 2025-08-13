@@ -19,7 +19,12 @@ import { CommonModule } from '@angular/common';
             <i class="bi bi-speedometer2 me-2"></i>
             <span>Execution Dashboard</span>
           </a>
-          <!-- Add more navigation items here -->
+          <a [routerLink]="['/servers']" 
+             [class.active]="isActive('/servers')"
+             class="sidenav-menu-item">
+            <i class="bi bi-server me-2"></i>
+            <span>MCP Servers</span>
+          </a>
         </nav>
       </div>
       

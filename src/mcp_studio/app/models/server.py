@@ -1,24 +1,11 @@
 """Data models for MCP servers."""
-from enum import Enum
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
-
-class ServerType(str, Enum):
-    """Types of MCP servers."""
-    PYTHON = "python"
-    DOCKER = "docker"
-    NODE = "node"
-    UNKNOWN = "unknown"
+from ..core.enums import ServerStatus, ServerType
 
 
-class ServerStatus(str, Enum):
-    """Status of an MCP server."""
-    ONLINE = "online"
-    OFFLINE = "offline"
-    STARTING = "starting"
-    STOPPING = "stopping"
-    ERROR = "error"
+# ServerType and ServerStatus enums moved to core.enums
 
 
 class ServerBase(BaseModel):
