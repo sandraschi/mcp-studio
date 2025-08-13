@@ -1,0 +1,48 @@
+{
+  "dxt_version": "0.1",
+  "name": "mcp-studio-frontend",
+  "version": "1.0.0",
+  "description": "MCP Studio Frontend - A modern React-based interface for MCP Studio",
+  "author": {
+    "name": "MCP Studio Team",
+    "email": "contact@mcp-studio.com"
+  },
+  "server": {
+    "type": "node",
+    "entry_point": "build/index.html",
+    "mcp_config": {
+      "command": "npx",
+      "args": ["serve", "-s", "build", "-l", "${user_config.port:3000}"],
+      "cwd": "mcp-studio-react",
+      "env": {
+        "NODE_ENV": "production",
+        "REACT_APP_API_URL": "${user_config.api_url}",
+        "GENERATE_SOURCEMAP": "false",
+        "INLINE_RUNTIME_CHUNK": "false"
+      }
+    }
+  },
+  "user_config": {
+    "port": {
+      "type": "number",
+      "default": 3000,
+      "description": "Port to run the frontend server on"
+    },
+    "api_url": {
+      "type": "string",
+      "description": "URL of the MCP Studio API server"
+    },
+    "public_url": {
+      "type": "string",
+      "description": "Public URL where the frontend will be accessible"
+    }
+  },
+  "dependencies": [
+    "node>=16.0.0",
+    "npm>=8.0.0"
+  ],
+  "prompts": {
+    "system": "prompts/system.md",
+    "user": "prompts/user.md"
+  }
+}
