@@ -1,564 +1,699 @@
 """
-MCP Tool Decorators
+Comprehensive tool decorators for MCP Studio with FastMCP 2.11 support.
 
-This module provides decorators for creating and enhancing MCP tools with features like
-structured logging, input validation, rate limiting, and more.
+This module provides decorators and utilities for creating MCP tools with proper
+multiline descriptions, parameter validation, error handling, and performance monitoring.
 """
+
+import asyncio
 import functools
 import inspect
 import json
 import logging
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Type, TypeVar, Union, cast
+import uuid
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, get_type_hints
+from enum import Enum
 
-from pydantic import BaseModel, ValidationError, create_model, validator
+import structlog
+from fastmcp import FastMCP
+from pydantic import BaseModel, Field, ValidationError, create_model
 
-# Type variables for generic type hints
+logger = structlog.get_logger(__name__)
+
+# Type variable for decorated functions
 F = TypeVar('F', bound=Callable[..., Any])
-T = TypeVar('T')
 
-# Configure structured logging
-logger = logging.getLogger("mcp.tools")
 
-@dataclass
-class ToolMetadata:
-    """Metadata for an MCP tool."""
-    name: str
-    description: str = ""
-    version: str = "1.0.0"
-    author: str = ""
-    tags: List[str] = field(default_factory=list)
-    input_schema: Optional[Type[BaseModel]] = None
-    output_schema: Optional[Type[BaseModel]] = None
-    rate_limit: Optional[int] = None
-    retry_attempts: int = 3
-    retry_delay: float = 1.0
-    timeout: Optional[float] = None
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert metadata to a dictionary."""
-        return {
-            "name": self.name,
-            "description": self.description,
-            "version": self.version,
-            "author": self.author,
-            "tags": self.tags,
-            "input_schema": self.input_schema.schema() if self.input_schema else None,
-            "output_schema": self.output_schema.schema() if self.output_schema else None,
-            "rate_limit": self.rate_limit,
-            "retry_attempts": self.retry_attempts,
-            "retry_delay": self.retry_delay,
-            "timeout": self.timeout
+class ToolCategory(str, Enum):
+    """Predefined tool categories for organization."""
+    DISCOVERY = "discovery"
+    UTILITY = "utility"
+    DEVELOPMENT = "development"
+    DATA = "data"
+    FILES = "files"
+    SERVER = "server"
+    MONITORING = "monitoring"
+    SECURITY = "security"
+    NETWORK = "network"
+    DATABASE = "database"
+
+
+class ToolMetadata(BaseModel):
+    """Enhanced metadata for MCP tools."""
+    name: str = Field(..., description="Tool name")
+    description: str = Field(..., description="Tool description")
+    category: ToolCategory = Field(ToolCategory.UTILITY, description="Tool category")
+    version: str = Field("1.0.0", description="Tool version")
+    author: Optional[str] = Field(None, description="Tool author")
+    tags: List[str] = Field(default_factory=list, description="Tool tags")
+    deprecated: bool = Field(False, description="Whether the tool is deprecated")
+    experimental: bool = Field(False, description="Whether the tool is experimental")
+    examples: List[Dict[str, Any]] = Field(default_factory=list, description="Usage examples")
+
+    # Performance metadata
+    estimated_runtime: Optional[str] = Field(None, description="Estimated runtime (e.g., '< 1s', '1-5s')")
+    requires_auth: bool = Field(False, description="Whether tool requires authentication")
+    rate_limited: bool = Field(False, description="Whether tool has rate limits")
+
+    # Internal tracking
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_modified: datetime = Field(default_factory=datetime.utcnow)
+    usage_count: int = Field(0, description="Number of times tool has been used")
+
+
+def clean_docstring(docstring: str) -> str:
+    """Clean and format a multiline docstring for tool descriptions.
+
+    Args:
+        docstring: Raw docstring to clean
+
+    Returns:
+        Cleaned and formatted description
+    """
+    if not docstring:
+        return ""
+
+    lines = docstring.strip().split('\n')
+
+    # Remove leading/trailing empty lines
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+
+    if not lines:
+        return ""
+
+    # Find minimum indentation (excluding first line)
+    min_indent = float('inf')
+    for line in lines[1:]:
+        if line.strip():  # Skip empty lines
+            indent = len(line) - len(line.lstrip())
+            min_indent = min(min_indent, indent)
+
+    # Remove common indentation
+    if min_indent != float('inf'):
+        for i in range(1, len(lines)):
+            if lines[i].strip():
+                lines[i] = lines[i][min_indent:]
+
+    return '\n'.join(lines)
+
+
+def extract_parameter_info(func: Callable) -> Dict[str, Any]:
+    """Extract parameter information from function signature and docstring.
+
+    Args:
+        func: Function to analyze
+
+    Returns:
+        Dictionary mapping parameter names to their schema information
+    """
+    sig = inspect.signature(func)
+    type_hints = get_type_hints(func)
+
+    parameters = {}
+
+    for param_name, param in sig.parameters.items():
+        # Skip 'self' parameter
+        if param_name == 'self':
+            continue
+
+        param_info = {
+            "type": "string",  # Default type
+            "required": param.default == inspect.Parameter.empty,
+            "description": f"Parameter: {param_name}"
         }
+
+        # Get type information
+        if param_name in type_hints:
+            type_hint = type_hints[param_name]
+            param_info["type"] = _python_type_to_json_schema_type(type_hint)
+
+        # Set default value if available
+        if param.default != inspect.Parameter.empty:
+            param_info["default"] = param.default
+
+        parameters[param_name] = param_info
+
+    return parameters
+
+
+def _python_type_to_json_schema_type(python_type) -> str:
+    """Convert Python type to JSON Schema type string.
+
+    Args:
+        python_type: Python type annotation
+
+    Returns:
+        JSON Schema type string
+    """
+    type_mapping = {
+        str: "string",
+        int: "integer",
+        float: "number",
+        bool: "boolean",
+        list: "array",
+        dict: "object",
+        List: "array",
+        Dict: "object",
+    }
+
+    # Handle Union types (like Optional)
+    if hasattr(python_type, '__origin__'):
+        if python_type.__origin__ is Union:
+            # For Optional[X], return the non-None type
+            non_none_types = [t for t in python_type.__args__ if t is not type(None)]
+            if non_none_types:
+                return _python_type_to_json_schema_type(non_none_types[0])
+        elif python_type.__origin__ in (list, List):
+            return "array"
+        elif python_type.__origin__ in (dict, Dict):
+            return "object"
+
+    return type_mapping.get(python_type, "string")
 
 
 def tool(
     name: Optional[str] = None,
-    description: str = "",
+    description: Optional[str] = None,
+    category: ToolCategory = ToolCategory.UTILITY,
     version: str = "1.0.0",
-    author: str = "",
+    author: Optional[str] = None,
     tags: Optional[List[str]] = None,
-    input_schema: Optional[Type[BaseModel]] = None,
-    output_schema: Optional[Type[BaseModel]] = None,
-    rate_limit: Optional[int] = None,
-    retry_attempts: int = 3,
-    retry_delay: float = 1.0,
-    timeout: Optional[float] = None
+    deprecated: bool = False,
+    experimental: bool = False,
+    examples: Optional[List[Dict[str, Any]]] = None,
+    estimated_runtime: Optional[str] = None,
+    requires_auth: bool = False,
+    rate_limited: bool = False,
 ) -> Callable[[F], F]:
-    """
-    Decorator to register a function as an MCP tool.
-    
+    """Enhanced tool decorator for MCP tools with comprehensive metadata.
+
+    This decorator provides:
+    - Automatic multiline docstring processing
+    - Parameter type inference from annotations
+    - Comprehensive metadata collection
+    - Performance tracking
+    - Error handling and logging
+
     Args:
         name: Tool name (defaults to function name)
-        description: Tool description
+        description: Tool description (defaults to cleaned docstring)
+        category: Tool category for organization
         version: Tool version
         author: Tool author
         tags: List of tags for categorization
-        input_schema: Pydantic model for input validation
-        output_schema: Pydantic model for output validation
-        rate_limit: Maximum calls per minute
-        retry_attempts: Number of retry attempts on failure
-        retry_delay: Delay between retries in seconds
-        timeout: Maximum execution time in seconds
+        deprecated: Whether the tool is deprecated
+        experimental: Whether the tool is experimental
+        examples: Usage examples
+        estimated_runtime: Estimated runtime description
+        requires_auth: Whether tool requires authentication
+        rate_limited: Whether tool has rate limits
+
+    Returns:
+        Decorated function with MCP tool metadata
+
+    Example:
+        ```python
+        @tool(
+            category=ToolCategory.UTILITY,
+            tags=["math", "calculation"],
+            examples=[{"input": {"a": 5, "b": 3}, "output": 8}],
+            estimated_runtime="< 1s"
+        )
+        def add_numbers(a: int, b: int) -> int:
+            '''Add two numbers together.
+
+            This is a simple utility function that performs
+            addition of two integer values.
+
+            Args:
+                a: First number to add
+                b: Second number to add
+
+            Returns:
+                Sum of the two numbers
+            '''
+            return a + b
+        ```
     """
     def decorator(func: F) -> F:
-        # Use function name if name not provided
-        tool_name = name or func.__name__
-        
-        # Create tool metadata
+        # Extract function information
+        func_name = name or func.__name__
+        func_description = description or clean_docstring(func.__doc__ or "")
+
+        # Create metadata
         metadata = ToolMetadata(
-            name=tool_name,
-            description=description or func.__doc__ or "",
+            name=func_name,
+            description=func_description,
+            category=category,
             version=version,
             author=author,
             tags=tags or [],
-            input_schema=input_schema,
-            output_schema=output_schema,
-            rate_limit=rate_limit,
-            retry_attempts=retry_attempts,
-            retry_delay=retry_delay,
-            timeout=timeout
+            deprecated=deprecated,
+            experimental=experimental,
+            examples=examples or [],
+            estimated_runtime=estimated_runtime,
+            requires_auth=requires_auth,
+            rate_limited=rate_limited,
         )
-        
-        # Store metadata in the function
-        setattr(func, "__mcp_metadata__", metadata)
-        
-        # Add structured logging
+
+        # Extract parameter information
+        parameters = extract_parameter_info(func)
+
+        # Store metadata on function
+        func._mcp_tool_metadata = metadata
+        func._mcp_tool_parameters = parameters
+        func._mcp_tool_name = func_name
+        func._mcp_is_tool = True
+
+        # Create wrapper for async functions
+        if asyncio.iscoroutinefunction(func):
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                return await _execute_tool_with_monitoring(func, metadata, *args, **kwargs)
+            return async_wrapper
+        else:
+            @functools.wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                return _execute_tool_with_monitoring(func, metadata, *args, **kwargs)
+            return sync_wrapper
+
+    return decorator
+
+
+def _execute_tool_with_monitoring(func: Callable, metadata: ToolMetadata, *args, **kwargs) -> Any:
+    """Execute a tool with performance monitoring and error handling.
+
+    Args:
+        func: Function to execute
+        metadata: Tool metadata
+        *args: Function arguments
+        **kwargs: Function keyword arguments
+
+    Returns:
+        Function result
+    """
+    start_time = time.time()
+    execution_id = str(uuid.uuid4())
+
+    logger.info(
+        "Tool execution started",
+        tool_name=metadata.name,
+        execution_id=execution_id,
+        category=metadata.category,
+        args_count=len(args),
+        kwargs_keys=list(kwargs.keys())
+    )
+
+    try:
+        # Execute function
+        if asyncio.iscoroutinefunction(func):
+            result = asyncio.run(func(*args, **kwargs))
+        else:
+            result = func(*args, **kwargs)
+
+        execution_time = time.time() - start_time
+
+        # Update usage count
+        metadata.usage_count += 1
+        metadata.last_modified = datetime.utcnow()
+
+        logger.info(
+            "Tool execution completed",
+            tool_name=metadata.name,
+            execution_id=execution_id,
+            execution_time=f"{execution_time:.3f}s",
+            success=True
+        )
+
+        return result
+
+    except Exception as e:
+        execution_time = time.time() - start_time
+
+        logger.error(
+            "Tool execution failed",
+            tool_name=metadata.name,
+            execution_id=execution_id,
+            execution_time=f"{execution_time:.3f}s",
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True
+        )
+
+        # Re-raise the exception
+        raise
+
+
+def structured_log(level: str = "info", message: Optional[str] = None):
+    """Decorator to add structured logging to tool functions.
+
+    Args:
+        level: Log level (debug, info, warning, error)
+        message: Custom log message (defaults to function name)
+
+    Example:
+        ```python
+        @structured_log(level="debug", message="Processing data file")
+        @tool()
+        def process_file(filename: str) -> str:
+            # Function implementation
+            pass
+        ```
+    """
+    def decorator(func: F) -> F:
+        log_message = message or f"Executing {func.__name__}"
+
         @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            # Log tool execution start
-            logger.info(
-                "tool_start",
-                extra={
-                    "tool": tool_name,
-                    "args": args,
-                    "kwargs": kwargs,
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                }
+        def wrapper(*args, **kwargs):
+            getattr(logger, level)(
+                log_message,
+                function=func.__name__,
+                args_count=len(args),
+                kwargs_keys=list(kwargs.keys())
             )
-            
-            start_time = time.monotonic()
-            result = None
-            exception = None
-            
-            try:
-                # Execute the tool
-                result = func(*args, **kwargs)
-                return result
-            except Exception as e:
-                exception = e
-                raise
-            finally:
-                # Calculate execution time
-                duration = time.monotonic() - start_time
-                
-                # Log tool completion or failure
-                log_data = {
-                    "tool": tool_name,
-                    "duration": duration,
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                }
-                
-                if exception:
-                    logger.error(
-                        "tool_error",
-                        extra={
-                            **log_data,
-                            "error": str(exception),
-                            "error_type": type(exception).__name__
-                        },
-                        exc_info=True
-                    )
-                else:
-                    logger.info(
-                        "tool_complete",
-                        extra={
-                            **log_data,
-                            "result": str(result)[:1000]  # Limit result size
-                        }
-                    )
-        
-        return cast(F, wrapper)
-    
+            return func(*args, **kwargs)
+
+        return wrapper
     return decorator
 
 
-def structured_log(
-    log_level: int = logging.INFO,
-    include_args: bool = True,
-    include_result: bool = True,
-    include_duration: bool = True
-) -> Callable[[F], F]:
-    """
-    Decorator to add structured logging to a function.
-    
+def validate_input(**field_validators):
+    """Decorator to add input validation to tool functions.
+
     Args:
-        log_level: Logging level (default: INFO)
-        include_args: Whether to log function arguments
-        include_result: Whether to log function result
-        include_duration: Whether to log execution duration
+        **field_validators: Field name to validator function mapping
+
+    Example:
+        ```python
+        @validate_input(
+            filename=lambda x: x.endswith('.txt'),
+            count=lambda x: x > 0
+        )
+        @tool()
+        def process_files(filename: str, count: int) -> str:
+            # Function implementation
+            pass
+        ```
     """
     def decorator(func: F) -> F:
         @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            # Get function information
-            func_name = func.__name__
-            module_name = func.__module__
-            
-            # Log function call start
-            log_data: Dict[str, Any] = {
-                "function": f"{module_name}.{func_name}",
-                "event": "function_start",
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
-            
-            if include_args:
-                # Get parameter names and values
-                sig = inspect.signature(func)
-                bound_args = sig.bind(*args, **kwargs)
-                bound_args.apply_defaults()
-                
-                # Convert arguments to a serializable format
-                serialized_args = {}
-                for name, value in bound_args.arguments.items():
-                    try:
-                        json.dumps(value)
-                        serialized_args[name] = value
-                    except (TypeError, OverflowError):
-                        serialized_args[name] = str(value)
-                
-                log_data["args"] = serialized_args
-            
-            logger.log(log_level, "function_call", extra=log_data)
-            
-            # Execute the function
-            start_time = time.monotonic()
-            exception = None
-            result = None
-            
-            try:
-                result = func(*args, **kwargs)
-                return result
-            except Exception as e:
-                exception = e
-                raise
-            finally:
-                # Log function completion
-                duration = time.monotonic() - start_time
-                
-                log_data = {
-                    "function": f"{module_name}.{func_name}",
-                    "event": "function_complete" if exception is None else "function_error",
-                    "duration": duration,
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                }
-                
-                if include_result and result is not None:
-                    try:
-                        log_data["result"] = result
-                    except (TypeError, OverflowError):
-                        log_data["result"] = str(result)
-                
-                if exception is not None:
-                    log_data["error"] = str(exception)
-                    log_data["error_type"] = type(exception).__name__
-                    logger.error("function_error", extra=log_data, exc_info=True)
-                else:
-                    logger.log(log_level, "function_complete", extra=log_data)
-        
-        return cast(F, wrapper)
-    
-    return decorator
-
-
-def validate_input(
-    input_model: Type[BaseModel],
-    exclude_unset: bool = False,
-    exclude_defaults: bool = False,
-    exclude_none: bool = False
-) -> Callable[[F], F]:
-    """
-    Decorator to validate function input using a Pydantic model.
-    
-    Args:
-        input_model: Pydantic model for input validation
-        exclude_unset: Whether to exclude unset fields
-        exclude_defaults: Whether to exclude default values
-        exclude_none: Whether to exclude None values
-    """
-    def decorator(func: F) -> F:
-        @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            # Get the signature of the function
+        def wrapper(*args, **kwargs):
+            # Get function signature
             sig = inspect.signature(func)
-            
-            # Bind the arguments
             bound_args = sig.bind(*args, **kwargs)
             bound_args.apply_defaults()
-            
-            # Convert to dictionary and validate
-            input_data = dict(bound_args.arguments)
-            
-            # Remove 'self' if it exists (for methods)
-            if 'self' in input_data:
-                del input_data['self']
-            
-            # Validate input using the Pydantic model
-            try:
-                validated = input_model(**input_data)
-                
-                # Update the arguments with validated data
-                validated_dict = validated.dict(
-                    exclude_unset=exclude_unset,
-                    exclude_defaults=exclude_defaults,
-                    exclude_none=exclude_none
-                )
-                
-                # Update the bound arguments
-                for name, value in validated_dict.items():
-                    if name in bound_args.arguments:
-                        bound_args.arguments[name] = value
-                
-                # Call the function with validated arguments
-                return func(*bound_args.args, **bound_args.kwargs)
-                
-            except ValidationError as e:
-                logger.error(
-                    "validation_error",
-                    extra={
-                        "function": func.__name__,
-                        "errors": e.errors(),
-                        "input_data": input_data
-                    }
-                )
-                raise
-        
-        return cast(F, wrapper)
-    
-    return decorator
 
+            # Validate inputs
+            for field_name, validator in field_validators.items():
+                if field_name in bound_args.arguments:
+                    value = bound_args.arguments[field_name]
+                    if not validator(value):
+                        raise ValueError(f"Validation failed for parameter '{field_name}': {value}")
 
-def rate_limited(calls: int, period: float = 60.0) -> Callable[[F], F]:
-    """
-    Decorator to limit the number of calls to a function within a time period.
-    
-    Args:
-        calls: Maximum number of calls allowed in the time period
-        period: Time period in seconds (default: 60 seconds)
-    """
-    import time
-    from collections import deque
-    
-    # Store call timestamps for each function
-    call_history: Dict[str, deque[float]] = {}
-    
-    def decorator(func: F) -> F:
-        func_name = f"{func.__module__}.{func.__name__}"
-        
-        # Initialize call history for this function
-        if func_name not in call_history:
-            call_history[func_name] = deque()
-        
-        @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            now = time.time()
-            history = call_history[func_name]
-            
-            # Remove timestamps older than the period
-            while history and now - history[0] > period:
-                history.popleft()
-            
-            # Check if we've exceeded the rate limit
-            if len(history) >= calls:
-                # Calculate how long to wait
-                time_to_wait = period - (now - history[0])
-                if time_to_wait > 0:
-                    time.sleep(time_to_wait)
-            
-            # Record the call time
-            call_time = time.time()
-            history.append(call_time)
-            
-            # Call the function
             return func(*args, **kwargs)
-        
-        return cast(F, wrapper)
-    
+
+        return wrapper
     return decorator
 
 
-def retry_on_failure(
-    max_attempts: int = 3,
-    delay: float = 1.0,
-    backoff: float = 2.0,
-    exceptions: tuple[Type[Exception], ...] = (Exception,),
-    log_retries: bool = True
-) -> Callable[[F], F]:
-    """
-    Decorator to retry a function on failure.
-    
+def rate_limited(calls_per_minute: int = 60):
+    """Decorator to add rate limiting to tool functions.
+
     Args:
-        max_attempts: Maximum number of attempts
-        delay: Initial delay between retries in seconds
-        backoff: Backoff multiplier (e.g., 2.0 doubles the delay each retry)
-        exceptions: Tuple of exceptions to catch and retry on
-        log_retries: Whether to log retry attempts
+        calls_per_minute: Maximum number of calls per minute
+
+    Example:
+        ```python
+        @rate_limited(calls_per_minute=10)
+        @tool()
+        def expensive_operation() -> str:
+            # Function implementation
+            pass
+        ```
+    """
+    def decorator(func: F) -> F:
+        calls = []
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            now = time.time()
+            # Remove calls older than 1 minute
+            calls[:] = [call_time for call_time in calls if now - call_time < 60]
+
+            if len(calls) >= calls_per_minute:
+                raise RuntimeError(f"Rate limit exceeded: {calls_per_minute} calls per minute")
+
+            calls.append(now)
+            return func(*args, **kwargs)
+
+        return wrapper
+    return decorator
+
+
+def retry_on_failure(max_retries: int = 3, delay: float = 1.0):
+    """Decorator to add retry logic to tool functions.
+
+    Args:
+        max_retries: Maximum number of retry attempts
+        delay: Delay between retries in seconds
+
+    Example:
+        ```python
+        @retry_on_failure(max_retries=3, delay=2.0)
+        @tool()
+        def unreliable_operation() -> str:
+            # Function implementation that might fail
+            pass
+        ```
     """
     def decorator(func: F) -> F:
         @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            current_delay = delay
+        def wrapper(*args, **kwargs):
             last_exception = None
-            
-            for attempt in range(1, max_attempts + 1):
+
+            for attempt in range(max_retries + 1):
                 try:
                     return func(*args, **kwargs)
-                except exceptions as e:
+                except Exception as e:
                     last_exception = e
-                    if attempt == max_attempts:
-                        break
-                        
-                    if log_retries:
+                    if attempt < max_retries:
                         logger.warning(
-                            "retry_attempt",
-                            extra={
-                                "function": func.__name__,
-                                "attempt": attempt,
-                                "max_attempts": max_attempts,
-                                "delay": current_delay,
-                                "error": str(e),
-                                "error_type": type(e).__name__
-                            }
+                            f"Tool execution failed, retrying in {delay}s",
+                            tool=func.__name__,
+                            attempt=attempt + 1,
+                            max_retries=max_retries,
+                            error=str(e)
                         )
-                    
-                    time.sleep(current_delay)
-                    current_delay *= backoff
-            
-            # If we get here, all attempts failed
-            if log_retries:
-                logger.error(
-                    "retry_exhausted",
-                    extra={
-                        "function": func.__name__,
-                        "attempts": max_attempts,
-                        "error": str(last_exception) if last_exception else "Unknown error",
-                        "error_type": type(last_exception).__name__ if last_exception else "UnknownError"
-                    },
-                    exc_info=last_exception
-                )
-            
-            raise last_exception if last_exception else Exception("Unknown error in retry decorator")
-        
-        return cast(F, wrapper)
-    
+                        time.sleep(delay)
+                    else:
+                        logger.error(
+                            "Tool execution failed after all retries",
+                            tool=func.__name__,
+                            attempts=max_retries + 1,
+                            error=str(e)
+                        )
+
+            # Re-raise the last exception
+            raise last_exception
+
+        return wrapper
     return decorator
 
 
-def cache_result(
-    maxsize: Optional[int] = 128,
-    ttl: Optional[float] = None,
-    key_func: Optional[Callable[..., Any]] = None
-) -> Callable[[F], F]:
-    """
-    Decorator to cache function results.
-    
+def cache_result(ttl_seconds: int = 300):
+    """Decorator to cache tool function results.
+
     Args:
-        maxsize: Maximum cache size (None for unlimited)
-        ttl: Time to live in seconds (None for no expiration)
-        key_func: Function to generate cache keys
+        ttl_seconds: Time to live for cached results in seconds
+
+    Example:
+        ```python
+        @cache_result(ttl_seconds=600)  # Cache for 10 minutes
+        @tool()
+        def expensive_calculation(data: str) -> str:
+            # Expensive operation
+            return result
+        ```
     """
-    import functools
-    from typing import Any, Callable, Dict, Tuple, Optional
-    
-    # Cache storage
-    cache: Dict[Any, Tuple[float, Any]] = {}
-    
     def decorator(func: F) -> F:
+        cache = {}
+
         @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            # Generate cache key
-            if key_func:
-                key = key_func(*args, **kwargs)
-            else:
-                # Default key generation
-                key = (args, frozenset(kwargs.items()))
-            
-            # Check cache
-            current_time = time.time()
-            if key in cache:
-                timestamp, result = cache[key]
-                if ttl is None or current_time - timestamp < ttl:
+        def wrapper(*args, **kwargs):
+            # Create cache key from arguments
+            cache_key = json.dumps({
+                'args': args,
+                'kwargs': sorted(kwargs.items())
+            }, sort_keys=True, default=str)
+
+            now = time.time()
+
+            # Check if we have a valid cached result
+            if cache_key in cache:
+                result, timestamp = cache[cache_key]
+                if now - timestamp < ttl_seconds:
+                    logger.debug(f"Returning cached result for {func.__name__}")
                     return result
-                # Remove expired item
-                del cache[key]
-            
-            # Call the function and cache the result
+                else:
+                    # Remove expired entry
+                    del cache[cache_key]
+
+            # Execute function and cache result
             result = func(*args, **kwargs)
-            cache[key] = (current_time, result)
-            
-            # Enforce maxsize
-            if maxsize is not None and len(cache) > maxsize:
-                # Remove the oldest item
-                oldest_key = next(iter(cache))
-                del cache[oldest_key]
-            
+            cache[cache_key] = (result, now)
+
+            logger.debug(f"Cached new result for {func.__name__}")
             return result
-        
-        return cast(F, wrapper)
-    
+
+        return wrapper
     return decorator
 
 
-def timed(print_result: bool = False) -> Callable[[F], F]:
-    """
-    Decorator to measure and log function execution time.
-    
+def timed(log_threshold: float = 1.0):
+    """Decorator to measure and log execution time for tool functions.
+
     Args:
-        print_result: Whether to print the result to stdout
+        log_threshold: Only log if execution time exceeds this threshold (seconds)
+
+    Example:
+        ```python
+        @timed(log_threshold=0.5)  # Log if takes more than 500ms
+        @tool()
+        def slow_operation() -> str:
+            # Function implementation
+            pass
+        ```
     """
     def decorator(func: F) -> F:
         @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            start_time = time.monotonic()
-            result = func(*args, **kwargs)
-            duration = time.monotonic() - start_time
-            
-            log_data = {
-                "function": f"{func.__module__}.{func.__name__}",
-                "duration": duration,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
-            
-            logger.info("function_timed", extra=log_data)
-            
-            if print_result:
-                print(f"{func.__name__} executed in {duration:.4f} seconds")
-                if result is not None:
-                    print(f"Result: {result}")
-            
-            return result
-        
-        return cast(F, wrapper)
-    
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            try:
+                result = func(*args, **kwargs)
+                execution_time = time.time() - start_time
+
+                if execution_time > log_threshold:
+                    logger.info(
+                        f"Tool execution time",
+                        tool=func.__name__,
+                        execution_time=f"{execution_time:.3f}s"
+                    )
+
+                return result
+            except Exception as e:
+                execution_time = time.time() - start_time
+                logger.error(
+                    f"Tool execution failed",
+                    tool=func.__name__,
+                    execution_time=f"{execution_time:.3f}s",
+                    error=str(e)
+                )
+                raise
+
+        return wrapper
     return decorator
 
 
-# Example usage
-if __name__ == "__main__":
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler('mcp_tools.log')
-        ]
+def register_tools_with_fastmcp(mcp: FastMCP, tools_module) -> None:
+    """Register all tools from a module with a FastMCP instance.
+
+    Args:
+        mcp: FastMCP instance to register tools with
+        tools_module: Module containing tool functions
+
+    Example:
+        ```python
+        from fastmcp import FastMCP
+        from . import server_tools
+
+        mcp = FastMCP("My Server")
+        register_tools_with_fastmcp(mcp, server_tools)
+        ```
+    """
+    registered_count = 0
+
+    for attr_name in dir(tools_module):
+        attr = getattr(tools_module, attr_name)
+
+        # Check if this is a tool function
+        if (callable(attr) and
+            hasattr(attr, '_mcp_is_tool') and
+            hasattr(attr, '_mcp_tool_metadata')):
+
+            metadata = attr._mcp_tool_metadata
+            parameters = getattr(attr, '_mcp_tool_parameters', {})
+
+            # Register with FastMCP
+            mcp.tool(name=metadata.name, description=metadata.description)(attr)
+
+            logger.info(
+                "Registered MCP tool",
+                tool_name=metadata.name,
+                category=metadata.category,
+                version=metadata.version,
+                deprecated=metadata.deprecated,
+                experimental=metadata.experimental
+            )
+
+            registered_count += 1
+
+    logger.info(
+        "Tool registration completed",
+        total_tools=registered_count,
+        module=tools_module.__name__
     )
-    
-    # Example tool with all decorators
-    @tool(
-        name="example_tool",
-        description="An example MCP tool with all the decorators",
-        version="1.0.0",
-        tags=["example", "test"]
-    )
-    @structured_log()
-    @validate_input(create_model("ExampleInput", text=(str, ...), repeat=(int, 1)))
-    @rate_limited(calls=5, period=60.0)
-    @retry_on_failure(max_attempts=3, delay=1.0)
-    @cache_result(maxsize=100, ttl=300)
-    @timed(print_result=True)
-    def example_tool(text: str, repeat: int = 1) -> str:
-        """Repeat the input text the specified number of times."""
-        if repeat < 0:
-            raise ValueError("Repeat count must be non-negative")
-        return " ".join([text] * repeat)
-    
-    # Test the tool
-    try:
-        result = example_tool("Hello", repeat=3)
-        print(f"Tool result: {result}")
-    except Exception as e:
-        print(f"Error: {e}")
+
+
+def get_tool_metadata(func: Callable) -> Optional[ToolMetadata]:
+    """Get metadata for a tool function.
+
+    Args:
+        func: Function to get metadata for
+
+    Returns:
+        Tool metadata if function is a tool, None otherwise
+    """
+    return getattr(func, '_mcp_tool_metadata', None)
+
+
+def list_tools_in_module(module) -> List[Dict[str, Any]]:
+    """List all tools in a module with their metadata.
+
+    Args:
+        module: Module to scan for tools
+
+    Returns:
+        List of dictionaries containing tool information
+    """
+    tools = []
+
+    for attr_name in dir(module):
+        attr = getattr(module, attr_name)
+
+        if (callable(attr) and
+            hasattr(attr, '_mcp_is_tool') and
+            hasattr(attr, '_mcp_tool_metadata')):
+
+            metadata = attr._mcp_tool_metadata
+            tools.append({
+                'function_name': attr_name,
+                'tool_name': metadata.name,
+                'description': metadata.description,
+                'category': metadata.category,
+                'version': metadata.version,
+                'author': metadata.author,
+                'tags': metadata.tags,
+                'deprecated': metadata.deprecated,
+                'experimental': metadata.experimental,
+                'usage_count': metadata.usage_count,
+                'estimated_runtime': metadata.estimated_runtime,
+                'requires_auth': metadata.requires_auth,
+                'rate_limited': metadata.rate_limited,
+            })
+
+    return tools

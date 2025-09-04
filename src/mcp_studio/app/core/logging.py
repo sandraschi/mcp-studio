@@ -1,4 +1,4 @@
-""Structured logging configuration for MCP Studio."""
+"""Structured logging configuration for MCP Studio."""
 
 import logging
 import logging.config
@@ -22,7 +22,7 @@ def drop_debug_logs(_: logging.Logger, __: str, event_dict: EventDict) -> EventD
 
 def configure_logging(level: str = "INFO", json_logs: bool = False) -> None:
     """Configure structured logging with structlog.
-    
+
     Args:
         level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         json_logs: Whether to output logs in JSON format
@@ -75,7 +75,7 @@ def configure_logging(level: str = "INFO", json_logs: bool = False) -> None:
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
         logger_factory=structlog.stdlib.LoggerFactory(),
-        wrapper_class=structlog.stdlib.AsyncBoundLogger,
+        wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
 

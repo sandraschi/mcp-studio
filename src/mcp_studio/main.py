@@ -23,7 +23,12 @@ from .app.core.config import settings
 from .app.core.logging_utils import get_logger, configure_uvicorn_logging
 from .app.core.lifespan import lifespan
 from .app.api import router as api_router
-from .app.services import discovery_service, server_service
+from .app.api.endpoints import mcp_servers as mcp_servers_router
+from .app.services.mcp_discovery_service import discovery_service, start_discovery, stop_discovery
+
+# Import working sets API
+sys.path.append(str(Path(__file__).parent.parent))
+from api.working_sets import router as working_sets_router
 
 # Configure logging
 configure_uvicorn_logging()
@@ -133,6 +138,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Include API routers
 app.include_router(api_router.router, prefix="/api")
+app.include_router(mcp_servers_router.router, prefix="/api")
+app.include_router(working_sets_router, tags=["working-sets"])  # Add working sets router
 
 # Mount static files
 static_dir = Path(__file__).parent / "static"
@@ -154,24 +161,16 @@ async def root():
 @app.on_event("startup")
 async def startup_event():
     """Handle application startup."""
-    logger.info("Starting MCP Studio")
+    logger.info("Starting MCP Studio...")
     
-    # Register signal handlers for graceful shutdown
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown(sig)))
-    
-    # Initialize services
     try:
-        # Initialize server service
-        await server_service.init_server_service()
-        
-        # Start discovery service
-        asyncio.create_task(discovery_service.discover_mcp_servers())
+        # Start the MCP discovery service
+        await start_discovery()
+        logger.info("MCP Discovery Service started")
         
         logger.info("MCP Studio started successfully")
     except Exception as e:
-        logger.critical("Failed to start MCP Studio", error=str(e), exc_info=True)
+        logger.error(f"Failed to start MCP Studio: {e}", exc_info=True)
         raise
 
 async def shutdown(signal: signal.Signals):
@@ -179,9 +178,6 @@ async def shutdown(signal: signal.Signals):
     logger.info(f"Received shutdown signal: {signal.name}")
     
     try:
-        # Close server service
-        await server_service.close()
-        
         # Close discovery service
         if hasattr(discovery_service, 'close'):
             await discovery_service.close()

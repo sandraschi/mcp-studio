@@ -1,0 +1,49 @@
+﻿{
+  "name": "Entertainment & Personal",
+  "id": "entertainment",
+  "description": "Personal entertainment and media consumption",
+  "icon": "🎮",
+  "category": "Entertainment",
+  "servers": [
+    {
+      "name": "basic-memory",
+      "required": true,
+      "description": "Universal - personal notes"
+    },
+    {
+      "name": "filesystem",
+      "required": true,
+      "description": "Universal - file browsing"
+    },
+    {
+      "name": "fetch",
+      "required": true,
+      "description": "Universal - web content"
+    },
+    {
+      "name": "plexmcp",
+      "required": false,
+      "description": "ENTERTAINMENT - media streaming"
+    },
+    {
+      "name": "immich",
+      "required": false,
+      "description": "ENTERTAINMENT - photo browsing"
+    },
+    {
+      "name": "calibremcp",
+      "required": false,
+      "description": "ENTERTAINMENT - reading"
+    },
+    {
+      "name": "obsidian-plugin-based",
+      "required": false,
+      "description": "PERSONAL - journal, notes"
+    },
+    {
+      "name": "microsoft-365",
+      "required": false,
+      "description": "PERSONAL - personal email/docs"
+    }
+  ]
+}

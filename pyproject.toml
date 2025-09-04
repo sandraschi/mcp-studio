@@ -6,10 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "mcp-studio"
 version = "0.1.0"
 description = "MCP Studio - A comprehensive UI for managing MCP servers"
-authors = [{name = "Your Name", email = "your.email@example.com"}]
+authors = [{ name = "Sandra Schipal", email = "sandraschipal@hotmail.com" }]
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = { text = "MIT" }
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",

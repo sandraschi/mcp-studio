@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field, HttpUrl, validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from ..core.enums import ParameterType, ServerStatus
 
@@ -38,11 +38,11 @@ class MCPTool(BaseModel):
     categories: List[str] = Field(default_factory=list, description="Categories for the tool")
     version: str = Field("0.1.0", description="Version of the tool")
     deprecated: bool = Field(False, description="Whether the tool is deprecated")
-    
+
     # Runtime information
     last_used: Optional[datetime] = Field(None, description="When the tool was last used")
     usage_count: int = Field(0, description="Number of times the tool has been used")
-    
+
     class Config:
         json_encoders = {
             datetime: lambda v: v.isoformat() if v else None
@@ -54,7 +54,7 @@ class MCPServerHealth(BaseModel):
     uptime: Optional[float] = Field(None, description="Uptime in seconds")
     version: Optional[str] = Field(None, description="Server version")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="When the health was checked")
-    
+
     class Config:
         json_encoders = {
             datetime: lambda v: v.isoformat() if v else None
@@ -66,36 +66,36 @@ class MCPServer(BaseModel):
     name: str = Field(..., description="Display name of the server")
     description: str = Field("", description="Description of the server")
     version: str = Field("0.1.0", description="Version of the server")
-    
+
     # Connection details
     url: Optional[HttpUrl] = Field(None, description="URL of the server")
     path: Optional[str] = Field(None, description="Filesystem path to the server")
     type: str = Field("python", description="Type of the server (python, dxt, http, etc.)")
-    
+
     # Status
     status: ServerStatus = Field(ServerStatus.OFFLINE, description="Current status of the server")
     last_seen: Optional[datetime] = Field(None, description="When the server was last seen")
     health: Optional[MCPServerHealth] = Field(None, description="Health status of the server")
-    
+
     # Tools
     tools: List[MCPTool] = Field(default_factory=list, description="List of available tools")
-    
+
     # Metadata
     tags: List[str] = Field(default_factory=list, description="Tags for categorization")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="When the server was discovered")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="When the server was last updated")
-    
+
     class Config:
         json_encoders = {
             datetime: lambda v: v.isoformat() if v else None
         }
-    
+
     def update_health(self, health: 'MCPServerHealth') -> None:
         """Update the health status of the server."""
         self.health = health
         self.status = health.status
         self.updated_at = datetime.utcnow()
-    
+
     def add_tool(self, tool: MCPTool) -> None:
         """Add a tool to the server."""
         # Check if tool already exists
@@ -107,14 +107,14 @@ class MCPServer(BaseModel):
         else:
             # Add new tool
             self.tools.append(tool)
-        
+
         self.updated_at = datetime.utcnow()
-    
+
     def remove_tool(self, tool_name: str) -> bool:
         """Remove a tool from the server."""
         initial_length = len(self.tools)
         self.tools = [t for t in self.tools if t.name != tool_name]
-        
+
         if len(self.tools) < initial_length:
             self.updated_at = datetime.utcnow()
             return True
@@ -126,8 +126,9 @@ class ToolExecutionRequest(BaseModel):
     tool_name: str = Field(..., description="Name of the tool to execute")
     parameters: Dict[str, Any] = Field(default_factory=dict, description="Parameters for the tool")
     timeout: Optional[float] = Field(60.0, description="Timeout in seconds")
-    
-    @validator('parameters')
+
+    @field_validator('parameters')
+    @classmethod
     def validate_parameters(cls, v: Dict[str, Any]) -> Dict[str, Any]:
         """Validate that parameters are JSON-serializable."""
         try:
@@ -144,7 +145,7 @@ class ToolExecutionResult(BaseModel):
     error: Optional[str] = Field(None, description="Error message if execution failed")
     execution_time: float = Field(..., description="Execution time in seconds")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="When the execution completed")
-    
+
     class Config:
         json_encoders = {
             datetime: lambda v: v.isoformat() if v else None
