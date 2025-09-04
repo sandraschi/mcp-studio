@@ -1,5 +1,11 @@
-import React, { useEffect, useState, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { Suspense, useState, useEffect } from 'react';
+import { 
+  BrowserRouter as Router, 
+  Routes, 
+  Route, 
+  Navigate, 
+  useLocation 
+} from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { WebSocketProvider } from './contexts/WebSocketContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -111,15 +117,81 @@ const OnlineStatusIndicator = () => {
   );
 };
 
-// Main App component
+// Protected route wrapper
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
+  
+  if (isLoading) {
+    return <LoadingFallback />;
+  }
+  
+  if (!isAuthenticated) {
+    // Redirect them to the /login page, but save the current location they were trying to go to
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  
+  return <>{children}</>;
+};
+
+// Define routes
+const AppRoutes = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <LoadingFallback />;
+  }
+
+  return (
+    <Routes>
+      {/* Public routes */}
+      <Route 
+        path="/" 
+        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <HomePage />} 
+      />
+      <Route 
+        path="/login" 
+        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />} 
+      />
+      <Route 
+        path="/register" 
+        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <RegisterPage />} 
+      />
+      
+      {/* Protected routes */}
+      <Route element={
+        <ProtectedRoute>
+          <AppLayout />
+        </ProtectedRoute>
+      }>
+        <Route path="/dashboard" element={<DashboardPage />} />
+        
+        {/* Add more protected routes here */}
+        
+        {/* Default dashboard redirect for authenticated users */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      </Route>
+      
+      {/* 404 route */}
+      <Route 
+        path="*" 
+        element={
+          <Navigate to={isAuthenticated ? "/dashboard" : "/login"} replace />
+        } 
+      />
+    </Routes>
+  );
+};
+
+// Main App component - ROUTER MOVED OUTSIDE AuthProvider
 function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Suspense fallback={<LoadingFallback />}>
-        <AuthProvider>
-          <WebSocketProvider>
-            <Router>
+      <Router>
+        <Suspense fallback={<LoadingFallback />}>
+          <AuthProvider>
+            <WebSocketProvider>
               <AppRoutes />
               <OnlineStatusIndicator />
               <ToastContainer
@@ -134,80 +206,12 @@ function App() {
                 pauseOnHover
                 theme="light"
               />
-            </Router>
-          </WebSocketProvider>
-        </AuthProvider>
-      </Suspense>
+            </WebSocketProvider>
+          </AuthProvider>
+        </Suspense>
+      </Router>
     </ThemeProvider>
   );
 }
-
-// Define routes
-const AppRoutes = () => {
-  const { isAuthenticated } = useAuth();
-
-  return (
-    <Routes>
-      {/* Public routes */}
-      <Route path="/" element={
-        isAuthenticated ? <Navigate to="/dashboard" replace /> : <HomePage />
-      } />
-      <Route path="/login" element={
-        isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />
-      } />
-      <Route path="/register" element={
-        isAuthenticated ? <Navigate to="/dashboard" replace /> : <RegisterPage />
-      } />
-      
-      {/* Protected routes */}
-      <Route element={<AppLayout />}>
-        <Route 
-          path="/dashboard" 
-          element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          } 
-        />
-        
-        {/* Add more protected routes here */}
-        
-        {/* Default dashboard redirect for authenticated users */}
-        <Route 
-          path="/" 
-          element={
-            <ProtectedRoute>
-              <Navigate to="/dashboard" replace />
-            </ProtectedRoute>
-          } 
-        />
-      </Route>
-      
-      {/* 404 route */}
-      <Route path="*" element={
-        isAuthenticated ? (
-          <Navigate to="/dashboard" replace />
-        ) : (
-          <Navigate to="/login" replace />
-        )
-      } />
-    </Routes>
-  );
-};
-
-// Protected route wrapper
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading } = useAuth();
-  
-  if (isLoading) {
-    return <LoadingFallback />;
-  }
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  return <>{children}</>;
-};
 
 export default App;

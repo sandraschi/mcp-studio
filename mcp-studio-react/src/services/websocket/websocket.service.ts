@@ -144,7 +144,7 @@ export class WebSocketService {
         resolve,
         reject,
         timeoutId,
-      });n
+      });
       this.socket.send(JSON.stringify(messageWithId));
     });
   }

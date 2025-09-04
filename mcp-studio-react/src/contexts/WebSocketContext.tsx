@@ -55,60 +55,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   const [error, setError] = useState<Error | null>(null);
   const messageHandlers = useRef<Map<string, Set<Function>>>(new Map());
 
-  // Initialize WebSocket connection
-  useEffect(() => {
-    if (autoConnect) {
-      connect(webSocketUrl).catch(console.error);
-    }
-
-    return () => {
-      if (wsService) {
-        wsService.disconnect();
-      }
-    };
-  }, [autoConnect, webSocketUrl, wsService, connect]);
-
-  // Set up event listeners
-  useEffect(() => {
-    if (!wsService) return;
-
-    const onOpen = () => {
-      setIsConnected(true);
-      setError(null);
-    };
-
-    const onClose = () => {
-      setIsConnected(false);
-    };
-
-    const onError = (error: Error) => {
-      setError(error);
-    };
-
-    const onMessage = (message: WebSocketMessage) => {
-      const handlers = messageHandlers.current.get('message') || [];
-      handlers.forEach(handler => {
-        try {
-          handler(message);
-        } catch (err) {
-          console.error('Error in WebSocket message handler:', err);
-        }
-      });
-    };
-
-    const unsubOpen = wsService.on('open', onOpen);
-    const unsubClose = wsService.on('close', onClose);
-    const unsubError = wsService.on('error', onError);
-    const unsubMessage = wsService.on('message', onMessage);
-
-    return () => {
-      unsubOpen();
-      unsubClose();
-      unsubError();
-      unsubMessage();
-    };
-  }, [wsService]);
-
   const connect = useCallback(async (url: string): Promise<boolean> => {
     if (!wsService) return false;
     
@@ -180,6 +126,60 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       handlers.delete(handler);
     };
   }, []);
+
+  // Initialize WebSocket connection - moved after connect definition
+  useEffect(() => {
+    if (autoConnect) {
+      connect(webSocketUrl).catch(console.error);
+    }
+
+    return () => {
+      if (wsService) {
+        wsService.disconnect();
+      }
+    };
+  }, [autoConnect, webSocketUrl, wsService, connect]);
+
+  // Set up event listeners
+  useEffect(() => {
+    if (!wsService) return;
+
+    const onOpen = () => {
+      setIsConnected(true);
+      setError(null);
+    };
+
+    const onClose = () => {
+      setIsConnected(false);
+    };
+
+    const onError = (error: Error) => {
+      setError(error);
+    };
+
+    const onMessage = (message: WebSocketMessage) => {
+      const handlers = messageHandlers.current.get('message') || [];
+      handlers.forEach(handler => {
+        try {
+          handler(message);
+        } catch (err) {
+          console.error('Error in WebSocket message handler:', err);
+        }
+      });
+    };
+
+    const unsubOpen = wsService.on('open', onOpen);
+    const unsubClose = wsService.on('close', onClose);
+    const unsubError = wsService.on('error', onError);
+    const unsubMessage = wsService.on('message', onMessage);
+
+    return () => {
+      unsubOpen();
+      unsubClose();
+      unsubError();
+      unsubMessage();
+    };
+  }, [wsService]);
 
   const value = {
     isConnected,

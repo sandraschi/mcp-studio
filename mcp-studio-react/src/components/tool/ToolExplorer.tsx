@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Tool } from '../../types';
-import { useApi } from '../../services/api';
+import { useApi } from '../../services';
 
 interface ToolExplorerProps {
   serverId: string;

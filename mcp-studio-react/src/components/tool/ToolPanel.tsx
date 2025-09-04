@@ -60,7 +60,9 @@ export const ToolPanel: React.FC<ToolPanelProps> = ({ serverId, tools, className
       
       // Fallback to REST API if WebSocket fails
       if (!executionId) {
-        const result = await apiExecuteTool(serverId, selectedTool.name, parameters);
+        const executionId = await apiExecuteTool(serverId, selectedTool.name, parameters);
+        // For REST API, we immediately get the result
+        const result = { executionId, success: true };
         setResults(prev => ({
           ...prev,
           [Date.now()]: {

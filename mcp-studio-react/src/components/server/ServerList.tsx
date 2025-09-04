@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Server } from '../../types';
-import { apiService } from '../../services/api';
-import { webSocketService } from '../../services/websocket';
+import { apiService, webSocketService } from '../../services';
 
 interface ServerListProps {
   onSelectServer: (server: Server) => void;

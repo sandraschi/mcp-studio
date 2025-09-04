@@ -57,6 +57,8 @@ export interface WebSocketMessage<T = any> {
   type: string;
   data: T;
   timestamp: string;
+  id?: string;
+  error?: string;
 }
 
 export interface ServerStatusUpdate {

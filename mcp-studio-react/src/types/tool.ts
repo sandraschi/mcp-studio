@@ -53,12 +53,14 @@ export interface ToolExecutionRequest {
 export interface ToolExecutionResult {
   executionId: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  success?: boolean; // Computed from status
   result?: any;
   error?: string;
   progress?: number;
   logs?: string[];
   startedAt: string;
   completedAt?: string;
+  timestamp?: string; // Legacy support
   metadata?: Record<string, any>;
 }
 

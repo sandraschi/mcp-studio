@@ -5,6 +5,8 @@ export interface User {
   firstName?: string;
   lastName?: string;
   role: 'admin' | 'user';
+  roles?: string[]; // Legacy support for roles array
+  avatar?: string;
   createdAt: string;
   updatedAt: string;
   lastLogin?: string;
@@ -18,6 +20,7 @@ export interface LoginCredentials {
 }
 
 export interface AuthResponse {
+  token: string; // Main auth token
   accessToken: string;
   refreshToken: string;
   user: Omit<User, 'password'>;
@@ -60,5 +63,5 @@ export interface AuthContextType {
   register: (data: RegisterData) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   resetPassword: (data: PasswordResetConfirm) => Promise<void>;
-  refreshUser: () => Promise<void>;
+  refreshUser: () => Promise<User | null>;
 }

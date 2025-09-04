@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { CircularProgress, Box, Typography } from '@mui/material';
 
 interface ProtectedRouteProps {

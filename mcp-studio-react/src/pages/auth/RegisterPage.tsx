@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { RegisterData } from '../../../types/auth';
 import { Box, Button, TextField, Typography, Paper, Container, Link as MuiLink, Alert, CircularProgress } from '@mui/material';
 
