@@ -1,0 +1,24 @@
+{
+  "name": "mcp-studio",
+  "version": "1.0.0",
+  "description": "MCP Studio - Professional MCP Server Management and Development Platform",
+  "author": "MCP Studio Team",
+  "license": "MIT",
+  "mcp": {
+    "version": "2.12.0",
+    "server": {
+      "command": "python",
+      "args": ["-m", "mcp_studio.main"],
+      "transport": "stdio"
+    },
+    "capabilities": {
+      "tools": true,
+      "resources": true,
+      "prompts": true
+    }
+  },
+  "dependencies": {
+    "python": ">=3.10.0",
+    "fastmcp": ">=2.12.0"
+  }
+}

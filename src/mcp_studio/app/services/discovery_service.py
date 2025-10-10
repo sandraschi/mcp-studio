@@ -78,14 +78,14 @@ async def _find_potential_servers() -> List[Tuple[Path, str]]:
             # Single Python file
             server_paths.append((path, "python"))
         elif path.is_dir():
-            # Directory - look for Python modules or DXT packages
+            # Directory - look for Python modules or MCPB packages
             for item in path.iterdir():
                 if item.is_file() and item.suffix == ".py" and item.stem != "__init__":
                     server_paths.append((item, "python"))
                 elif item.is_dir() and (item / "__init__.py").exists():
                     server_paths.append((item, "python"))
-                elif item.is_file() and item.suffix == ".dxt":
-                    server_paths.append((item, "dxt"))
+                elif item.is_file() and item.suffix == ".mcpb":
+                    server_paths.append((item, "mcpb"))
 
     logger.debug("Found potential MCP servers", count=len(server_paths))
     return server_paths

@@ -50,7 +50,7 @@ One-click switching between focused MCP server configurations for different work
 - **Stdio Transport**: Robust bidirectional communication over stdin/stdout
 - **Type Safety**: Full Pydantic validation for all tool parameters
 - **Async-First**: Built on Python asyncio for efficient I/O handling
-- **DXT Packaging**: Seamless tool distribution and deployment
+- **MCPB Packaging**: Seamless tool distribution and deployment
 
 ### **🎨 Modern Web Interface**
 - **Real-time Updates**: WebSocket-based live updates
