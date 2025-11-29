@@ -132,8 +132,11 @@ ZOO_ANIMALS = {
 SKIP_DIRS = {
     "node_modules", "__pycache__", ".git", ".venv", "venv", "env",
     "dist", "build", ".tox", ".pytest_cache", ".mypy_cache",
-    "eggs", "htmlcov", "docs", "site-packages",
+    "eggs", "htmlcov", "site-packages", "_legacy", "deprecated",
 }
+
+# Patterns that indicate we're inside a venv (check full path)
+VENV_PATTERNS = {".venv", "venv", "Lib", "site-packages"}
 
 # ============================================================================
 # ANALYZER
@@ -148,9 +151,17 @@ def fast_py_glob(directory: Path, max_depth: int = 3) -> List[Path]:
         try:
             for item in path.iterdir():
                 if item.is_dir():
-                    if item.name not in SKIP_DIRS and not item.name.startswith('.') and not item.name.endswith('.egg-info'):
-                        _walk(item, depth + 1)
+                    # Skip known dirs and venv patterns
+                    if item.name in SKIP_DIRS or item.name.startswith('.') or item.name.endswith('.egg-info'):
+                        continue
+                    # Skip if any venv pattern in full path
+                    if any(vp in str(item) for vp in VENV_PATTERNS):
+                        continue
+                    _walk(item, depth + 1)
                 elif item.suffix == '.py' and 'test' not in item.name.lower():
+                    # Skip if inside venv
+                    if any(vp in str(item) for vp in VENV_PATTERNS):
+                        continue
                     results.append(item)
         except (PermissionError, OSError):
             pass
@@ -214,7 +225,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     # Count tools (optimized with skip dirs and depth limit)
     # Match all common FastMCP tool decorator patterns:
     # @app.tool, @app.tool(), @app.tool(name=...), @mcp.tool, @self.mcp.tool, etc.
-    tool_pattern = re.compile(r'@(?:app|mcp|self\.mcp|server)\.tool(?:\s*\(|\s*$|\s*\n)', re.MULTILINE)
+    # Also matches @mcp.tool without parens (followed by newline or def)
+    tool_pattern = re.compile(r'@(?:app|mcp|self\.mcp|server)\.tool(?:\s*\(|(?=\s*(?:\r?\n|def\s)))', re.MULTILINE)
     # Detect non-conforming registration patterns (should flag, not count)
     nonconforming_pattern = re.compile(r'def register_\w+_tool\s*\(|\.add_tool\s*\(|register_tool\s*\(')
     tool_count = 0
@@ -737,7 +749,7 @@ async def dashboard():
                     </div>
                     <div class="flex gap-4 text-sm text-gray-600">
                         <span>FastMCP: <strong>${repo.fastmcp_version || '-'}</strong></span>
-                        <span>Tools: <strong>${repo.tool_count}</strong></span>
+                        <span>Tools: <strong>${repo.tool_count}</strong>${repo.portmanteau_ops > 0 ? ` (${repo.portmanteau_ops} ops)` : ''}</span>
                         <span>${repo.zoo_class}</span>
                     </div>
                     ${repo.runt_reasons.length > 0 ? `

@@ -68,7 +68,8 @@ MCP_CLIENT_CONFIGS = {
 # Skip these directories when scanning
 SKIP_DIRS = {'node_modules', '__pycache__', '.git', 'venv', '.venv', 'dist', 'build', 
              'env', '.env', 'eggs', '.eggs', '.tox', '.mypy_cache', '.pytest_cache',
-             'site-packages', '.ruff_cache', 'coverage', 'htmlcov', '.idea', '.vscode'}
+             'site-packages', '.ruff_cache', 'coverage', 'htmlcov', '.idea', '.vscode',
+             '_legacy', 'deprecated'}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FASTAPI APP
