@@ -317,6 +317,21 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                 except:
                     pass
     
+    # Check for modular entry point pattern (mcp_main.py -> mcp_server_clean.py -> tools/)
+    imported_tool_modules = set()
+    for entry_file in ['mcp_main.py', 'mcp_server_clean.py', 'mcp_server.py']:
+        for base in [repo_path / "src" / pkg_name_underscore, repo_path / "src" / pkg_name, repo_path / pkg_name]:
+            candidate = base / entry_file
+            if candidate.exists():
+                try:
+                    content = candidate.read_text(encoding='utf-8', errors='ignore')
+                    # Look for imports like: import avatarmcp.tools.core.core_tools
+                    tool_imports = re.findall(r'import\s+\w+\.tools\.(\w+)\.(\w+)', content)
+                    for pkg, mod in tool_imports:
+                        imported_tool_modules.add(f"{pkg}/{mod}.py")
+                except:
+                    pass
+    
     # If monolithic server, ONLY count from that file
     if monolithic_server:
         search_dirs = []
@@ -343,6 +358,11 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     filename in {'test_calibre_connection', 'calibre_ocr_tool'}  # Known entry points
                 )
                 if not is_portmanteau_entry:
+                    continue
+            # If modular entry imports specific tool modules, only count those
+            elif imported_tool_modules:
+                rel_path = f"{py_file.parent.name}/{py_file.name}"
+                if rel_path not in imported_tool_modules:
                     continue
             # If we have an __init__.py with imports, only count imported modules
             elif imported_modules:
