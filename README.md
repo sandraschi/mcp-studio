@@ -4,12 +4,58 @@
 [![CI](https://img.shields.io/github/actions/workflow/status/sandraschi/mcp-studio/ci.yml?label=CI)](https://github.com/sandraschi/mcp-studio/actions)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.116.1-009688.svg?logo=fastapi)](https://fastapi.tiangolo.com/)
-[![FastMCP](https://img.shields.io/badge/FastMCP-2.11-FF6F00.svg)](https://github.com/jlowin/fastmcp)
 
-🎯 **Mission Control for the MCP Ecosystem** - A comprehensive web-based management platform for MCP (Model Context Protocol) servers, built with FastMCP 2.11 and FastAPI.
+🎯 **Mission Control for the MCP Ecosystem** - A comprehensive web-based management platform for MCP (Model Context Protocol) servers, built with FastMCP 2.13.1 and FastAPI.
+
+## 🆕 **What's New (v2.0.0)**
+
+### 🔍 **Runt Analyzer** - SOTA Compliance Dashboard
+Scan `D:/Dev/repos` and instantly identify which MCP repos need work:
+- 🔴 **Red** = Critical runts (FastMCP outdated, no CI, no tests)
+- 🟠 **Orange** = Needs improvement (warnings, minor issues)
+- 🟢 **Green** = SOTA compliant (all checks pass)
+
+**Checks performed:**
+- FastMCP version (2.12+ required)
+- Portmanteau refactor (if >15 tools)
+- CI/CD workflow presence
+- Ruff linting configuration
+- Test harness (unit/integration, pytest, coverage)
+- Help & status tools
+- DXT packaging
+- Proper docstrings
+- Logging vs print statements
+- Error handling quality
+
+### 🎛️ **Tool Groups** - Smart Activate/Deactivate
+Like Cursor's MCP activation, but with predefined workflow groups:
+
+| Group | Servers | Use Case |
+|-------|---------|----------|
+| 🎵 Audio Production | virtualdj, reaper, ableton | DJ & DAW workflows |
+| 🎬 Video Production | davinci-resolve, premiere | Video editing |
+| 🏠 Smart Home | tapo, hue, ring, nest | Home automation |
+| 📺 Media | plex, jellyfin, spotify | Media libraries |
+| 📚 Knowledge | advanced-memory, obsidian | Note-taking |
+| 💻 Development | github, gitlab, docker | Coding |
+| 🚇 Transit | vienna-transit, weather | Location services |
+| 💬 Communication | gmail, calendar, slack | Productivity |
+| 🌐 Web | browser, puppeteer | Web automation |
+
+**Context Budget:** When LLM is added, only active group tools load into context!
+
+### 🧪 **Smoke Test** - No-LLM Server Testing
+Bare minimum connectivity test for all MCP servers:
+1. Spawn via stdio
+2. Initialize connection
+3. List available tools
+4. Call help/status tool
+5. Verify non-empty response
+
+**No LLM required** - just validates servers are alive!
 
 ## 🚀 **What is MCP Studio?**
 
@@ -48,12 +94,13 @@ One-click switching between focused MCP server configurations for different work
 - **Schema Visualization**: Interactive display of tool schemas and parameters
 - **Test Console**: Live testing interface for MCP tools with parameter forms
 
-### **⚡ FastMCP 2.11 Integration**
+### **⚡ FastMCP 2.13.1 Integration**
 - **High-Performance**: Optimized for low-latency, high-throughput operations
 - **Stdio Transport**: Robust bidirectional communication over stdin/stdout
 - **Type Safety**: Full Pydantic validation for all tool parameters
 - **Async-First**: Built on Python asyncio for efficient I/O handling
 - **MCPB Packaging**: Seamless tool distribution and deployment
+- **250+ Tools**: No context limit since no LLM - connect everything!
 
 ### **🎨 Modern Web Interface**
 - **Real-time Updates**: WebSocket-based live updates
@@ -323,7 +370,7 @@ pytest
 MCP Studio is the **first comprehensive management platform** for the MCP ecosystem. It bridges the gap between raw MCP servers and user-friendly interfaces.
 
 ### **⚡ Performance First**
-Built on **FastMCP 2.11** and **FastAPI**, providing enterprise-grade performance with developer-friendly APIs.
+Built on **FastMCP 2.13.1** and **FastAPI**, providing enterprise-grade performance with developer-friendly APIs.
 
 ### **🔧 Workflow Optimization**
 The **Working Sets** feature revolutionizes how users interact with AI tools by providing **context-aware tool selection**.
