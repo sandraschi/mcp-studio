@@ -203,8 +203,10 @@ def analyze_repo(repo_path: Path) -> Dict[str, Any]:
             except:
                 pass
     
-    # Count tools
-    tool_pattern = r'@(?:app|mcp|self\.mcp|server)\.tool(?:\s*\(|\s*$|\s*\n)'
+    # Count tools - multiple patterns to catch all styles
+    tool_pattern = r'@(?:app|mcp|self\.mcp(?:_server\.mcp)?|server)\.tool(?:\s*\(|(?=\s*(?:\r?\n|def\s)))'
+    # Non-conforming patterns like register_*_tool(), .add_tool(), register_tool()
+    nonconforming_pattern = r'def\s+register_\w+_tool\s*\(|\.add_tool\s*\(|register_tool\s*\('
     
     # Determine package directory
     pkg_name = name.replace("-", "_").replace("mcp_", "").replace("_mcp", "")
@@ -234,6 +236,7 @@ def analyze_repo(repo_path: Path) -> Dict[str, Any]:
             try:
                 content = py_file.read_text(encoding='utf-8', errors='ignore')
                 tool_matches = len(re.findall(tool_pattern, content))
+                nonconforming_matches = len(re.findall(nonconforming_pattern, content))
                 
                 if "portmanteau" in py_file.name.lower() or "_tool" in py_file.name.lower():
                     info["portmanteau_tools"] += tool_matches
@@ -243,6 +246,16 @@ def analyze_repo(repo_path: Path) -> Dict[str, Any]:
                         info["portmanteau_ops"] += len(match.split(','))
                 else:
                     info["individual_tools"] += tool_matches
+                
+                # Also count non-conforming tool registrations
+                if nonconforming_matches > 0:
+                    info["individual_tools"] += nonconforming_matches
+                    if "nonconforming" not in info:
+                        info["nonconforming"] = 0
+                    info["nonconforming"] = info.get("nonconforming", 0) + nonconforming_matches
+                    if "Non-conforming tool registration" not in str(info["issues"]):
+                        info["issues"].append(f"Non-conforming tool registration ({nonconforming_matches} tools)")
+                        info["recommendations"].append("Migrate to FastMCP @app.tool decorator pattern")
                     
             except:
                 pass
