@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.0.0] - 2025-11-29 - MCP Studio Dashboard
+
+### Added
+- **Unified MCP Studio Dashboard** (`studio_dashboard.py`) - Mission Control for the MCP Zoo
+- Auto-discovers servers from Claude Desktop, Cursor, Windsurf, Cline configs
+- Static analysis of all MCP repos with runt/SOTA classification
+- Beautiful dark theme with glass morphism UI
+- Tabbed interface: Overview, MCP Clients, Repositories, Tools, Console
+- Live activity log with real-time updates
+- Stats dashboard: Clients, Repos, Tools, SOTA count
+- Repository health breakdown: SOTA/Improvable/Runts
+- Zoo classification with animal emojis (🐘 Jumbo → 🐿️ Chipmunk)
+
+### Dashboard Features
+- 📊 Overview: Stats + client discovery + repo health
+- 🔌 MCP Clients: All discovered server configs with connect buttons
+- 📦 Repositories: Filterable repo grid with detail modals
+- 🔧 Tools: Tool explorer (pending live connection)
+- 💻 Console: Tool execution without LLM (pending)
+
 ## [0.2.1] - 2025-11-29 - Detail Modal Redesign
 
 ### Improved
