@@ -293,11 +293,17 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     # Check if repo uses portmanteau pattern (has register_tools function OR portmanteau/ subdir)
     uses_portmanteau_pattern = False
     portmanteau_dir = None
+    portmanteau_modules = set()  # For PORTMANTEAU_MODULES list pattern
     if tools_dir:
         init_file = tools_dir / '__init__.py'
         if init_file.exists():
             init_text = init_file.read_text(encoding='utf-8', errors='ignore')
             uses_portmanteau_pattern = 'def register_tools' in init_text
+            # Check for PORTMANTEAU_MODULES list pattern (pywinauto-mcp style)
+            if 'PORTMANTEAU_MODULES' in init_text:
+                # Extract module names from list
+                import_match = re.findall(r"'(portmanteau_\w+|desktop_state)'", init_text)
+                portmanteau_modules = set(import_match)
         # Also check for tools/portmanteau/ subdirectory
         candidate_portmanteau = tools_dir / 'portmanteau'
         if candidate_portmanteau.exists() and candidate_portmanteau.is_dir():
@@ -344,6 +350,10 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     # If modular imports detected (mcp_server_clean.py), use those (takes precedence)
     elif imported_tool_modules:
         py_files_to_scan = None  # Will filter by imported_tool_modules
+    # If PORTMANTEAU_MODULES list found, only count those files
+    elif portmanteau_modules:
+        py_files_to_scan = [tools_dir / f"{m}.py" for m in portmanteau_modules if (tools_dir / f"{m}.py").exists()]
+        search_dirs = []
     # If has portmanteau/ subdir with actual tools, ONLY count from there
     elif portmanteau_dir:
         # Check if portmanteau dir has any @tool decorators
