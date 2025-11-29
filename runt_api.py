@@ -197,7 +197,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     for config_file in [req_file, pyproject_file]:
         if config_file.exists():
             try:
-                content = config_file.read_text(encoding='utf-8')
+                content = config_file.read_text(encoding='utf-8', errors='ignore')
                 match = re.search(r'fastmcp.*?(\d+\.\d+\.?\d*)', content, re.IGNORECASE)
                 if match:
                     fastmcp_version = match.group(1)
@@ -222,51 +222,78 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             info["has_portmanteau"] = True
             break
 
-    # Count tools (optimized with skip dirs and depth limit)
-    # Match all common FastMCP tool decorator patterns:
-    # @app.tool, @app.tool(), @app.tool(name=...), @mcp.tool, @self.mcp.tool, etc.
-    # Also matches @mcp.tool without parens (followed by newline or def)
+    # Count tools - SMART APPROACH:
+    # 1. Check tools/__init__.py for what's actually imported (most accurate)
+    # 2. Fall back to scanning all files if no init found
     tool_pattern = re.compile(r'@(?:app|mcp|self\.mcp|server)\.tool(?:\s*\(|(?=\s*(?:\r?\n|def\s)))', re.MULTILINE)
-    # Detect non-conforming registration patterns (should flag, not count)
     nonconforming_pattern = re.compile(r'def register_\w+_tool\s*\(|\.add_tool\s*\(|register_tool\s*\(')
     tool_count = 0
     
-    # Search multiple possible package locations
-    search_dirs = []
-    src_dir = repo_path / "src"
-    if src_dir.exists():
-        search_dirs.append(src_dir)
-    
-    # Also check for package dirs in root (e.g., ring_mcp/, blender_mcp/)
     pkg_name = repo_path.name.replace('-', '_')
-    pkg_dir = repo_path / pkg_name
-    if pkg_dir.exists() and pkg_dir.is_dir():
-        search_dirs.append(pkg_dir)
     
-    # Fallback to repo root if no src/pkg found
-    if not search_dirs:
-        search_dirs.append(repo_path)
+    # Find the tools directory and its __init__.py
+    tools_init_paths = [
+        repo_path / "src" / pkg_name / "mcp" / "tools" / "__init__.py",  # advanced-memory style
+        repo_path / "src" / pkg_name / "tools" / "__init__.py",
+        repo_path / pkg_name / "tools" / "__init__.py",
+        repo_path / "tools" / "__init__.py",
+    ]
+    
+    imported_modules = set()
+    tools_dir = None
+    for init_path in tools_init_paths:
+        if init_path.exists():
+            tools_dir = init_path.parent
+            try:
+                init_content = init_path.read_text(encoding='utf-8', errors='ignore')
+                # Extract imported module names from "from .module import ..." lines
+                # Only count else block (portmanteau mode) if exists
+                if 'else:' in init_content:
+                    # Split at else: and only use the second part
+                    else_block = init_content.split('else:')[-1]
+                    imports = re.findall(r'from\s+\.(\w+)\s+import', else_block)
+                else:
+                    imports = re.findall(r'from\s+\.(\w+)\s+import', init_content)
+                imported_modules.update(imports)
+            except Exception:
+                pass
+            break
+    
+    # Search directories
+    search_dirs = []
+    if tools_dir and tools_dir.exists():
+        search_dirs.append(tools_dir)
+    else:
+        src_dir = repo_path / "src"
+        if src_dir.exists():
+            search_dirs.append(src_dir)
+        pkg_dir = repo_path / pkg_name
+        if pkg_dir.exists() and pkg_dir.is_dir():
+            search_dirs.append(pkg_dir)
+        if not search_dirs:
+            search_dirs.append(repo_path)
     
     has_nonconforming = False
     nonconforming_count = 0
-    portmanteau_tools = 0  # Main portmanteau functions
-    portmanteau_ops = 0    # Operations within portmanteaus (Literal values)
-    individual_tools = 0   # Simple standalone tools (help, status, etc.)
+    portmanteau_tools = 0
+    portmanteau_ops = 0
+    individual_tools = 0
     
-    # Patterns for counting operations in portmanteaus
     literal_pattern = re.compile(r'Literal\[([^\]]+)\]')
     simple_tool_names = {'help', 'status', 'info', 'health', 'version', 'list', 'search', 'log', 'debug'}
     
     for search_dir in search_dirs:
         py_files = fast_py_glob(search_dir, max_depth=4)
         for py_file in py_files:
+            # If we have an __init__.py with imports, only count imported modules
+            if imported_modules:
+                if py_file.stem not in imported_modules:
+                    continue
             try:
-                content = py_file.read_text(encoding='utf-8')
-                # Count decorator-style tools (proper FastMCP)
+                content = py_file.read_text(encoding='utf-8', errors='ignore')
                 matches = tool_pattern.findall(content)
                 file_tools = len(matches)
                 
-                # Classify file type
                 path_str = str(py_file).lower()
                 filename = py_file.stem.lower()
                 is_portmanteau_file = (
@@ -1057,7 +1084,7 @@ def get_detailed_repo_info(repo_path: Path) -> Dict[str, Any]:
         readme_file = repo_path / readme_name
         if readme_file.exists():
             try:
-                readme_content = readme_file.read_text(encoding='utf-8')[:5000]  # Limit size
+                readme_content = readme_file.read_text(encoding='utf-8', errors='ignore')[:5000]  # Limit size
             except:
                 pass
             break
@@ -1085,7 +1112,7 @@ def get_detailed_repo_info(repo_path: Path) -> Dict[str, Any]:
     for search_dir in search_dirs:
         for py_file in fast_py_glob(search_dir, max_depth=4):
             try:
-                content = py_file.read_text(encoding='utf-8')
+                content = py_file.read_text(encoding='utf-8', errors='ignore')
                 rel_path = py_file.relative_to(repo_path)
                 
                 for match in tool_extract_pattern.finditer(content):
