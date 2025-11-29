@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.1.0] - 2025-11-29 - AI Assistant with Tools
+
+### Added
+- **🤖 AI Assistant Tab** - Chat with Ollama for intelligent MCP analysis
+- **Ollama model dropdown** - Auto-detects loaded models with sizes
+- **File reading** - AI can read any file in `D:/Dev/repos`
+- **Directory browsing** - AI can list folder contents
+- **Web search** - DuckDuckGo integration (no API key needed)
+- **Repo context** - Include full repo list in AI context
+
+### AI Assistant Features
+- 🛠️ AI Tools panel: file path input, web search input, repo list toggle
+- ⚡ Quick prompts: Analyze runts, Suggest portmanteaus, Review naming, etc.
+- 📋 Context sidebar: Shows repo count, tool count, SOTA/runt stats
+- ⚙️ Model selector: Dropdown with all Ollama models + refresh button
+- Real-time thinking indicators with tool usage display
+
+### API Endpoints
+- `GET /api/ai/read-file?path=` - Read files from repos directory
+- `GET /api/ai/search-web?query=` - DuckDuckGo web search
+- `GET /api/ai/list-repos` - List all repos with type detection
+- `GET /api/ollama/models` - List loaded Ollama models
+- `POST /api/ai/chat` - Chat with context (file, web, repos)
+
 ## [1.0.0] - 2025-11-29 - MCP Studio Dashboard
 
 ### Added
@@ -7,7 +31,7 @@
 - Auto-discovers servers from Claude Desktop, Cursor, Windsurf, Cline configs
 - Static analysis of all MCP repos with runt/SOTA classification
 - Beautiful dark theme with glass morphism UI
-- Tabbed interface: Overview, MCP Clients, Repositories, Tools, Console
+- Tabbed interface: Overview, MCP Clients, Repositories, Tools, Console, AI Assistant
 - Live activity log with real-time updates
 - Stats dashboard: Clients, Repos, Tools, SOTA count
 - Repository health breakdown: SOTA/Improvable/Runts
@@ -17,8 +41,9 @@
 - 📊 Overview: Stats + client discovery + repo health
 - 🔌 MCP Clients: All discovered server configs with connect buttons
 - 📦 Repositories: Filterable repo grid with detail modals
-- 🔧 Tools: Tool explorer (pending live connection)
-- 💻 Console: Tool execution without LLM (pending)
+- 🔧 Tools: Tool explorer with live connection support
+- 💻 Console: Tool execution console with parameter input
+- 🤖 AI Assistant: Ollama-powered chat with file/web access
 
 ## [0.2.1] - 2025-11-29 - Detail Modal Redesign
 

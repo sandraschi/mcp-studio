@@ -27,7 +27,8 @@
 
 ```
 docs/
-├── MCP_ZOO_RUNT_ANALYZER.md   🦁 MCP server quality analyzer (NEW!)
+├── MCP_STUDIO_DASHBOARD.md    🎛️ MCP Studio Dashboard (Mission Control)
+├── MCP_ZOO_RUNT_ANALYZER.md   🦁 MCP server quality analyzer
 │
 ├── repository-protection/      🛡️ Git, GitHub, backup & AI workflow
 │   ├── README.md              → Protection strategy hub
