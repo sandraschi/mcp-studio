@@ -225,7 +225,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     # Count tools - SMART APPROACH:
     # 1. Check tools/__init__.py for what's actually imported (most accurate)
     # 2. Fall back to scanning all files if no init found
-    tool_pattern = re.compile(r'@(?:app|mcp|self\.mcp|server)\.tool(?:\s*\(|(?=\s*(?:\r?\n|def\s)))', re.MULTILINE)
+    # Patterns: @mcp.tool, @app.tool, @self.mcp.tool, @self.mcp_server.mcp.tool, @server.tool
+    tool_pattern = re.compile(r'@(?:app|mcp|self\.mcp(?:_server\.mcp)?|server)\.tool(?:\s*\(|(?=\s*(?:\r?\n|def\s)))', re.MULTILINE)
     nonconforming_pattern = re.compile(r'def register_\w+_tool\s*\(|\.add_tool\s*\(|register_tool\s*\(')
     tool_count = 0
     
