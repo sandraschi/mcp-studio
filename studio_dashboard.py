@@ -159,6 +159,9 @@ def fast_py_glob(directory: Path, max_depth: int = 3) -> List[Path]:
                         continue
                     _walk(item, depth + 1)
                 elif item.suffix == '.py' and 'test' not in name_lower and name_lower != '__init__.py':
+                    # Skip backup/development files
+                    if any(x in name_lower for x in ['_fixed', '_backup', '_old', '_dev', '_wip']):
+                        continue
                     results.append(item)
         except (PermissionError, OSError):
             pass
@@ -295,8 +298,38 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             init_text = init_file.read_text(encoding='utf-8', errors='ignore')
             uses_portmanteau_pattern = 'def register_tools' in init_text
     
-    for search_dir in search_dirs:
-        py_files = fast_py_glob(search_dir, max_depth=4)
+    # Check if repo uses monolithic server pattern (all tools in server.py, no tools/ dir)
+    monolithic_server = None
+    # Only check for monolithic if there's no tools directory with register_tools
+    if not uses_portmanteau_pattern and not tools_dir:
+        for server_file in ['server.py', 'main.py', '__main__.py']:
+            candidate = (repo_path / "src" / pkg_name_underscore / server_file)
+            if not candidate.exists():
+                candidate = (repo_path / "src" / pkg_name / server_file)
+            if not candidate.exists():
+                candidate = (repo_path / pkg_name / server_file)
+            if candidate.exists():
+                try:
+                    server_content = candidate.read_text(encoding='utf-8', errors='ignore')
+                    if '@self.mcp.tool' in server_content or '@mcp.tool' in server_content:
+                        monolithic_server = candidate
+                        break
+                except:
+                    pass
+    
+    # If monolithic server, ONLY count from that file
+    if monolithic_server:
+        search_dirs = []
+        py_files_to_scan = [monolithic_server]
+    else:
+        py_files_to_scan = None  # Will be computed per search_dir
+    
+    for search_dir in search_dirs if py_files_to_scan is None else [None]:
+        if py_files_to_scan is None:
+            py_files = fast_py_glob(search_dir, max_depth=4)
+        else:
+            py_files = py_files_to_scan
+            
         for py_file in py_files:
             filename = py_file.stem.lower()
             
