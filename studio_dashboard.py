@@ -1849,7 +1849,7 @@ async def dashboard():
                 }}
                 
                 select.innerHTML = data.models.map(m => 
-                    `<option value="ollama:${{m.name}}">${{m.name}} (${{m.size}})</option>`
+                    `<option value="${{m.name}}">${{m.name}} (${{m.size}})</option>`
                 ).join('');
                 
                 info.innerHTML = `<span class="text-green-400">${{data.count}} models available</span>`;
