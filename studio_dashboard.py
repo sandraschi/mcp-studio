@@ -282,6 +282,14 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         if not search_dirs:
             search_dirs.append(repo_path)
     
+    # Also check plugins/ directory if it exists (virtualization-mcp pattern)
+    plugins_dir = None
+    for base in [repo_path / "src" / pkg_name_underscore, repo_path / "src" / pkg_name, repo_path / pkg_name]:
+        candidate = base / "plugins"
+        if candidate.exists() and candidate.is_dir():
+            plugins_dir = candidate
+            break
+    
     has_nonconforming = False
     nonconforming_count = 0
     portmanteau_tools = 0
@@ -368,6 +376,12 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     pass
         if has_tools:
             search_dirs = [portmanteau_dir]
+            # Also include plugins/ subdirs that DON'T have a corresponding portmanteau
+            if plugins_dir:
+                portmanteau_names = {p.stem.replace('_management', '') for p in portmanteau_dir.glob('*_management.py')}
+                for plugin_subdir in plugins_dir.iterdir():
+                    if plugin_subdir.is_dir() and plugin_subdir.name not in portmanteau_names:
+                        search_dirs.append(plugin_subdir)
             py_files_to_scan = None
         else:
             py_files_to_scan = None
