@@ -208,29 +208,60 @@ def analyze_repo(repo_path: Path) -> Dict[str, Any]:
     # Non-conforming patterns like register_*_tool(), .add_tool(), register_tool()
     nonconforming_pattern = r'def\s+register_\w+_tool\s*\(|\.add_tool\s*\(|register_tool\s*\('
     
-    # Determine package directory
-    pkg_name = name.replace("-", "_").replace("mcp_", "").replace("_mcp", "")
-    search_dirs = []
+    # Determine package directory - try multiple naming conventions
+    pkg_name = name.replace("-", "_")
+    pkg_variants = [
+        pkg_name,
+        pkg_name.replace("mcp_", "").replace("_mcp", ""),
+        f"{pkg_name}_mcp",
+        f"mcp_{pkg_name}",
+    ]
     
-    if info["has_src"]:
-        search_dirs.append(repo_path / "src")
+    # Find tools directory first (most accurate tool count)
+    tools_init_paths = []
+    for pn in pkg_variants:
+        tools_init_paths.extend([
+            repo_path / "src" / pn / "mcp" / "tools" / "__init__.py",  # advanced-memory style
+            repo_path / "src" / pn / "tools" / "__init__.py",
+            repo_path / pn / "tools" / "__init__.py",
+            repo_path / "tools" / "__init__.py",
+        ])
     
-    for potential_pkg in [repo_path / pkg_name, repo_path / f"{pkg_name}_mcp", repo_path / f"mcp_{pkg_name}"]:
-        if potential_pkg.is_dir():
-            search_dirs.append(potential_pkg)
-            info["has_tools_dir"] = (potential_pkg / "tools").is_dir()
+    tools_dir = None
+    for init_path in tools_init_paths:
+        if init_path.exists():
+            tools_dir = init_path.parent
+            info["has_tools_dir"] = True
             break
+    
+    # Build search directories
+    search_dirs = []
+    if tools_dir:
+        search_dirs.append(tools_dir)
+    else:
+        if info["has_src"]:
+            search_dirs.append(repo_path / "src")
+        for pn in pkg_variants:
+            pkg_path = repo_path / pn
+            if pkg_path.is_dir():
+                search_dirs.append(pkg_path)
+                if (pkg_path / "tools").is_dir():
+                    info["has_tools_dir"] = True
+                break
     
     if not search_dirs:
         search_dirs = [repo_path]
     
     # Count tools in Python files
+    literal_pattern = re.compile(r'Literal\[([^\]]+)\]')
+    
     for search_dir in search_dirs:
         if not search_dir.exists():
             continue
         
         for py_file in search_dir.rglob("*.py"):
-            if any(skip in str(py_file) for skip in SKIP_DIRS):
+            path_str = str(py_file).lower()
+            if any(skip in path_str for skip in SKIP_DIRS):
                 continue
             
             try:
@@ -238,20 +269,26 @@ def analyze_repo(repo_path: Path) -> Dict[str, Any]:
                 tool_matches = len(re.findall(tool_pattern, content))
                 nonconforming_matches = len(re.findall(nonconforming_pattern, content))
                 
-                if "portmanteau" in py_file.name.lower() or "_tool" in py_file.name.lower():
+                # Check if this is a portmanteau file (ends with _tool.py, _tools.py, or contains portmanteau)
+                is_portmanteau_file = (
+                    "portmanteau" in path_str or
+                    path_str.endswith("_tool.py") or
+                    path_str.endswith("_tools.py")
+                )
+                
+                if is_portmanteau_file and tool_matches > 0:
                     info["portmanteau_tools"] += tool_matches
-                    # Count operations (Literal types)
-                    literal_matches = re.findall(r'Literal\[([^\]]+)\]', content)
-                    for match in literal_matches:
-                        info["portmanteau_ops"] += len(match.split(','))
+                    # Count operations (Literal values with quoted strings)
+                    for lit_match in literal_pattern.findall(content):
+                        ops = len(re.findall(r'["\'][^"\']+["\']', lit_match))
+                        if ops > 1:  # Only count if multiple operations
+                            info["portmanteau_ops"] += ops
                 else:
                     info["individual_tools"] += tool_matches
                 
                 # Also count non-conforming tool registrations
                 if nonconforming_matches > 0:
                     info["individual_tools"] += nonconforming_matches
-                    if "nonconforming" not in info:
-                        info["nonconforming"] = 0
                     info["nonconforming"] = info.get("nonconforming", 0) + nonconforming_matches
                     if "Non-conforming tool registration" not in str(info["issues"]):
                         info["issues"].append(f"Non-conforming tool registration ({nonconforming_matches} tools)")
