@@ -15,6 +15,7 @@ import { Login } from './pages/auth/Login';
 import { Register } from './pages/auth/Register';
 import { ForgotPassword } from './pages/auth/ForgotPassword';
 import { ResetPassword } from './pages/auth/ResetPassword';
+import { Clients } from './pages/Clients';
 import { NotFound } from './pages/NotFound';
 
 // Wrapper component for protected routes
@@ -109,6 +110,11 @@ const App: React.FC = () => {
                 <Route path="/settings" element={
                   <ProtectedLayout>
                     <Settings />
+                  </ProtectedLayout>
+                } />
+                <Route path="/clients" element={
+                  <ProtectedLayout>
+                    <Clients />
                   </ProtectedLayout>
                 } />
 

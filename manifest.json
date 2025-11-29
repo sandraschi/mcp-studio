@@ -7,6 +7,7 @@
     "name": "MCP Studio Team",
     "email": "team@mcp-studio.dev"
   },
+  "license": "MIT",
   "server": {
     "type": "python",
     "entry_point": "src/mcp_studio/mcp_server.py",
@@ -31,87 +32,30 @@
       "type": "boolean",
       "title": "Auto Discovery",
       "description": "Automatically discover MCP servers on startup",
-      "default": true
+      "default": true,
+      "required": false
     }
   },
   "tools": [
     {
       "name": "discover_mcp_servers",
-      "description": "Discover MCP servers in configured paths",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "paths": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Specific paths to scan"
-          }
-        }
-      }
+      "description": "Discover MCP servers in configured paths"
     },
     {
       "name": "get_server_info",
-      "description": "Get detailed information about a specific MCP server",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "server_id": {
-            "type": "string",
-            "description": "Server identifier"
-          }
-        },
-        "required": ["server_id"]
-      }
+      "description": "Get detailed information about a specific MCP server"
     },
     {
       "name": "list_server_tools",
-      "description": "List all tools provided by a specific MCP server",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "server_id": {
-            "type": "string",
-            "description": "Server identifier"
-          }
-        },
-        "required": ["server_id"]
-      }
+      "description": "List all tools provided by a specific MCP server"
     },
     {
       "name": "execute_remote_tool",
-      "description": "Execute a tool on a remote MCP server",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "server_id": {
-            "type": "string",
-            "description": "Server identifier"
-          },
-          "tool_name": {
-            "type": "string",
-            "description": "Tool name to execute"
-          },
-          "parameters": {
-            "type": "object",
-            "description": "Tool parameters"
-          }
-        },
-        "required": ["server_id", "tool_name"]
-      }
+      "description": "Execute a tool on a remote MCP server"
     },
     {
       "name": "test_server_connection",
-      "description": "Test connection to an MCP server",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "server_id": {
-            "type": "string",
-            "description": "Server identifier"
-          }
-        },
-        "required": ["server_id"]
-      }
+      "description": "Test connection to an MCP server"
     }
   ],
   "compatibility": {

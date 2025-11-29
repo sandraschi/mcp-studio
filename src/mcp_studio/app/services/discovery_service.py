@@ -77,8 +77,12 @@ async def _find_potential_servers() -> List[Tuple[Path, str]]:
         if path.is_file() and path.suffix == ".py":
             # Single Python file
             server_paths.append((path, "python"))
+        elif path.is_file() and path.suffix in (".mcpb", ".dxt"):
+            # Packaged MCP server
+            package_type = "mcpb" if path.suffix == ".mcpb" else "dxt"
+            server_paths.append((path, package_type))
         elif path.is_dir():
-            # Directory - look for Python modules or MCPB packages
+            # Directory - look for Python modules or MCPB/DXT packages
             for item in path.iterdir():
                 if item.is_file() and item.suffix == ".py" and item.stem != "__init__":
                     server_paths.append((item, "python"))
@@ -86,6 +90,8 @@ async def _find_potential_servers() -> List[Tuple[Path, str]]:
                     server_paths.append((item, "python"))
                 elif item.is_file() and item.suffix == ".mcpb":
                     server_paths.append((item, "mcpb"))
+                elif item.is_file() and item.suffix == ".dxt":
+                    server_paths.append((item, "dxt"))
 
     logger.debug("Found potential MCP servers", count=len(server_paths))
     return server_paths
@@ -104,7 +110,7 @@ async def _discover_server(server_path: Path, server_type: str) -> None:
 
             if server_type == "python":
                 await _discover_python_server(server_path)
-            elif server_type == "dxt":
+            elif server_type in ("dxt", "mcpb"):
                 await _discover_dxt_server(server_path)
 
         except Exception as e:
@@ -222,9 +228,60 @@ async def _discover_python_server(server_path: Path) -> None:
             sys.path.remove(str(server_path.parent))
 
 async def _discover_dxt_server(dxt_path: Path) -> None:
-    """Discover a DXT-packaged MCP server."""
-    # TODO: Implement DXT package discovery
-    logger.warning("DXT package discovery not yet implemented", path=str(dxt_path))
+    """Discover a DXT/MCPB-packaged MCP server."""
+    from .mcpb_loader import load_mcpb_package
+    
+    try:
+        logger.info(
+            "Loading packaged server",
+            path=str(dxt_path),
+            type="dxt/mcpb"
+        )
+        
+        # Load the package
+        server_config = await load_mcpb_package(dxt_path)
+        
+        if not server_config:
+            logger.error(
+                "Failed to load packaged server",
+                path=str(dxt_path)
+            )
+            return
+        
+        # Create server ID
+        server_id = f"package:{server_config['id']}"
+        
+        # Register the server
+        server = MCPServer(
+            id=server_id,
+            name=server_config["name"],
+            description=server_config.get("description", ""),
+            path=server_config["command"],
+            args=server_config["args"],
+            cwd=server_config.get("cwd"),
+            env=server_config.get("env", {}),
+            status=ServerStatus.OFFLINE,
+            metadata=server_config.get("metadata", {}),
+            version=server_config.get("version", "unknown"),
+            type=server_config["type"],
+        )
+        
+        discovered_servers[server_id] = server
+        
+        logger.info(
+            "Packaged server registered",
+            server_id=server_id,
+            name=server["name"],
+            version=server.get("version", "unknown")
+        )
+        
+    except Exception as e:
+        logger.error(
+            "Error loading packaged server",
+            path=str(dxt_path),
+            error=str(e),
+            exc_info=True
+        )
 
 def _extract_tool_info(tool_name: str, tool_func: Any) -> Optional[MCPTool]:
     """Extract tool information from a tool function."""

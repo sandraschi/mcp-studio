@@ -23,7 +23,7 @@ dependencies = [
     "uvicorn>=0.23.0",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
-    "fastmcp>=2.11.0",
+    "fastmcp[all]>=2.13.1",
     "structlog>=23.0.0",
     "aiofiles>=23.0.0",
     "watchdog>=3.0.0",
@@ -36,10 +36,8 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
+    "ruff>=0.1.0",
     "mypy>=1.0.0",
-    "pylint>=3.0.0",
     "pytest-cov>=4.0.0",
 ]
 
@@ -47,15 +45,18 @@ dev = [
 where = ["src"]
 include = ["mcp_studio*"]
 
-[tool.black]
+[tool.ruff]
 line-length = 100
-target-version = ["py310"]
-include = '\.pyi?$'
+target-version = "py310"
+src = ["src"]
 
-[tool.isort]
-profile = "black"
-line_length = 100
-known_first_party = ["mcp_studio"]
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "A", "C4", "DTZ", "EM", "ISC", "ICN", "PT", "Q", "RET", "SIM", "TID", "ARG", "PLE", "PLW"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

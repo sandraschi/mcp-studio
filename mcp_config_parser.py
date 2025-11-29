@@ -134,8 +134,10 @@ class MCPConfigParser:
         """Parse Cursor IDE MCP configuration."""
         # Cursor might store MCP config in different locations
         cursor_paths = [
-            Path(os.environ["APPDATA"]) / "Cursor" / "User" / "settings.json",
-            Path(os.environ["APPDATA"]) / "Cursor" / "mcp_config.json",
+            Path(os.environ.get("APPDATA", "")) / "Cursor" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json",
+            Path(os.environ.get("APPDATA", "")) / "Cursor" / "User" / "settings.json",
+            Path(os.environ.get("APPDATA", "")) / "Cursor" / "mcp_settings.json",
+            Path.home() / ".cursor" / "mcp_settings.json",
         ]
         
         for config_path in cursor_paths:
@@ -145,19 +147,112 @@ class MCPConfigParser:
                         config = json.load(f)
                     
                     # Look for MCP-related settings
-                    if "mcp" in config or "mcpServers" in config:
+                    if "mcpServers" in config:
                         print(f"🔍 Found Cursor config with MCP settings: {config_path}")
-                        # Parse based on structure when we find it
+                        servers = self._parse_cursor_structure(config, str(config_path))
+                        if servers:
+                            print(f"✅ Parsed {len(servers)} MCP servers from Cursor IDE")
+                            return servers
                         
                 except Exception as e:
+                    print(f"⚠️  Error parsing Cursor config at {config_path}: {e}")
                     continue
                     
-        print("ℹ️ No Cursor MCP config found")
+        print("ℹ️  No Cursor MCP config found")
+        return []
+    
+    def _parse_cursor_structure(self, config: Dict, config_path: str) -> List[MCPServerInfo]:
+        """Parse Cursor-specific config structure."""
+        servers = []
+        
+        # Cursor uses same structure as Claude Desktop
+        mcp_servers = config.get("mcpServers", {})
+        
+        for server_id, server_config in mcp_servers.items():
+            server = MCPServerInfo(
+                id=server_id,
+                name=server_id.replace("-", " ").replace("_", " ").title(),
+                command=server_config.get("command", ""),
+                args=server_config.get("args", []),
+                cwd=server_config.get("cwd"),
+                env=server_config.get("env"),
+                source="cursor-ide"
+            )
+            servers.append(server)
+        
+        return servers
+    
+    def parse_cline_config(self) -> List[MCPServerInfo]:
+        """Parse Cline (formerly Claude Dev) VSCode extension config."""
+        paths = [
+            Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json",
+            Path.home() / ".config" / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json",
+        ]
+        return self._parse_standard_format(paths, "cline-vscode")
+    
+    def parse_continue_dev_config(self) -> List[MCPServerInfo]:
+        """Parse Continue.dev VSCode extension config."""
+        paths = [
+            Path.home() / ".continue" / "config.json",
+            Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "globalStorage" / "continue.continue" / "config.json",
+        ]
+        return self._parse_standard_format(paths, "continue-dev")
+    
+    def parse_lm_studio_config(self) -> List[MCPServerInfo]:
+        """Parse LM Studio MCP configuration."""
+        paths = [
+            Path(os.environ.get("APPDATA", "")) / "LM Studio" / "mcp_config.json",
+            Path.home() / ".lmstudio" / "mcp_config.json",
+        ]
+        return self._parse_standard_format(paths, "lm-studio")
+    
+    def parse_zed_config(self) -> List[MCPServerInfo]:
+        """Parse Zed Editor MCP configuration."""
+        paths = [
+            Path.home() / ".config" / "zed" / "mcp.json",
+            Path(os.environ.get("APPDATA", "")) / "Zed" / "mcp.json",
+        ]
+        return self._parse_standard_format(paths, "zed-editor")
+    
+    def _parse_standard_format(self, paths: List[Path], source: str) -> List[MCPServerInfo]:
+        """Parse standard MCP config format (mcpServers)."""
+        for config_path in paths:
+            if not config_path.exists():
+                continue
+            
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                
+                if "mcpServers" not in config:
+                    continue
+                
+                servers = []
+                for server_id, server_config in config["mcpServers"].items():
+                    server = MCPServerInfo(
+                        id=server_id,
+                        name=server_id.replace("-", " ").replace("_", " ").title(),
+                        command=server_config.get("command", ""),
+                        args=server_config.get("args", []),
+                        cwd=server_config.get("cwd"),
+                        env=server_config.get("env"),
+                        source=source
+                    )
+                    servers.append(server)
+                
+                if servers:
+                    print(f"✅ Parsed {len(servers)} MCP servers from {source}")
+                    return servers
+                    
+            except Exception as e:
+                continue
+        
         return []
     
     def parse_all_configs(self) -> MCPConfigSummary:
-        """Parse all available MCP configurations."""
-        print("🔍 Scanning for MCP configurations...")
+        """Parse all available MCP configurations from ALL known MCP clients."""
+        print("🔍 Scanning MCP Client Zoo...")
+        print("   (Claude Desktop, Cursor, Windsurf, Cline, Roo-Cline, Continue.dev, LM Studio, Zed, VSCode)")
         
         all_servers = []
         sources = []
@@ -168,17 +263,41 @@ class MCPConfigParser:
         if claude_servers:
             sources.append("claude-desktop")
         
-        # Parse Windsurf
-        windsurf_servers = self.parse_windsurf_config()
-        all_servers.extend(windsurf_servers)
-        if windsurf_servers:
-            sources.append("windsurf")
-        
-        # Parse Cursor
+        # Parse Cursor IDE
         cursor_servers = self.parse_cursor_config()
         all_servers.extend(cursor_servers)
         if cursor_servers:
-            sources.append("cursor")
+            sources.append("cursor-ide")
+        
+        # Parse Windsurf IDE
+        windsurf_servers = self.parse_windsurf_config()
+        all_servers.extend(windsurf_servers)
+        if windsurf_servers:
+            sources.append("windsurf-ide")
+        
+        # Parse Cline (VSCode)
+        cline_servers = self.parse_cline_config()
+        all_servers.extend(cline_servers)
+        if cline_servers:
+            sources.append("cline-vscode")
+        
+        # Parse Continue.dev
+        continue_servers = self.parse_continue_dev_config()
+        all_servers.extend(continue_servers)
+        if continue_servers:
+            sources.append("continue-dev")
+        
+        # Parse LM Studio
+        lmstudio_servers = self.parse_lm_studio_config()
+        all_servers.extend(lmstudio_servers)
+        if lmstudio_servers:
+            sources.append("lm-studio")
+        
+        # Parse Zed Editor
+        zed_servers = self.parse_zed_config()
+        all_servers.extend(zed_servers)
+        if zed_servers:
+            sources.append("zed-editor")
         
         total_estimated_tools = sum(server.estimated_tools for server in all_servers)
         
