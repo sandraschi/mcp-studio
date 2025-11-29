@@ -338,26 +338,49 @@ def scan_repos() -> List[Dict[str, Any]]:
 
 async def find_server_entrypoint(repo_name: str, repo_path: Path) -> Optional[Path]:
     """Find the Python entrypoint file for an MCP server repo."""
-    # Common patterns
+    # Variations of package name
+    pkg_variants = [
+        repo_name.replace("-", "_"),                           # ring-mcp -> ring_mcp
+        repo_name.replace("-", "_").replace("mcp_", "").replace("_mcp", ""),  # ring-mcp -> ring
+        repo_name.replace("my", "").replace("-", "_"),         # mywienerlinien -> wienerlinien
+        repo_name.replace("my", "").replace("-", "_") + "_mcp",  # mywienerlinien -> wienerlinien_mcp
+    ]
+    
+    # Direct file patterns
     patterns = [
         repo_path / "server.py",
         repo_path / "main.py",
         repo_path / "app.py",
         repo_path / "src" / "main.py",
         repo_path / "src" / "server.py",
-        repo_path / f"{repo_name.replace('-', '_')}" / "server.py",
     ]
     
-    # Also check package __main__ entrypoints
-    pkg_name = repo_name.replace("-", "_").replace("mcp_", "").replace("_mcp", "")
-    patterns.extend([
-        repo_path / "src" / pkg_name / "__main__.py",
-        repo_path / pkg_name / "__main__.py",
-    ])
+    # Add package-based patterns
+    for pkg in pkg_variants:
+        patterns.extend([
+            repo_path / pkg / "server.py",
+            repo_path / pkg / "main.py",
+            repo_path / pkg / "__main__.py",
+            repo_path / "src" / pkg / "server.py",
+            repo_path / "src" / pkg / "main.py",
+            repo_path / "src" / pkg / "__main__.py",
+        ])
     
     for pattern in patterns:
         if pattern.exists():
             return pattern
+    
+    # Fallback: search src/ for any server.py
+    src_dir = repo_path / "src"
+    if src_dir.exists():
+        for pkg_dir in src_dir.iterdir():
+            if pkg_dir.is_dir() and not pkg_dir.name.startswith(("_", ".")):
+                server_py = pkg_dir / "server.py"
+                if server_py.exists():
+                    return server_py
+                main_py = pkg_dir / "__main__.py"
+                if main_py.exists():
+                    return main_py
     
     return None
 
