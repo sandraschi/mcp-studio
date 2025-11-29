@@ -158,7 +158,7 @@ def fast_py_glob(directory: Path, max_depth: int = 3) -> List[Path]:
                     if name_lower in SKIP_DIRS or item.name.startswith('.') or item.name.endswith('.egg-info'):
                         continue
                     _walk(item, depth + 1)
-                elif item.suffix == '.py' and 'test' not in name_lower:
+                elif item.suffix == '.py' and 'test' not in name_lower and name_lower != '__init__.py':
                     results.append(item)
         except (PermissionError, OSError):
             pass
@@ -287,11 +287,32 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     
     literal_pattern = re.compile(r'Literal\[([^\]]+)\]')
     
+    # Check if repo uses portmanteau pattern (has register_tools function)
+    uses_portmanteau_pattern = False
+    if tools_dir:
+        init_file = tools_dir / '__init__.py'
+        if init_file.exists():
+            init_text = init_file.read_text(encoding='utf-8', errors='ignore')
+            uses_portmanteau_pattern = 'def register_tools' in init_text
+    
     for search_dir in search_dirs:
         py_files = fast_py_glob(search_dir, max_depth=4)
         for py_file in py_files:
+            filename = py_file.stem.lower()
+            
+            # For portmanteau repos, ONLY count portmanteau-style files
+            if uses_portmanteau_pattern:
+                is_portmanteau_entry = (
+                    filename.startswith('manage_') or
+                    filename.startswith('query_') or
+                    filename.startswith('analyze_') or
+                    filename.endswith('_portmanteau') or
+                    filename in {'test_calibre_connection', 'calibre_ocr_tool'}  # Known entry points
+                )
+                if not is_portmanteau_entry:
+                    continue
             # If we have an __init__.py with imports, only count imported modules
-            if imported_modules:
+            elif imported_modules:
                 # Check if file matches OR if file's parent dir matches (for packages)
                 file_matches = py_file.stem in imported_modules
                 parent_matches = py_file.parent.name in imported_modules
