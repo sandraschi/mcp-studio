@@ -756,6 +756,112 @@ async def get_logs():
     """Get recent log messages."""
     return {"logs": state["logs"][-100:]}
 
+@app.get("/api/ai/read-file")
+async def ai_read_file(path: str):
+    """Read a file from the repos directory for AI context."""
+    # Security: only allow reading from REPOS_DIR
+    try:
+        file_path = Path(path)
+        if not file_path.is_absolute():
+            file_path = REPOS_DIR / path
+        
+        # Ensure path is within repos dir
+        file_path = file_path.resolve()
+        if not str(file_path).startswith(str(REPOS_DIR.resolve())):
+            return {"error": "Access denied: path must be within repos directory"}
+        
+        if not file_path.exists():
+            return {"error": f"File not found: {path}"}
+        
+        if file_path.is_dir():
+            # List directory contents
+            items = []
+            for item in sorted(file_path.iterdir())[:100]:  # Limit to 100 items
+                items.append({
+                    "name": item.name,
+                    "type": "dir" if item.is_dir() else "file",
+                    "size": item.stat().st_size if item.is_file() else None
+                })
+            return {"type": "directory", "path": str(file_path), "items": items}
+        
+        # Read file (limit size)
+        size = file_path.stat().st_size
+        if size > 100_000:  # 100KB limit
+            return {"error": f"File too large ({size} bytes). Max 100KB."}
+        
+        try:
+            content = file_path.read_text(encoding='utf-8')
+        except UnicodeDecodeError:
+            return {"error": "Binary file, cannot read as text"}
+        
+        return {"type": "file", "path": str(file_path), "content": content, "size": size}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/ai/search-web")
+async def ai_search_web(query: str, num_results: int = 5):
+    """Search the web using DuckDuckGo (no API key needed)."""
+    import httpx
+    
+    try:
+        # Use DuckDuckGo HTML search (no API key required)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://html.duckduckgo.com/html/",
+                params={"q": query},
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            )
+            
+            if resp.status_code != 200:
+                return {"error": f"Search failed: {resp.status_code}"}
+            
+            # Parse results (simple regex extraction)
+            import re
+            html = resp.text
+            
+            results = []
+            # Find result links and snippets
+            pattern = r'<a rel="nofollow" class="result__a" href="([^"]+)"[^>]*>([^<]+)</a>.*?<a class="result__snippet"[^>]*>([^<]*)</a>'
+            matches = re.findall(pattern, html, re.DOTALL)[:num_results]
+            
+            for url, title, snippet in matches:
+                # Clean up URL (DuckDuckGo redirects)
+                if "uddg=" in url:
+                    actual_url = re.search(r'uddg=([^&]+)', url)
+                    if actual_url:
+                        from urllib.parse import unquote
+                        url = unquote(actual_url.group(1))
+                
+                results.append({
+                    "title": title.strip(),
+                    "url": url,
+                    "snippet": snippet.strip()
+                })
+            
+            return {"query": query, "results": results, "count": len(results)}
+    
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/ai/list-repos")
+async def ai_list_repos():
+    """List all repos in the repos directory with basic info."""
+    repos = []
+    for item in sorted(REPOS_DIR.iterdir()):
+        if item.is_dir() and not item.name.startswith('.'):
+            info = {"name": item.name, "path": str(item)}
+            # Check for common files
+            if (item / "README.md").exists():
+                info["has_readme"] = True
+            if (item / "pyproject.toml").exists():
+                info["type"] = "python"
+            elif (item / "package.json").exists():
+                info["type"] = "node"
+            elif (item / "Cargo.toml").exists():
+                info["type"] = "rust"
+            repos.append(info)
+    return {"repos": repos, "count": len(repos), "base_path": str(REPOS_DIR)}
+
 @app.get("/api/ollama/models")
 async def get_ollama_models():
     """Get list of available Ollama models."""
@@ -783,26 +889,74 @@ async def get_ollama_models():
 
 @app.post("/api/ai/chat")
 async def ai_chat(request: Request):
-    """Chat with Ollama for AI-powered analysis."""
+    """Chat with Ollama for AI-powered analysis with tool capabilities."""
     import httpx
     
     data = await request.json()
     model_id = data.get("model_id", "llama3.2:3b")
     message = data.get("message", "")
+    include_repo_context = data.get("include_repo_context", False)
+    file_path = data.get("file_path")  # Optional file to include
+    web_search = data.get("web_search")  # Optional web search query
     
     if not message:
         raise HTTPException(400, "message required")
     
     log(f"🤖 AI chat with {model_id}: {message[:50]}...")
     
+    # Build enhanced context
+    context_parts = []
+    
+    # Add file content if requested
+    if file_path:
+        file_result = await ai_read_file(file_path)
+        if "content" in file_result:
+            context_parts.append(f"FILE: {file_path}\n```\n{file_result['content'][:10000]}\n```")
+        elif "items" in file_result:
+            items_str = "\n".join([f"  {'📁' if i['type']=='dir' else '📄'} {i['name']}" for i in file_result['items'][:50]])
+            context_parts.append(f"DIRECTORY: {file_path}\n{items_str}")
+    
+    # Add web search results if requested
+    if web_search:
+        search_result = await ai_search_web(web_search)
+        if "results" in search_result:
+            results_str = "\n".join([f"- [{r['title']}]({r['url']}): {r['snippet']}" for r in search_result['results']])
+            context_parts.append(f"WEB SEARCH for '{web_search}':\n{results_str}")
+    
+    # Add repo list context if requested
+    if include_repo_context:
+        repos_result = await ai_list_repos()
+        repos_str = "\n".join([f"- {r['name']} ({r.get('type', 'unknown')})" for r in repos_result['repos'][:30]])
+        context_parts.append(f"AVAILABLE REPOS in {repos_result['base_path']}:\n{repos_str}")
+    
+    # Build full prompt
+    system_prompt = """You are an AI assistant for MCP Studio, helping analyze and manage MCP (Model Context Protocol) servers.
+You have access to:
+- The user's MCP repositories at D:/Dev/repos
+- Web search capabilities
+- File reading capabilities
+
+When helping with code:
+- Be specific and reference actual files/functions
+- Suggest concrete improvements
+- Follow FastMCP best practices
+
+When the user asks about their repos, you can see the provided context."""
+
+    full_message = message
+    if context_parts:
+        full_message = "\n\n".join(context_parts) + "\n\nUSER QUESTION: " + message
+    
     try:
-        # Call Ollama API directly
         async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(
                 "http://localhost:11434/api/chat",
                 json={
                     "model": model_id,
-                    "messages": [{"role": "user", "content": message}],
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": full_message}
+                    ],
                     "stream": False,
                 }
             )
@@ -817,7 +971,7 @@ async def ai_chat(request: Request):
                 response = str(result)
             
             log(f"✅ AI response received ({len(response)} chars)")
-            return {"response": response}
+            return {"response": response, "context_used": list(context_parts) if context_parts else None}
     
     except httpx.TimeoutException:
         log("❌ AI chat timeout")
@@ -1148,29 +1302,53 @@ async def dashboard():
                 
                 <!-- Right: Quick Actions & Context -->
                 <div class="space-y-6">
+                    <!-- Tools Panel -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10">
+                            <h3 class="font-semibold text-sm">🛠️ AI Tools</h3>
+                        </div>
+                        <div class="p-4 space-y-3">
+                            <div>
+                                <label class="text-xs text-gray-400 flex items-center gap-2">
+                                    <input type="checkbox" id="ai-include-repos" class="rounded"> Include repo list
+                                </label>
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400">📁 Read file/folder</label>
+                                <input id="ai-file-path" type="text" placeholder="repo-name/src/main.py" 
+                                       class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs">
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400">🌐 Web search</label>
+                                <input id="ai-web-search" type="text" placeholder="FastMCP best practices" 
+                                       class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs">
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Quick Prompts -->
                     <div class="glass rounded-xl overflow-hidden">
                         <div class="px-4 py-3 border-b border-white/10">
                             <h3 class="font-semibold text-sm">⚡ Quick Prompts</h3>
                         </div>
                         <div class="p-4 space-y-2">
-                            <button onclick="setAIPrompt('Analyze my MCP zoo and identify runts that need the most improvement')" 
+                            <button onclick="setAIPrompt('Analyze my MCP zoo and identify runts that need the most improvement', true)" 
                                     class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
                                 🔍 Analyze runts
                             </button>
-                            <button onclick="setAIPrompt('Suggest which tools could be combined into portmanteau patterns')" 
+                            <button onclick="setAIPrompt('Suggest which tools could be combined into portmanteau patterns', true)" 
                                     class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
                                 🔧 Suggest portmanteaus
                             </button>
-                            <button onclick="setAIPrompt('Review tool naming conventions and suggest improvements')" 
+                            <button onclick="setAIPrompt('Review tool naming conventions and suggest improvements', true)" 
                                     class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
                                 📝 Review naming
                             </button>
-                            <button onclick="setAIPrompt('Which repos are missing tests and how should they be structured?')" 
+                            <button onclick="askWithWebSearch('FastMCP 2.x best practices and patterns')" 
                                     class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
-                                🧪 Test coverage
+                                🌐 FastMCP best practices
                             </button>
-                            <button onclick="setAIPrompt('Generate a summary of all my MCP servers and their capabilities')" 
+                            <button onclick="setAIPrompt('Generate a summary of all my MCP servers and their capabilities', true)" 
                                     class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
                                 📊 Zoo summary
                             </button>
@@ -1878,8 +2056,14 @@ async def dashboard():
             document.getElementById('ai-context-runts').textContent = reposData.filter(r => r.status === 'runt').length;
         }}
 
-        function setAIPrompt(text) {{
+        function setAIPrompt(text, includeRepos = false) {{
             document.getElementById('ai-input').value = text;
+            document.getElementById('ai-include-repos').checked = includeRepos;
+        }}
+        
+        function askWithWebSearch(searchQuery) {{
+            document.getElementById('ai-web-search').value = searchQuery;
+            document.getElementById('ai-input').value = 'Based on the web search results, summarize the key points and how they apply to my MCP projects.';
         }}
 
         function addChatMessage(role, content) {{
@@ -1903,7 +2087,7 @@ async def dashboard():
 
         async function sendAIMessage() {{
             if (!aiConnected) {{
-                alert('Please connect to local-llm-mcp first');
+                alert('Please connect to Ollama first');
                 return;
             }}
             
@@ -1911,19 +2095,41 @@ async def dashboard():
             const message = input.value.trim();
             if (!message) return;
             
+            // Get tool options
+            const includeRepos = document.getElementById('ai-include-repos').checked;
+            const filePath = document.getElementById('ai-file-path').value.trim();
+            const webSearch = document.getElementById('ai-web-search').value.trim();
+            
+            // Show what tools are being used
+            let toolsUsed = [];
+            if (includeRepos) toolsUsed.push('📁 repos');
+            if (filePath) toolsUsed.push('📄 ' + filePath);
+            if (webSearch) toolsUsed.push('🌐 ' + webSearch);
+            
+            const userMsg = toolsUsed.length > 0 
+                ? message + '\\n\\n<span class="text-xs text-gray-500">Tools: ' + toolsUsed.join(', ') + '</span>'
+                : message;
+            
             input.value = '';
-            addChatMessage('user', message);
+            document.getElementById('ai-file-path').value = '';
+            document.getElementById('ai-web-search').value = '';
+            document.getElementById('ai-include-repos').checked = false;
+            
+            addChatMessage('user', userMsg);
             
             // Add thinking indicator
             const chatEl = document.getElementById('ai-chat');
             const thinkingId = 'thinking-' + Date.now();
+            const thinkingText = toolsUsed.length > 0 
+                ? 'Gathering context... (' + toolsUsed.join(', ') + ')'
+                : 'Thinking...';
             chatEl.insertAdjacentHTML('beforeend', `
                 <div id="${{thinkingId}}" class="flex gap-3">
                     <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-sm">🤖</div>
                     <div class="flex-1 bg-white/5 rounded-lg p-4">
                         <div class="font-medium text-purple-400 mb-1">AI Assistant</div>
                         <div class="text-gray-400 flex items-center gap-2">
-                            <span class="animate-pulse">●</span> Thinking...
+                            <span class="animate-pulse">●</span> ${{thinkingText}}
                         </div>
                     </div>
                 </div>
@@ -1942,7 +2148,10 @@ async def dashboard():
                     headers: {{ 'Content-Type': 'application/json' }},
                     body: JSON.stringify({{
                         model_id: modelId,
-                        message: fullPrompt
+                        message: fullPrompt,
+                        include_repo_context: includeRepos,
+                        file_path: filePath || null,
+                        web_search: webSearch || null
                     }})
                 }});
                 
