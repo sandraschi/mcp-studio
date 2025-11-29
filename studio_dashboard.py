@@ -65,15 +65,14 @@ MCP_CLIENT_CONFIGS = {
     ],
 }
 
-# Skip these directories when scanning
+# Skip these directories when scanning - MUST include all venv patterns
 SKIP_DIRS = {
     'node_modules', '__pycache__', '.git', 'venv', '.venv', 'dist', 'build', 
     'env', '.env', 'eggs', '.eggs', '.tox', '.mypy_cache', '.pytest_cache',
     'site-packages', '.ruff_cache', 'coverage', 'htmlcov', '.idea', '.vscode',
-    '_legacy', 'deprecated'
+    '_legacy', 'deprecated', 'Lib', 'Scripts', 'Include',  # Windows venv
+    'lib', 'bin', 'lib64',  # Linux venv
 }
-# Patterns that indicate we're inside a venv (check full path)
-VENV_PATTERNS = {".venv", "venv", "Lib", "site-packages"}
 
 # FastMCP version thresholds
 FASTMCP_LATEST = "2.13.1"
@@ -142,20 +141,24 @@ def discover_mcp_clients() -> Dict[str, List[Dict]]:
 def fast_py_glob(directory: Path, max_depth: int = 3) -> List[Path]:
     """Fast python file glob with depth limit and skip dirs."""
     results = []
+    
+    # Pre-check: don't scan if directory itself is in a venv
+    dir_str = str(directory).lower()
+    if '.venv' in dir_str or 'site-packages' in dir_str or '\\lib\\' in dir_str:
+        return results
+    
     def _walk(path: Path, depth: int):
         if depth > max_depth:
             return
         try:
             for item in path.iterdir():
+                name_lower = item.name.lower()
                 if item.is_dir():
-                    if item.name in SKIP_DIRS or item.name.startswith('.') or item.name.endswith('.egg-info'):
-                        continue
-                    if any(vp in str(item) for vp in VENV_PATTERNS):
+                    # Skip venv, cache, and hidden dirs
+                    if name_lower in SKIP_DIRS or item.name.startswith('.') or item.name.endswith('.egg-info'):
                         continue
                     _walk(item, depth + 1)
-                elif item.suffix == '.py' and 'test' not in item.name.lower():
-                    if any(vp in str(item) for vp in VENV_PATTERNS):
-                        continue
+                elif item.suffix == '.py' and 'test' not in name_lower:
                     results.append(item)
         except (PermissionError, OSError):
             pass
@@ -221,18 +224,24 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     tool_count = 0
     
     pkg_name = repo_path.name.replace('-', '_')
-    # Try multiple package name variations (e.g., advanced_memory_mcp -> advanced_memory)
+    # Try multiple package name variations
     pkg_name_short = pkg_name.replace('_mcp', '').replace('mcp_', '')
+    # Also try inserting underscore before mcp (calibremcp -> calibre_mcp)
+    pkg_name_underscore = pkg_name.replace('mcp', '_mcp') if 'mcp' in pkg_name and '_mcp' not in pkg_name else pkg_name
     
     # Find the tools directory and its __init__.py
     tools_init_paths = [
-        # Try short name first (advanced_memory)
+        # Try underscore variant first (calibre_mcp)
+        repo_path / "src" / pkg_name_underscore / "mcp" / "tools" / "__init__.py",
+        repo_path / "src" / pkg_name_underscore / "tools" / "__init__.py",
+        # Try short name (advanced_memory)
         repo_path / "src" / pkg_name_short / "mcp" / "tools" / "__init__.py",
         repo_path / "src" / pkg_name_short / "tools" / "__init__.py",
         # Try full name (advanced_memory_mcp)
         repo_path / "src" / pkg_name / "mcp" / "tools" / "__init__.py",
         repo_path / "src" / pkg_name / "tools" / "__init__.py",
         # Root package dirs
+        repo_path / pkg_name_underscore / "tools" / "__init__.py",
         repo_path / pkg_name_short / "tools" / "__init__.py",
         repo_path / pkg_name / "tools" / "__init__.py",
         repo_path / "tools" / "__init__.py",
@@ -283,7 +292,10 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         for py_file in py_files:
             # If we have an __init__.py with imports, only count imported modules
             if imported_modules:
-                if py_file.stem not in imported_modules:
+                # Check if file matches OR if file's parent dir matches (for packages)
+                file_matches = py_file.stem in imported_modules
+                parent_matches = py_file.parent.name in imported_modules
+                if not file_matches and not parent_matches:
                     continue
             try:
                 content = py_file.read_text(encoding='utf-8', errors='ignore')
