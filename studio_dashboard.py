@@ -66,10 +66,19 @@ MCP_CLIENT_CONFIGS = {
 }
 
 # Skip these directories when scanning
-SKIP_DIRS = {'node_modules', '__pycache__', '.git', 'venv', '.venv', 'dist', 'build', 
-             'env', '.env', 'eggs', '.eggs', '.tox', '.mypy_cache', '.pytest_cache',
-             'site-packages', '.ruff_cache', 'coverage', 'htmlcov', '.idea', '.vscode',
-             '_legacy', 'deprecated'}
+SKIP_DIRS = {
+    'node_modules', '__pycache__', '.git', 'venv', '.venv', 'dist', 'build', 
+    'env', '.env', 'eggs', '.eggs', '.tox', '.mypy_cache', '.pytest_cache',
+    'site-packages', '.ruff_cache', 'coverage', 'htmlcov', '.idea', '.vscode',
+    '_legacy', 'deprecated'
+}
+# Patterns that indicate we're inside a venv (check full path)
+VENV_PATTERNS = {".venv", "venv", "Lib", "site-packages"}
+
+# FastMCP version thresholds
+FASTMCP_LATEST = "2.13.1"
+FASTMCP_RUNT_THRESHOLD = "2.10.0"
+FASTMCP_WARN_THRESHOLD = "2.12.0"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FASTAPI APP
@@ -130,39 +139,52 @@ def discover_mcp_clients() -> Dict[str, List[Dict]]:
 # STATIC ANALYSIS - Runt checker
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def is_mcp_repo(repo_path: Path) -> bool:
-    """Check if a directory is an MCP server repository."""
-    indicators = [
-        repo_path / "pyproject.toml",
-        repo_path / "setup.py",
-        repo_path / "requirements.txt",
-    ]
-    
-    # Must have Python project indicator
-    if not any(f.exists() for f in indicators):
-        return False
-    
-    # Check for FastMCP/MCP imports in any Python file
-    try:
-        for py_file in list(repo_path.glob("*.py"))[:5] + list(repo_path.glob("src/**/*.py"))[:10]:
-            if py_file.exists():
-                content = py_file.read_text(encoding='utf-8', errors='ignore')[:5000]
-                if 'fastmcp' in content.lower() or 'mcp' in content.lower():
-                    return True
-    except:
-        pass
-    
-    return False
+def fast_py_glob(directory: Path, max_depth: int = 3) -> List[Path]:
+    """Fast python file glob with depth limit and skip dirs."""
+    results = []
+    def _walk(path: Path, depth: int):
+        if depth > max_depth:
+            return
+        try:
+            for item in path.iterdir():
+                if item.is_dir():
+                    if item.name in SKIP_DIRS or item.name.startswith('.') or item.name.endswith('.egg-info'):
+                        continue
+                    if any(vp in str(item) for vp in VENV_PATTERNS):
+                        continue
+                    _walk(item, depth + 1)
+                elif item.suffix == '.py' and 'test' not in item.name.lower():
+                    if any(vp in str(item) for vp in VENV_PATTERNS):
+                        continue
+                    results.append(item)
+        except (PermissionError, OSError):
+            pass
+    _walk(directory, 0)
+    return results
 
-def analyze_repo(repo_path: Path) -> Dict[str, Any]:
-    """Analyze a single MCP repository for quality metrics."""
-    name = repo_path.name
-    
+def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
+    """Analyze a single MCP repository - COPIED FROM WORKING runt_api.py."""
     info = {
-        "name": name,
+        "name": repo_path.name,
         "path": str(repo_path),
         "fastmcp_version": None,
-        "tools": 0,
+        "tool_count": 0,
+        "tools": 0,  # Alias for compatibility
+        "has_portmanteau": False,
+        "has_ci": False,
+        "has_cicd": False,  # Alias
+        "ci_workflows": 0,
+        "cicd_count": 0,  # Alias
+        "is_runt": False,
+        "runt_reasons": [],
+        "issues": [],  # Alias
+        "recommendations": [],
+        "status_emoji": "✅",
+        "status_color": "green",
+        "status_label": "SOTA",
+        "status": "sota",
+        "zoo_class": "unknown",
+        "zoo_emoji": "🦔",
         "portmanteau_tools": 0,
         "portmanteau_ops": 0,
         "individual_tools": 0,
@@ -170,192 +192,246 @@ def analyze_repo(repo_path: Path) -> Dict[str, Any]:
         "has_tests": False,
         "has_scripts": False,
         "has_tools_dir": False,
-        "has_cicd": False,
-        "cicd_count": 0,
-        "issues": [],
-        "recommendations": [],
-        "status": "unknown",
-        "zoo_class": "chipmunk",
-        "zoo_emoji": "🐿️",
     }
-    
-    # Check structure
-    info["has_src"] = (repo_path / "src").is_dir()
-    info["has_tests"] = (repo_path / "tests").is_dir()
-    info["has_scripts"] = (repo_path / "scripts").is_dir()
-    
-    # Check CI/CD
-    workflows_dir = repo_path / ".github" / "workflows"
-    if workflows_dir.exists():
-        info["cicd_count"] = len(list(workflows_dir.glob("*.yml"))) + len(list(workflows_dir.glob("*.yaml")))
-        info["has_cicd"] = info["cicd_count"] > 0
-    
-    # Find FastMCP version
-    for dep_file in ["pyproject.toml", "requirements.txt", "setup.py"]:
-        dep_path = repo_path / dep_file
-        if dep_path.exists():
+
+    # Check for requirements.txt or pyproject.toml
+    req_file = repo_path / "requirements.txt"
+    pyproject_file = repo_path / "pyproject.toml"
+
+    fastmcp_version = None
+    for config_file in [req_file, pyproject_file]:
+        if config_file.exists():
             try:
-                content = dep_path.read_text(encoding='utf-8', errors='ignore')
-                match = re.search(r'fastmcp[>=<~!\s]*([0-9]+\.[0-9]+(?:\.[0-9]+)?)', content, re.IGNORECASE)
+                content = config_file.read_text(encoding='utf-8', errors='ignore')
+                match = re.search(r'fastmcp.*?(\d+\.\d+\.?\d*)', content, re.IGNORECASE)
                 if match:
-                    info["fastmcp_version"] = match.group(1)
+                    fastmcp_version = match.group(1)
                     break
-            except:
+            except Exception:
                 pass
+
+    if not fastmcp_version:
+        return None  # Not an MCP repo
+
+    info["fastmcp_version"] = fastmcp_version
+
+    # Count tools - SMART APPROACH from runt_api.py
+    tool_pattern = re.compile(r'@(?:app|mcp|self\.mcp(?:_server\.mcp)?|server)\.tool(?:\s*\(|(?=\s*(?:\r?\n|def\s)))', re.MULTILINE)
+    nonconforming_pattern = re.compile(r'def register_\w+_tool\s*\(|\.add_tool\s*\(|register_tool\s*\(')
+    tool_count = 0
     
-    # Count tools - multiple patterns to catch all styles
-    tool_pattern = r'@(?:app|mcp|self\.mcp(?:_server\.mcp)?|server)\.tool(?:\s*\(|(?=\s*(?:\r?\n|def\s)))'
-    # Non-conforming patterns like register_*_tool(), .add_tool(), register_tool()
-    nonconforming_pattern = r'def\s+register_\w+_tool\s*\(|\.add_tool\s*\(|register_tool\s*\('
+    pkg_name = repo_path.name.replace('-', '_')
+    # Try multiple package name variations (e.g., advanced_memory_mcp -> advanced_memory)
+    pkg_name_short = pkg_name.replace('_mcp', '').replace('mcp_', '')
     
-    # Determine package directory - try multiple naming conventions
-    pkg_name = name.replace("-", "_")
-    pkg_variants = [
-        pkg_name,
-        pkg_name.replace("mcp_", "").replace("_mcp", ""),
-        f"{pkg_name}_mcp",
-        f"mcp_{pkg_name}",
+    # Find the tools directory and its __init__.py
+    tools_init_paths = [
+        # Try short name first (advanced_memory)
+        repo_path / "src" / pkg_name_short / "mcp" / "tools" / "__init__.py",
+        repo_path / "src" / pkg_name_short / "tools" / "__init__.py",
+        # Try full name (advanced_memory_mcp)
+        repo_path / "src" / pkg_name / "mcp" / "tools" / "__init__.py",
+        repo_path / "src" / pkg_name / "tools" / "__init__.py",
+        # Root package dirs
+        repo_path / pkg_name_short / "tools" / "__init__.py",
+        repo_path / pkg_name / "tools" / "__init__.py",
+        repo_path / "tools" / "__init__.py",
     ]
     
-    # Find tools directory first (most accurate tool count)
-    tools_init_paths = []
-    for pn in pkg_variants:
-        tools_init_paths.extend([
-            repo_path / "src" / pn / "mcp" / "tools" / "__init__.py",  # advanced-memory style
-            repo_path / "src" / pn / "tools" / "__init__.py",
-            repo_path / pn / "tools" / "__init__.py",
-            repo_path / "tools" / "__init__.py",
-        ])
-    
+    imported_modules = set()
     tools_dir = None
     for init_path in tools_init_paths:
         if init_path.exists():
             tools_dir = init_path.parent
-            info["has_tools_dir"] = True
+            try:
+                init_content = init_path.read_text(encoding='utf-8', errors='ignore')
+                # Only count else block (portmanteau mode) if exists
+                if 'else:' in init_content:
+                    else_block = init_content.split('else:')[-1]
+                    imports = re.findall(r'from\s+\.(\w+)\s+import', else_block)
+                else:
+                    imports = re.findall(r'from\s+\.(\w+)\s+import', init_content)
+                imported_modules.update(imports)
+            except Exception:
+                pass
             break
     
-    # Build search directories
+    # Search directories
     search_dirs = []
-    if tools_dir:
+    if tools_dir and tools_dir.exists():
         search_dirs.append(tools_dir)
     else:
-        if info["has_src"]:
-            search_dirs.append(repo_path / "src")
-        for pn in pkg_variants:
-            pkg_path = repo_path / pn
-            if pkg_path.is_dir():
-                search_dirs.append(pkg_path)
-                if (pkg_path / "tools").is_dir():
-                    info["has_tools_dir"] = True
-                break
+        src_dir = repo_path / "src"
+        if src_dir.exists():
+            search_dirs.append(src_dir)
+        pkg_dir = repo_path / pkg_name
+        if pkg_dir.exists() and pkg_dir.is_dir():
+            search_dirs.append(pkg_dir)
+        if not search_dirs:
+            search_dirs.append(repo_path)
     
-    if not search_dirs:
-        search_dirs = [repo_path]
+    has_nonconforming = False
+    nonconforming_count = 0
+    portmanteau_tools = 0
+    portmanteau_ops = 0
+    individual_tools = 0
     
-    # Count tools in Python files
     literal_pattern = re.compile(r'Literal\[([^\]]+)\]')
     
     for search_dir in search_dirs:
-        if not search_dir.exists():
-            continue
-        
-        for py_file in search_dir.rglob("*.py"):
-            path_str = str(py_file).lower()
-            if any(skip in path_str for skip in SKIP_DIRS):
-                continue
-            
+        py_files = fast_py_glob(search_dir, max_depth=4)
+        for py_file in py_files:
+            # If we have an __init__.py with imports, only count imported modules
+            if imported_modules:
+                if py_file.stem not in imported_modules:
+                    continue
             try:
                 content = py_file.read_text(encoding='utf-8', errors='ignore')
-                tool_matches = len(re.findall(tool_pattern, content))
-                nonconforming_matches = len(re.findall(nonconforming_pattern, content))
+                matches = tool_pattern.findall(content)
+                file_tools = len(matches)
                 
-                # Check if this is a portmanteau file (ends with _tool.py, _tools.py, or contains portmanteau)
+                path_str = str(py_file).lower()
                 is_portmanteau_file = (
-                    "portmanteau" in path_str or
+                    "portmanteau" in path_str or 
                     path_str.endswith("_tool.py") or
                     path_str.endswith("_tools.py")
                 )
                 
-                if is_portmanteau_file and tool_matches > 0:
-                    info["portmanteau_tools"] += tool_matches
-                    # Count operations (Literal values with quoted strings)
+                if is_portmanteau_file:
+                    portmanteau_tools += file_tools
                     for lit_match in literal_pattern.findall(content):
                         ops = len(re.findall(r'["\'][^"\']+["\']', lit_match))
-                        if ops > 1:  # Only count if multiple operations
-                            info["portmanteau_ops"] += ops
+                        if ops > 1:
+                            portmanteau_ops += ops
                 else:
-                    info["individual_tools"] += tool_matches
+                    individual_tools += file_tools
                 
-                # Also count non-conforming tool registrations
-                if nonconforming_matches > 0:
-                    info["individual_tools"] += nonconforming_matches
-                    info["nonconforming"] = info.get("nonconforming", 0) + nonconforming_matches
-                    if "Non-conforming tool registration" not in str(info["issues"]):
-                        info["issues"].append(f"Non-conforming tool registration ({nonconforming_matches} tools)")
-                        info["recommendations"].append("Migrate to FastMCP @app.tool decorator pattern")
-                    
-            except:
+                tool_count += file_tools
+                
+                nc_matches = nonconforming_pattern.findall(content)
+                if nc_matches:
+                    has_nonconforming = True
+                    nonconforming_count += len(nc_matches)
+            except Exception:
                 pass
     
-    info["tools"] = info["portmanteau_tools"] + info["individual_tools"]
+    info["tool_count"] = tool_count
+    info["tools"] = tool_count  # Alias
+    info["portmanteau_tools"] = portmanteau_tools
+    info["portmanteau_ops"] = portmanteau_ops
+    info["individual_tools"] = individual_tools
+    info["has_nonconforming_registration"] = has_nonconforming
+    info["nonconforming_count"] = nonconforming_count
+
+    # Check CI
+    workflows_dir = repo_path / ".github" / "workflows"
+    if workflows_dir.exists():
+        info["has_ci"] = True
+        info["has_cicd"] = True
+        info["ci_workflows"] = len(list(workflows_dir.glob("*.yml")))
+        info["cicd_count"] = info["ci_workflows"]
+
+    # Check project structure
+    has_src = (repo_path / "src").exists()
+    has_tests = (repo_path / "tests").exists()
+    has_scripts = (repo_path / "scripts").exists()
     
-    # Zoo classification
-    total_capability = info["tools"] + info["portmanteau_ops"]
-    if total_capability >= 20:
-        info["zoo_class"], info["zoo_emoji"] = "jumbo", "🐘"
-    elif total_capability >= 10:
-        info["zoo_class"], info["zoo_emoji"] = "large", "🦁"
-    elif total_capability >= 5:
-        info["zoo_class"], info["zoo_emoji"] = "medium", "🦊"
-    elif total_capability >= 2:
-        info["zoo_class"], info["zoo_emoji"] = "small", "🐰"
-    else:
-        info["zoo_class"], info["zoo_emoji"] = "chipmunk", "🐿️"
+    tools_paths = [
+        repo_path / "src" / pkg_name / "tools",
+        repo_path / pkg_name / "tools",
+        repo_path / "tools",
+    ]
+    has_tools_dir = any(p.exists() and p.is_dir() for p in tools_paths)
     
-    # Analyze issues
-    if info["fastmcp_version"]:
-        try:
-            major, minor = map(int, info["fastmcp_version"].split(".")[:2])
-            if major < 2 or (major == 2 and minor < 10):
-                info["issues"].append(f"FastMCP {info['fastmcp_version']} is ancient")
-                info["recommendations"].append("Upgrade to FastMCP 2.13.1")
-        except:
-            pass
-    
-    if not info["has_src"] and not any((repo_path / d).is_dir() for d in [pkg_name, f"{pkg_name}_mcp"]):
-        info["issues"].append("No src/ or package directory")
-        info["recommendations"].append("Consider src/ layout")
-    
-    if info["tools"] >= 10 and not info["has_cicd"]:
-        info["issues"].append("No CI/CD for large repo")
-        info["recommendations"].append("Add GitHub Actions workflow")
-    
-    if info["tools"] >= 15 and info["portmanteau_tools"] == 0:
-        info["issues"].append(f"{info['tools']} tools, no portmanteau pattern")
+    info["has_src"] = has_src
+    info["has_tests"] = has_tests
+    info["has_scripts"] = has_scripts
+    info["has_tools_dir"] = has_tools_dir
+
+    # Evaluate FastMCP version
+    try:
+        version_parts = [int(x) for x in fastmcp_version.split('.')[:2]]
+        runt_parts = [int(x) for x in FASTMCP_RUNT_THRESHOLD.split('.')[:2]]
+        warn_parts = [int(x) for x in FASTMCP_WARN_THRESHOLD.split('.')[:2]]
+        
+        if version_parts < runt_parts:
+            info["is_runt"] = True
+            info["runt_reasons"].append(f"FastMCP {fastmcp_version} is ancient")
+            info["issues"].append(f"FastMCP {fastmcp_version} is ancient")
+            info["recommendations"].append(f"Upgrade to FastMCP {FASTMCP_LATEST}")
+        elif version_parts < warn_parts:
+            info["recommendations"].append(f"Upgrade FastMCP {fastmcp_version} → {FASTMCP_LATEST}")
+    except Exception:
+        pass
+
+    # Check portmanteau usage
+    if portmanteau_tools == 0 and tool_count > 20:
+        info["runt_reasons"].append(f"{tool_count} tools, no portmanteau pattern")
+        info["issues"].append(f"{tool_count} tools, no portmanteau pattern")
         info["recommendations"].append("Consider consolidating to portmanteau tools")
+
+    # CI check
+    if not info["has_ci"]:
+        if tool_count >= 10:
+            info["is_runt"] = True
+            info["runt_reasons"].append("No CI/CD workflows")
+            info["issues"].append("No CI/CD workflows")
+        info["recommendations"].append("Add CI workflow")
+
+    # Structure checks
+    if not has_src and not (repo_path / pkg_name).exists():
+        info["is_runt"] = True
+        info["runt_reasons"].append("No src/ directory")
+        info["issues"].append("No src/ directory")
+        info["recommendations"].append("Use proper src/ layout")
     
-    if info["tools"] >= 10 and not info["has_tests"]:
+    if not has_tests and tool_count >= 10:
+        info["runt_reasons"].append("No tests/ directory")
         info["issues"].append("No tests/ directory")
-        info["recommendations"].append("Add test coverage")
+        info["recommendations"].append("Add tests/ with pytest")
     
-    # Determine status
-    issue_count = len(info["issues"])
-    if issue_count == 0:
+    if has_nonconforming:
+        if tool_count == 0 and nonconforming_count > 10:
+            info["is_runt"] = True
+            info["runt_reasons"].append(f"All tools non-FastMCP ({nonconforming_count}x)")
+            info["issues"].append(f"All tools non-FastMCP ({nonconforming_count}x)")
+        info["recommendations"].append("Use @app.tool decorators")
+
+    # Set status
+    runt_count = len(info["runt_reasons"])
+    if info["is_runt"]:
+        info["status_color"] = "red"
+        info["status"] = "runt"
+        info["status_emoji"] = "🐛"
+        info["status_label"] = "Runt"
+    elif runt_count > 0:
+        info["status_emoji"] = "⚠️"
+        info["status_color"] = "yellow"
+        info["status_label"] = "Improvable"
+        info["status"] = "improvable"
+    else:
         info["status"] = "sota"
         info["status_emoji"] = "✅"
         info["status_label"] = "SOTA"
         info["status_color"] = "green"
-    elif issue_count <= 2:
-        info["status"] = "improvable"
-        info["status_emoji"] = "⚠️"
-        info["status_label"] = "Improvable"
-        info["status_color"] = "yellow"
+
+    # Zoo classification
+    if tool_count >= 20:
+        info["zoo_class"] = "jumbo"
+        info["zoo_emoji"] = "🐘"
+    elif tool_count >= 10:
+        info["zoo_class"] = "large"
+        info["zoo_emoji"] = "🦁"
+    elif tool_count >= 5:
+        info["zoo_class"] = "medium"
+        info["zoo_emoji"] = "🦊"
+    elif tool_count >= 2:
+        info["zoo_class"] = "small"
+        info["zoo_emoji"] = "🐰"
     else:
-        info["status"] = "runt"
-        info["status_emoji"] = "🐛"
-        info["status_label"] = "Runt"
-        info["status_color"] = "red"
-    
+        info["zoo_class"] = "chipmunk"
+        info["zoo_emoji"] = "🐿️"
+
     return info
 
 def scan_repos() -> List[Dict[str, Any]]:
@@ -373,8 +449,9 @@ def scan_repos() -> List[Dict[str, Any]]:
         state["scan_progress"]["current"] = repo_path.name
         state["scan_progress"]["done"] = i + 1
         
-        if is_mcp_repo(repo_path):
-            info = analyze_repo(repo_path)
+        # analyze_repo returns None if not MCP repo
+        info = analyze_repo(repo_path)
+        if info:
             results.append(info)
             log(f"  {info['zoo_emoji']} {info['status_emoji']} {info['name']} v{info['fastmcp_version'] or '?'} tools={info['tools']}")
     
