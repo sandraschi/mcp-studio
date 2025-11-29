@@ -1264,7 +1264,7 @@ async def dashboard():
         <div id="content-ai" class="tab-content hidden">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Left: Chat Interface -->
-                <div class="lg:col-span-2 glass rounded-xl overflow-hidden flex flex-col" style="height: 85vh;">
+                <div class="lg:col-span-2 glass rounded-xl overflow-hidden flex flex-col" style="height: 90vh; min-height: 800px;">
                     <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
                         <div>
                             <h2 class="font-semibold flex items-center gap-2">
