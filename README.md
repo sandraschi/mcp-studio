@@ -1,5 +1,8 @@
 # MCP Studio
 
+[![FastMCP 2.13.1](https://img.shields.io/badge/FastMCP-2.13.1-green.svg)](https://github.com/jlowin/fastmcp)
+[![CI](https://img.shields.io/github/actions/workflow/status/sandraschi/mcp-studio/ci.yml?label=CI)](https://github.com/sandraschi/mcp-studio/actions)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
