@@ -634,12 +634,22 @@ async def dashboard():
         <!-- Tools Tab -->
         <div id="content-tools" class="tab-content hidden">
             <div class="glass rounded-xl overflow-hidden">
-                <div class="px-6 py-4 border-b border-white/10">
-                    <h2 class="font-semibold">🔧 Tool Explorer</h2>
-                    <p class="text-sm text-gray-400 mt-1">Browse and test tools from connected servers</p>
+                <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                    <div>
+                        <h2 class="font-semibold">🔧 Tool Explorer</h2>
+                        <p class="text-sm text-gray-400 mt-1">Browse tools from your MCP repos</p>
+                    </div>
+                    <div class="flex gap-4 items-center">
+                        <select id="tools-repo-select" onchange="loadRepoTools()" class="bg-midnight-800 border border-white/10 rounded-lg px-4 py-2 text-sm min-w-64">
+                            <option value="">Select a repository...</option>
+                        </select>
+                    </div>
                 </div>
                 <div id="tools-detail" class="p-6">
-                    <div class="text-gray-500">Connect to a server to explore its tools...</div>
+                    <div class="text-center py-12 text-gray-500">
+                        <div class="text-4xl mb-4">🔧</div>
+                        <div>Select a repository above to explore its tools</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -798,6 +808,7 @@ async def dashboard():
                 const res = await fetch('/api/repos');
                 reposData = await res.json();
                 renderRepos();
+                populateRepoSelector();
                 updateStats();
                 loadLogs();
             }} catch(e) {{
@@ -976,6 +987,90 @@ async def dashboard():
 
         function closeModal() {{
             document.getElementById('modal').classList.add('hidden');
+        }}
+
+        // Populate repo selector for Tools tab
+        function populateRepoSelector() {{
+            const select = document.getElementById('tools-repo-select');
+            if (!select || reposData.length === 0) return;
+            
+            select.innerHTML = '<option value="">Select a repository...</option>' +
+                reposData.map(r => `<option value="${{r.name}}">${{r.zoo_emoji}} ${{r.name}} (${{r.tools}} tools)</option>`).join('');
+        }}
+
+        // Load tools for selected repo
+        async function loadRepoTools() {{
+            const select = document.getElementById('tools-repo-select');
+            const detail = document.getElementById('tools-detail');
+            const repoName = select.value;
+            
+            if (!repoName) {{
+                detail.innerHTML = `
+                    <div class="text-center py-12 text-gray-500">
+                        <div class="text-4xl mb-4">🔧</div>
+                        <div>Select a repository above to explore its tools</div>
+                    </div>
+                `;
+                return;
+            }}
+            
+            const repo = reposData.find(r => r.name === repoName);
+            if (!repo) return;
+            
+            detail.innerHTML = `
+                <div class="mb-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <span class="text-3xl">${{repo.zoo_emoji}}</span>
+                        <div>
+                            <h3 class="text-xl font-bold">${{repo.name}}</h3>
+                            <p class="text-sm text-gray-400">${{repo.path}}</p>
+                        </div>
+                        <span class="ml-auto px-3 py-1 rounded ${{repo.status === 'sota' ? 'bg-green-500/20 text-green-400' : repo.status === 'improvable' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}}">
+                            ${{repo.status_emoji}} ${{repo.status_label}}
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-4 gap-4 mb-6">
+                        <div class="p-3 bg-white/5 rounded-lg text-center">
+                            <div class="text-xl font-bold">${{repo.fastmcp_version || '?'}}</div>
+                            <div class="text-xs text-gray-400">FastMCP</div>
+                        </div>
+                        <div class="p-3 bg-white/5 rounded-lg text-center">
+                            <div class="text-xl font-bold">${{repo.portmanteau_tools}}</div>
+                            <div class="text-xs text-gray-400">Portmanteaus</div>
+                        </div>
+                        <div class="p-3 bg-white/5 rounded-lg text-center">
+                            <div class="text-xl font-bold">${{repo.portmanteau_ops}}</div>
+                            <div class="text-xs text-gray-400">Operations</div>
+                        </div>
+                        <div class="p-3 bg-white/5 rounded-lg text-center">
+                            <div class="text-xl font-bold">${{repo.individual_tools}}</div>
+                            <div class="text-xs text-gray-400">Individual</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="border-t border-white/10 pt-6">
+                    <h4 class="font-semibold mb-4">📊 Tool Summary</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="p-4 bg-indigo-500/10 rounded-lg">
+                            <div class="text-2xl font-bold text-indigo-400">${{repo.tools}}</div>
+                            <div class="text-sm text-gray-400">Total Tools Detected</div>
+                            <div class="text-xs text-gray-500 mt-2">From static analysis of @app.tool decorators</div>
+                        </div>
+                        <div class="p-4 bg-purple-500/10 rounded-lg">
+                            <div class="text-2xl font-bold text-purple-400">${{repo.portmanteau_ops || 0}}</div>
+                            <div class="text-sm text-gray-400">Portmanteau Operations</div>
+                            <div class="text-xs text-gray-500 mt-2">Actions within consolidated tools</div>
+                        </div>
+                    </div>
+                    <div class="mt-6 p-4 bg-white/5 rounded-lg">
+                        <p class="text-sm text-gray-400">
+                            <span class="text-yellow-400">💡 Note:</span> 
+                            This shows static analysis from code scanning. For live tool discovery with schemas and docstrings, 
+                            the server would need to be started via stdio transport.
+                        </p>
+                    </div>
+                </div>
+            `;
         }}
 
         // Filter change
