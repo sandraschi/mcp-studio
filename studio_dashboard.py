@@ -755,6 +755,87 @@ async def get_logs():
     """Get recent log messages."""
     return {"logs": state["logs"][-100:]}
 
+@app.post("/api/ai/chat")
+async def ai_chat(request: Request):
+    """Chat with local-llm-mcp for AI-powered analysis."""
+    data = await request.json()
+    model_id = data.get("model_id", "ollama:llama3.2")
+    message = data.get("message", "")
+    
+    if not message:
+        raise HTTPException(400, "message required")
+    
+    if not FASTMCP_AVAILABLE:
+        raise HTTPException(503, "FastMCP not available")
+    
+    # Find local-llm-mcp config
+    repo_path = REPOS_DIR / "local-llm-mcp"
+    if not repo_path.exists():
+        raise HTTPException(404, "local-llm-mcp not found in repos")
+    
+    cursor_config = find_cursor_config_for_repo("local-llm-mcp", repo_path)
+    if not cursor_config:
+        raise HTTPException(400, "local-llm-mcp not in Cursor config")
+    
+    try:
+        command = cursor_config.get("command", "python")
+        args = cursor_config.get("args", [])
+        cwd = cursor_config.get("cwd", str(repo_path))
+        config_env = cursor_config.get("env", {})
+        
+        env = os.environ.copy()
+        env.update(config_env)
+        env["PYTHONUNBUFFERED"] = "1"
+        
+        log(f"🤖 AI chat: {message[:50]}...")
+        
+        transport = StdioTransport(
+            command=command,
+            args=args,
+            env=env,
+            cwd=cwd,
+        )
+        
+        client = Client(transport)
+        
+        async with client:
+            await client.initialize()
+            
+            # Try chat_completion first, fall back to generate_text
+            try:
+                result = await client.call_tool("chat_completion", {
+                    "model": model_id,
+                    "messages": [{"role": "user", "content": message}],
+                    "max_tokens": 2000,
+                })
+            except Exception:
+                # Fall back to generate_text
+                result = await client.call_tool("generate_text", {
+                    "model": model_id,
+                    "prompt": message,
+                    "max_tokens": 2000,
+                })
+            
+            # Extract response text
+            if isinstance(result, dict):
+                response = result.get("response") or result.get("text") or result.get("content") or str(result)
+            elif isinstance(result, list) and len(result) > 0:
+                first = result[0]
+                if hasattr(first, 'text'):
+                    response = first.text
+                else:
+                    response = str(first)
+            else:
+                response = str(result)
+            
+            log(f"✅ AI response received ({len(response)} chars)")
+            
+            return {"response": response}
+    
+    except Exception as e:
+        log(f"❌ AI chat error: {e}")
+        return {"error": str(e)}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # DASHBOARD HTML
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -837,6 +918,9 @@ async def dashboard():
                 </button>
                 <button onclick="switchTab('console')" id="tab-console" class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
                     💻 Console
+                </button>
+                <button onclick="switchTab('ai')" id="tab-ai" class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+                    🤖 AI Assistant
                 </button>
             </nav>
         </div>
@@ -1027,6 +1111,122 @@ async def dashboard():
                     <div class="mt-6">
                         <label class="block text-sm font-medium mb-2">Result</label>
                         <pre id="console-result" class="bg-black/30 rounded p-4 mono text-sm min-h-32 max-h-96 overflow-auto">Ready...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Assistant Tab -->
+        <div id="content-ai" class="tab-content hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left: Chat Interface -->
+                <div class="lg:col-span-2 glass rounded-xl overflow-hidden flex flex-col" style="height: 70vh;">
+                    <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                        <div>
+                            <h2 class="font-semibold flex items-center gap-2">
+                                🤖 AI Assistant
+                                <span id="ai-status" class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400">Not Connected</span>
+                            </h2>
+                            <p class="text-sm text-gray-400 mt-1">Powered by local-llm-mcp</p>
+                        </div>
+                        <button onclick="connectAI()" id="ai-connect-btn" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-medium">
+                            🔌 Connect to LLM
+                        </button>
+                    </div>
+                    
+                    <!-- Chat Messages -->
+                    <div id="ai-chat" class="flex-1 p-4 overflow-y-auto space-y-4">
+                        <div class="text-center text-gray-500 py-8">
+                            <div class="text-4xl mb-4">🧠</div>
+                            <div>Connect to local-llm-mcp to start chatting</div>
+                            <div class="text-sm mt-2">The AI can analyze your MCP repos, suggest improvements, and help with tool design</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Input Area -->
+                    <div class="p-4 border-t border-white/10">
+                        <div class="flex gap-2">
+                            <textarea id="ai-input" class="flex-1 bg-midnight-800 border border-white/10 rounded-lg px-4 py-3 text-sm resize-none" 
+                                      rows="2" placeholder="Ask about your MCP servers, tools, or get suggestions..."
+                                      onkeydown="if(event.key==='Enter' && !event.shiftKey){{event.preventDefault();sendAIMessage();}}"></textarea>
+                            <button onclick="sendAIMessage()" class="px-6 bg-purple-600 hover:bg-purple-500 rounded-lg font-medium">
+                                Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Right: Quick Actions & Context -->
+                <div class="space-y-6">
+                    <!-- Quick Prompts -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10">
+                            <h3 class="font-semibold text-sm">⚡ Quick Prompts</h3>
+                        </div>
+                        <div class="p-4 space-y-2">
+                            <button onclick="setAIPrompt('Analyze my MCP zoo and identify runts that need the most improvement')" 
+                                    class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                                🔍 Analyze runts
+                            </button>
+                            <button onclick="setAIPrompt('Suggest which tools could be combined into portmanteau patterns')" 
+                                    class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                                🔧 Suggest portmanteaus
+                            </button>
+                            <button onclick="setAIPrompt('Review tool naming conventions and suggest improvements')" 
+                                    class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                                📝 Review naming
+                            </button>
+                            <button onclick="setAIPrompt('Which repos are missing tests and how should they be structured?')" 
+                                    class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                                🧪 Test coverage
+                            </button>
+                            <button onclick="setAIPrompt('Generate a summary of all my MCP servers and their capabilities')" 
+                                    class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                                📊 Zoo summary
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Context -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10">
+                            <h3 class="font-semibold text-sm">📋 Context</h3>
+                        </div>
+                        <div class="p-4 text-sm text-gray-400 space-y-2">
+                            <div class="flex justify-between">
+                                <span>Repos scanned:</span>
+                                <span id="ai-context-repos" class="text-white">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Total tools:</span>
+                                <span id="ai-context-tools" class="text-white">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>SOTA repos:</span>
+                                <span id="ai-context-sota" class="text-green-400">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Runts:</span>
+                                <span id="ai-context-runts" class="text-red-400">0</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Model Settings -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10">
+                            <h3 class="font-semibold text-sm">⚙️ Model</h3>
+                        </div>
+                        <div class="p-4 space-y-3">
+                            <div>
+                                <label class="text-xs text-gray-400">Model ID</label>
+                                <input id="ai-model" type="text" value="ollama:llama3.2" 
+                                       class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-3 py-2 text-sm">
+                            </div>
+                            <div class="text-xs text-gray-500">
+                                Examples: ollama:llama3.2, lmstudio:default, openai:gpt-4
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1590,10 +1790,182 @@ async def dashboard():
         document.getElementById('console-server').addEventListener('change', onServerSelect);
         document.getElementById('console-tool').addEventListener('change', onToolSelect);
 
+        // ═══════════════════════════════════════════════════════════════════
+        // AI ASSISTANT TAB
+        // ═══════════════════════════════════════════════════════════════════
+        
+        let aiConnected = false;
+        let aiMessages = [];
+
+        async function connectAI() {{
+            const statusEl = document.getElementById('ai-status');
+            const btnEl = document.getElementById('ai-connect-btn');
+            const chatEl = document.getElementById('ai-chat');
+            
+            statusEl.textContent = 'Connecting...';
+            statusEl.className = 'text-xs px-2 py-0.5 rounded bg-yellow-600 text-yellow-100';
+            btnEl.disabled = true;
+            
+            try {{
+                // Connect to local-llm-mcp
+                const res = await fetch('/api/repos/local-llm-mcp/connect', {{ method: 'POST' }});
+                const data = await res.json();
+                
+                if (data.status === 'connected') {{
+                    aiConnected = true;
+                    statusEl.textContent = 'Connected (' + data.tools.length + ' tools)';
+                    statusEl.className = 'text-xs px-2 py-0.5 rounded bg-green-600 text-green-100';
+                    btnEl.textContent = '✓ Connected';
+                    btnEl.className = 'px-4 py-2 bg-green-600 rounded text-sm font-medium cursor-default';
+                    
+                    chatEl.innerHTML = `
+                        <div class="flex gap-3">
+                            <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-sm">🤖</div>
+                            <div class="flex-1 bg-white/5 rounded-lg p-4">
+                                <div class="font-medium text-purple-400 mb-1">AI Assistant</div>
+                                <div class="text-gray-300">Connected to local-llm-mcp with ${{data.tools.length}} tools! I can help you analyze your MCP zoo, suggest improvements, and answer questions about your servers. What would you like to know?</div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    updateAIContext();
+                }} else {{
+                    throw new Error(data.error || 'Connection failed');
+                }}
+            }} catch(e) {{
+                statusEl.textContent = 'Error: ' + e.message;
+                statusEl.className = 'text-xs px-2 py-0.5 rounded bg-red-600 text-red-100';
+                btnEl.disabled = false;
+            }}
+        }}
+
+        function updateAIContext() {{
+            document.getElementById('ai-context-repos').textContent = reposData.length;
+            document.getElementById('ai-context-tools').textContent = reposData.reduce((acc, r) => acc + r.tools, 0);
+            document.getElementById('ai-context-sota').textContent = reposData.filter(r => r.status === 'sota').length;
+            document.getElementById('ai-context-runts').textContent = reposData.filter(r => r.status === 'runt').length;
+        }}
+
+        function setAIPrompt(text) {{
+            document.getElementById('ai-input').value = text;
+        }}
+
+        function addChatMessage(role, content) {{
+            const chatEl = document.getElementById('ai-chat');
+            const isUser = role === 'user';
+            
+            const msgHtml = `
+                <div class="flex gap-3 ${{isUser ? 'justify-end' : ''}}">
+                    ${{isUser ? '' : '<div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-sm">🤖</div>'}}
+                    <div class="flex-1 ${{isUser ? 'max-w-[80%]' : ''}} ${{isUser ? 'bg-indigo-600' : 'bg-white/5'}} rounded-lg p-4">
+                        ${{isUser ? '' : '<div class="font-medium text-purple-400 mb-1">AI Assistant</div>'}}
+                        <div class="text-gray-${{isUser ? '100' : '300'}} whitespace-pre-wrap">${{content}}</div>
+                    </div>
+                    ${{isUser ? '<div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm">👤</div>' : ''}}
+                </div>
+            `;
+            
+            chatEl.insertAdjacentHTML('beforeend', msgHtml);
+            chatEl.scrollTop = chatEl.scrollHeight;
+        }}
+
+        async function sendAIMessage() {{
+            if (!aiConnected) {{
+                alert('Please connect to local-llm-mcp first');
+                return;
+            }}
+            
+            const input = document.getElementById('ai-input');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            input.value = '';
+            addChatMessage('user', message);
+            
+            // Add thinking indicator
+            const chatEl = document.getElementById('ai-chat');
+            const thinkingId = 'thinking-' + Date.now();
+            chatEl.insertAdjacentHTML('beforeend', `
+                <div id="${{thinkingId}}" class="flex gap-3">
+                    <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-sm">🤖</div>
+                    <div class="flex-1 bg-white/5 rounded-lg p-4">
+                        <div class="font-medium text-purple-400 mb-1">AI Assistant</div>
+                        <div class="text-gray-400 flex items-center gap-2">
+                            <span class="animate-pulse">●</span> Thinking...
+                        </div>
+                    </div>
+                </div>
+            `);
+            chatEl.scrollTop = chatEl.scrollHeight;
+            
+            try {{
+                // Build context about the MCP zoo
+                const context = buildZooContext();
+                const fullPrompt = context + '\\n\\nUser question: ' + message;
+                
+                const modelId = document.getElementById('ai-model').value;
+                
+                const res = await fetch('/api/ai/chat', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        model_id: modelId,
+                        message: fullPrompt
+                    }})
+                }});
+                
+                const data = await res.json();
+                
+                // Remove thinking indicator
+                document.getElementById(thinkingId)?.remove();
+                
+                if (data.response) {{
+                    addChatMessage('assistant', data.response);
+                }} else if (data.error) {{
+                    addChatMessage('assistant', '❌ Error: ' + data.error);
+                }} else {{
+                    addChatMessage('assistant', JSON.stringify(data, null, 2));
+                }}
+            }} catch(e) {{
+                document.getElementById(thinkingId)?.remove();
+                addChatMessage('assistant', '❌ Error: ' + e.message);
+            }}
+        }}
+
+        function buildZooContext() {{
+            if (reposData.length === 0) return 'No MCP repositories have been scanned yet.';
+            
+            const sota = reposData.filter(r => r.status === 'sota');
+            const improvable = reposData.filter(r => r.status === 'improvable');
+            const runts = reposData.filter(r => r.status === 'runt');
+            const totalTools = reposData.reduce((acc, r) => acc + r.tools, 0);
+            
+            let context = `You are an AI assistant helping analyze an MCP (Model Context Protocol) server zoo.
+
+MCP ZOO SUMMARY:
+- Total repositories: ${{reposData.length}}
+- Total tools: ${{totalTools}}
+- SOTA (excellent): ${{sota.length}} repos
+- Improvable: ${{improvable.length}} repos
+- Runts (need work): ${{runts.length}} repos
+
+SOTA REPOS: ${{sota.map(r => r.name + ' (' + r.tools + ' tools)').join(', ') || 'none'}}
+
+RUNTS (need improvement): ${{runts.map(r => r.name + ' - issues: ' + r.issues.join(', ')).join('; ') || 'none'}}
+
+TOP REPOS BY TOOLS:
+${{reposData.sort((a,b) => b.tools - a.tools).slice(0, 10).map(r => '- ' + r.name + ': ' + r.tools + ' tools, FastMCP ' + (r.fastmcp_version || '?') + ', status: ' + r.status).join('\\n')}}
+
+Please provide helpful, specific advice about MCP server development, tool design, and best practices.`;
+            
+            return context;
+        }}
+
         // Initial load
         loadClients();
         setInterval(loadLogs, 5000);
-        setInterval(loadConsoleServers, 3000);  // Keep console servers updated
+        setInterval(loadConsoleServers, 3000);
+        setInterval(updateAIContext, 5000);  // Keep AI context updated
     </script>
 </body>
 </html>'''
