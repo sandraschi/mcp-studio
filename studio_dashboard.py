@@ -656,6 +656,20 @@ async def connect_repo_endpoint(repo_name: str):
     """Connect to an MCP server from a repository."""
     return await connect_repo_server(repo_name)
 
+@app.get("/api/connections")
+async def list_connections():
+    """List all connected servers."""
+    connections = []
+    for conn_id, conn in state["connected_servers"].items():
+        if conn.get("status") == "connected":
+            connections.append({
+                "id": conn_id,
+                "name": conn_id.split(":")[-1] if ":" in conn_id else conn_id,
+                "tools": conn.get("tools", []),
+                "tool_count": len(conn.get("tools", [])),
+            })
+    return {"connections": connections}
+
 @app.get("/api/connections/{connection_id}/tools")
 async def get_connection_tools(connection_id: str):
     """Get tools from a connected server."""
@@ -668,30 +682,68 @@ async def get_connection_tools(connection_id: str):
     
     return {"tools": conn.get("tools", [])}
 
-@app.post("/api/connections/{connection_id}/tools/{tool_name}/execute")
-async def execute_tool(connection_id: str, tool_name: str, parameters: dict):
-    """Execute a tool on a connected server."""
-    if connection_id not in state["connected_servers"]:
-        raise HTTPException(404, f"Connection {connection_id} not found")
+@app.post("/api/execute")
+async def execute_tool_endpoint(request: Request):
+    """Execute a tool on a server - reconnects to execute."""
+    data = await request.json()
+    repo_name = data.get("repo_name")
+    tool_name = data.get("tool_name")
+    parameters = data.get("parameters", {})
     
-    conn = state["connected_servers"][connection_id]
-    if conn.get("status") != "connected":
-        raise HTTPException(400, f"Server not connected")
+    if not repo_name or not tool_name:
+        raise HTTPException(400, "repo_name and tool_name required")
     
     if not FASTMCP_AVAILABLE:
         raise HTTPException(503, "FastMCP not available")
     
+    repo_path = REPOS_DIR / repo_name
+    if not repo_path.exists():
+        raise HTTPException(404, f"Repository {repo_name} not found")
+    
+    # Find config for this repo
+    cursor_config = find_cursor_config_for_repo(repo_name, repo_path)
+    if not cursor_config:
+        cursor_config = parse_pyproject_entrypoint(repo_path)
+    
+    if not cursor_config:
+        raise HTTPException(400, f"No config found for {repo_name}")
+    
     try:
-        # For a real implementation, we'd need to keep the client alive
-        # This is a simplified version - in production you'd manage client lifecycle
-        return {
-            "status": "not_implemented",
-            "message": "Tool execution requires persistent client connections",
-            "tool": tool_name,
-            "parameters": parameters,
-        }
+        command = cursor_config.get("command", "python")
+        args = cursor_config.get("args", [])
+        cwd = cursor_config.get("cwd", str(repo_path))
+        config_env = cursor_config.get("env", {})
+        
+        env = os.environ.copy()
+        env.update(config_env)
+        env["PYTHONUNBUFFERED"] = "1"
+        
+        log(f"🔧 Executing {tool_name} on {repo_name}...")
+        
+        transport = StdioTransport(
+            command=command,
+            args=args,
+            env=env,
+            cwd=cwd,
+        )
+        
+        client = Client(transport)
+        
+        async with client:
+            await client.initialize()
+            result = await client.call_tool(tool_name, parameters)
+            
+            log(f"✅ Executed {tool_name} successfully")
+            
+            return {
+                "status": "success",
+                "tool": tool_name,
+                "result": result,
+            }
+    
     except Exception as e:
-        raise HTTPException(500, f"Tool execution failed: {str(e)}")
+        log(f"❌ Tool execution failed: {e}")
+        raise HTTPException(500, f"Execution failed: {str(e)}")
 
 @app.get("/api/progress")
 async def get_progress():
@@ -938,35 +990,43 @@ async def dashboard():
             <div class="glass rounded-xl overflow-hidden">
                 <div class="px-6 py-4 border-b border-white/10">
                     <h2 class="font-semibold">💻 Execution Console</h2>
-                    <p class="text-sm text-gray-400 mt-1">Execute tools without an LLM</p>
+                    <p class="text-sm text-gray-400 mt-1">Execute tools without an LLM - connect to a server first in the Tools tab</p>
                 </div>
                 <div class="p-6">
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div>
-                            <label class="block text-sm font-medium mb-2">Server</label>
+                            <label class="block text-sm font-medium mb-2">Connected Server</label>
                             <select id="console-server" class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
-                                <option>Select a server...</option>
+                                <option value="">Select a connected server...</option>
                             </select>
+                            <p class="text-xs text-gray-500 mt-1">Connect to servers via the Tools tab first</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-2">Tool</label>
                             <select id="console-tool" class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
-                                <option>Select a tool...</option>
+                                <option value="">Select a tool...</option>
                             </select>
                         </div>
                     </div>
+                    
+                    <!-- Tool description/schema -->
+                    <div id="tool-schema" class="mt-4 hidden"></div>
+                    
                     <div class="mt-6">
                         <label class="block text-sm font-medium mb-2">Parameters (JSON)</label>
-                        <textarea id="console-params" class="w-full h-32 bg-midnight-800 border border-white/10 rounded px-3 py-2 mono text-sm" placeholder='{{"key": "value"}}'></textarea>
+                        <textarea id="console-params" class="w-full h-40 bg-midnight-800 border border-white/10 rounded px-3 py-2 mono text-sm" placeholder='{{"key": "value"}}'>{{}}</textarea>
                     </div>
                     <div class="mt-4 flex gap-4">
-                        <button onclick="executeToolConsole()" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded font-medium">
-                            ▶ Execute
+                        <button onclick="executeToolConsole()" class="px-6 py-2 bg-green-600 hover:bg-green-500 rounded font-medium">
+                            ▶ Execute Tool
+                        </button>
+                        <button onclick="document.getElementById('console-result').textContent = 'Ready...'; document.getElementById('console-result').className = 'bg-black/30 rounded p-4 mono text-sm min-h-32 overflow-auto';" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded font-medium">
+                            Clear
                         </button>
                     </div>
                     <div class="mt-6">
                         <label class="block text-sm font-medium mb-2">Result</label>
-                        <pre id="console-result" class="bg-black/30 rounded p-4 mono text-sm min-h-32 overflow-auto">Ready...</pre>
+                        <pre id="console-result" class="bg-black/30 rounded p-4 mono text-sm min-h-32 max-h-96 overflow-auto">Ready...</pre>
                     </div>
                 </div>
             </div>
@@ -1395,9 +1455,145 @@ async def dashboard():
         // Close modal on escape
         document.addEventListener('keydown', e => {{ if (e.key === 'Escape') closeModal(); }});
 
+        // ═══════════════════════════════════════════════════════════════════
+        // CONSOLE TAB - Tool Execution
+        // ═══════════════════════════════════════════════════════════════════
+        
+        let consoleServers = [];
+        let consoleSelectedServer = null;
+        let consoleSelectedTool = null;
+
+        async function loadConsoleServers() {{
+            try {{
+                const res = await fetch('/api/connections');
+                const data = await res.json();
+                consoleServers = data.connections || [];
+                renderConsoleServers();
+            }} catch(e) {{
+                console.error('Error loading connections:', e);
+            }}
+        }}
+
+        function renderConsoleServers() {{
+            const select = document.getElementById('console-server');
+            select.innerHTML = '<option value="">Select a connected server...</option>' +
+                consoleServers.map(s => `<option value="${{s.id}}">${{s.name}} (${{s.tool_count}} tools)</option>`).join('');
+        }}
+
+        function onServerSelect() {{
+            const select = document.getElementById('console-server');
+            const serverId = select.value;
+            const toolSelect = document.getElementById('console-tool');
+            
+            if (!serverId) {{
+                consoleSelectedServer = null;
+                toolSelect.innerHTML = '<option value="">Select a tool...</option>';
+                document.getElementById('tool-schema').classList.add('hidden');
+                return;
+            }}
+            
+            consoleSelectedServer = consoleServers.find(s => s.id === serverId);
+            if (!consoleSelectedServer) return;
+            
+            toolSelect.innerHTML = '<option value="">Select a tool...</option>' +
+                consoleSelectedServer.tools.map(t => `<option value="${{t.name}}">${{t.name}}</option>`).join('');
+        }}
+
+        function onToolSelect() {{
+            const toolSelect = document.getElementById('console-tool');
+            const toolName = toolSelect.value;
+            const schemaDiv = document.getElementById('tool-schema');
+            const paramsInput = document.getElementById('console-params');
+            
+            if (!toolName || !consoleSelectedServer) {{
+                consoleSelectedTool = null;
+                schemaDiv.classList.add('hidden');
+                return;
+            }}
+            
+            consoleSelectedTool = consoleSelectedServer.tools.find(t => t.name === toolName);
+            if (!consoleSelectedTool) return;
+            
+            // Show tool description and schema
+            schemaDiv.innerHTML = `
+                <div class="p-4 bg-white/5 rounded-lg mb-4">
+                    <div class="font-semibold text-indigo-400 mb-2">${{consoleSelectedTool.name}}</div>
+                    <div class="text-sm text-gray-300">${{consoleSelectedTool.description || 'No description'}}</div>
+                </div>
+            `;
+            schemaDiv.classList.remove('hidden');
+            
+            // Pre-populate params with schema hint
+            if (consoleSelectedTool.inputSchema && consoleSelectedTool.inputSchema.properties) {{
+                const example = {{}};
+                for (const [key, prop] of Object.entries(consoleSelectedTool.inputSchema.properties)) {{
+                    if (prop.type === 'string') example[key] = '';
+                    else if (prop.type === 'boolean') example[key] = false;
+                    else if (prop.type === 'number' || prop.type === 'integer') example[key] = 0;
+                    else example[key] = null;
+                }}
+                paramsInput.value = JSON.stringify(example, null, 2);
+            }} else {{
+                paramsInput.value = '{{}}';
+            }}
+        }}
+
+        async function executeToolConsole() {{
+            if (!consoleSelectedServer || !consoleSelectedTool) {{
+                alert('Please select a server and tool first');
+                return;
+            }}
+            
+            const paramsInput = document.getElementById('console-params');
+            const resultDiv = document.getElementById('console-result');
+            
+            let params = {{}};
+            try {{
+                params = JSON.parse(paramsInput.value || '{{}}');
+            }} catch(e) {{
+                resultDiv.textContent = 'Error: Invalid JSON in parameters';
+                resultDiv.className = 'bg-red-900/30 rounded p-4 mono text-sm min-h-32 overflow-auto text-red-300';
+                return;
+            }}
+            
+            resultDiv.textContent = 'Executing...';
+            resultDiv.className = 'bg-black/30 rounded p-4 mono text-sm min-h-32 overflow-auto';
+            
+            try {{
+                const repoName = consoleSelectedServer.id.replace('repo:', '');
+                const res = await fetch('/api/execute', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        repo_name: repoName,
+                        tool_name: consoleSelectedTool.name,
+                        parameters: params
+                    }})
+                }});
+                
+                const data = await res.json();
+                
+                if (res.ok) {{
+                    resultDiv.textContent = JSON.stringify(data, null, 2);
+                    resultDiv.className = 'bg-green-900/30 rounded p-4 mono text-sm min-h-32 overflow-auto text-green-300';
+                }} else {{
+                    resultDiv.textContent = 'Error: ' + (data.detail || JSON.stringify(data));
+                    resultDiv.className = 'bg-red-900/30 rounded p-4 mono text-sm min-h-32 overflow-auto text-red-300';
+                }}
+            }} catch(e) {{
+                resultDiv.textContent = 'Error: ' + e.message;
+                resultDiv.className = 'bg-red-900/30 rounded p-4 mono text-sm min-h-32 overflow-auto text-red-300';
+            }}
+        }}
+
+        // Wire up console selects
+        document.getElementById('console-server').addEventListener('change', onServerSelect);
+        document.getElementById('console-tool').addEventListener('change', onToolSelect);
+
         // Initial load
         loadClients();
         setInterval(loadLogs, 5000);
+        setInterval(loadConsoleServers, 3000);  // Keep console servers updated
     </script>
 </body>
 </html>'''
