@@ -19,6 +19,10 @@ FASTMCP_LATEST = "2.13.1"
 FASTMCP_RUNT_THRESHOLD = "2.12.0"
 TOOL_PORTMANTEAU_THRESHOLD = 15  # Repos with >15 tools should have portmanteau
 
+# Required SOTA features
+REQUIRED_TOOLS = ["help", "status"]  # Every MCP server should have these
+DXT_FILES = ["manifest.json", "dxt.json"]  # Desktop extension packaging
+
 
 @tool(
     name="analyze_runts",
@@ -152,6 +156,10 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         "has_portmanteau": False,
         "has_ci": False,
         "ci_workflows": 0,
+        "has_dxt": False,
+        "has_help_tool": False,
+        "has_status_tool": False,
+        "has_proper_docstrings": False,
         "is_runt": False,
         "runt_reasons": [],
         "recommendations": [],
@@ -194,9 +202,17 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             info["has_portmanteau"] = True
             break
 
-    # Count tools
+    # Check for DXT packaging
+    for dxt_file in DXT_FILES:
+        if (repo_path / dxt_file).exists():
+            info["has_dxt"] = True
+            break
+
+    # Count tools and check for help/status + docstrings
     tool_patterns = [r"@app\.tool\(\)", r"@mcp\.tool\(\)", r"@tool\("]
     tool_count = 0
+    proper_docstrings = 0
+    total_tools_checked = 0
     src_dirs = [repo_path / "src", repo_path]
 
     for src_dir in src_dirs:
@@ -208,10 +224,31 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     content = py_file.read_text(encoding='utf-8')
                     for pattern in tool_patterns:
                         tool_count += len(re.findall(pattern, content))
+                    
+                    # Check for help tool
+                    if re.search(r'(def\s+help|def\s+get_help|"help"|\'help\')\s*\(', content, re.IGNORECASE):
+                        info["has_help_tool"] = True
+                    
+                    # Check for status tool
+                    if re.search(r'(def\s+status|def\s+get_status|"status"|\'status\')\s*\(', content, re.IGNORECASE):
+                        info["has_status_tool"] = True
+                    
+                    # Check for proper multiline docstrings (triple quotes with newlines)
+                    # Pattern: function def followed by triple-quoted docstring with Args/Returns
+                    docstring_matches = re.findall(
+                        r'@(?:app|mcp)\.tool.*?\n\s*(?:async\s+)?def\s+\w+[^:]+:\s*\n\s*"""[\s\S]*?(?:Args:|Returns:|Examples:)[\s\S]*?"""',
+                        content
+                    )
+                    if docstring_matches:
+                        proper_docstrings += len(docstring_matches)
+                        total_tools_checked += len(docstring_matches)
                 except Exception:
                     pass
 
     info["tool_count"] = tool_count
+    # Consider proper docstrings if >50% of tools have them
+    info["has_proper_docstrings"] = (proper_docstrings > 0 and 
+                                      (total_tools_checked == 0 or proper_docstrings / max(tool_count, 1) > 0.5))
 
     # Check CI
     ci_dir = repo_path / ".github" / "workflows"
@@ -256,18 +293,49 @@ def _evaluate_runt_status(info: Dict[str, Any], fastmcp_version: str) -> None:
         info["runt_reasons"].append(f"{info['ci_workflows']} CI workflows (recommend: 1)")
         info["recommendations"].append("Consolidate to single CI workflow")
 
-    # Set status emoji
+    # Check DXT packaging
+    if not info["has_dxt"]:
+        info["runt_reasons"].append("No DXT packaging (manifest.json)")
+        info["recommendations"].append("Add manifest.json for desktop extension support")
+
+    # Check help tool
+    if not info["has_help_tool"]:
+        info["is_runt"] = True
+        info["runt_reasons"].append("No help tool")
+        info["recommendations"].append("Add help() tool for discoverability")
+
+    # Check status tool
+    if not info["has_status_tool"]:
+        info["is_runt"] = True
+        info["runt_reasons"].append("No status tool")
+        info["recommendations"].append("Add status() tool for diagnostics")
+
+    # Check proper docstrings
+    if not info["has_proper_docstrings"] and info["tool_count"] > 0:
+        info["runt_reasons"].append("Missing proper multiline docstrings (Args/Returns)")
+        info["recommendations"].append("Add comprehensive docstrings with Args, Returns, Examples")
+
+    # Set status emoji based on severity
+    runt_count = len(info["runt_reasons"])
     if info["is_runt"]:
-        info["status_emoji"] = "🐣" if len(info["runt_reasons"]) == 1 else "🐛"
+        if runt_count >= 5:
+            info["status_emoji"] = "💀"  # Critical
+        elif runt_count >= 3:
+            info["status_emoji"] = "🐛"  # Bug
+        else:
+            info["status_emoji"] = "🐣"  # Chick (minor)
     else:
-        info["status_emoji"] = "✅"
+        if runt_count > 0:
+            info["status_emoji"] = "⚠️"  # Warning (has issues but not runt)
+        else:
+            info["status_emoji"] = "✅"  # Perfect
 
 
 def _calculate_sota_score(info: Dict[str, Any]) -> int:
     """Calculate SOTA compliance score (0-100)."""
     score = 100
 
-    # Deduct for old FastMCP
+    # Deduct for old FastMCP (-20)
     if info.get("fastmcp_version"):
         try:
             version = [int(x) for x in info["fastmcp_version"].split('.')[:2]]
@@ -277,16 +345,32 @@ def _calculate_sota_score(info: Dict[str, Any]) -> int:
         except Exception:
             pass
 
-    # Deduct for missing portmanteau when needed
+    # Deduct for missing portmanteau when needed (-25)
     if info.get("tool_count", 0) > TOOL_PORTMANTEAU_THRESHOLD and not info.get("has_portmanteau"):
         score -= 25
 
-    # Deduct for no CI
+    # Deduct for no CI (-20)
     if not info.get("has_ci"):
-        score -= 30
+        score -= 20
 
-    # Deduct for too many CI workflows
+    # Deduct for too many CI workflows (-5)
     if info.get("ci_workflows", 0) > 3:
+        score -= 5
+
+    # Deduct for no DXT packaging (-10)
+    if not info.get("has_dxt"):
+        score -= 10
+
+    # Deduct for no help tool (-10)
+    if not info.get("has_help_tool"):
+        score -= 10
+
+    # Deduct for no status tool (-10)
+    if not info.get("has_status_tool"):
+        score -= 10
+
+    # Deduct for poor docstrings (-10)
+    if not info.get("has_proper_docstrings") and info.get("tool_count", 0) > 0:
         score -= 10
 
     return max(0, score)

@@ -65,8 +65,10 @@ async def get_thresholds():
     Get current SOTA thresholds and criteria.
     """
     from ..tools.runt_analyzer import (
+        DXT_FILES,
         FASTMCP_LATEST,
         FASTMCP_RUNT_THRESHOLD,
+        REQUIRED_TOOLS,
         TOOL_PORTMANTEAU_THRESHOLD,
     )
     
@@ -74,11 +76,28 @@ async def get_thresholds():
         "fastmcp_latest": FASTMCP_LATEST,
         "fastmcp_runt_threshold": FASTMCP_RUNT_THRESHOLD,
         "portmanteau_threshold": TOOL_PORTMANTEAU_THRESHOLD,
-        "criteria": [
-            f"FastMCP < {FASTMCP_RUNT_THRESHOLD} = runt",
-            f"> {TOOL_PORTMANTEAU_THRESHOLD} tools without portmanteau = runt",
-            "No CI/CD = runt",
-            "> 3 CI workflows = bloated"
-        ]
+        "required_tools": REQUIRED_TOOLS,
+        "dxt_files": DXT_FILES,
+        "criteria": {
+            "critical_runt": [
+                f"FastMCP < {FASTMCP_RUNT_THRESHOLD}",
+                f"> {TOOL_PORTMANTEAU_THRESHOLD} tools without portmanteau",
+                "No CI/CD workflows",
+                "No help tool",
+                "No status tool",
+            ],
+            "warning": [
+                "> 3 CI workflows (bloated)",
+                "No DXT packaging (manifest.json)",
+                "Missing proper multiline docstrings",
+            ]
+        },
+        "status_emojis": {
+            "💀": "Critical (5+ issues)",
+            "🐛": "Bug (3-4 issues)", 
+            "🐣": "Minor (1-2 issues)",
+            "⚠️": "Warning (non-critical issues)",
+            "✅": "SOTA compliant"
+        }
     }
 
