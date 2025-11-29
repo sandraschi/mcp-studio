@@ -23,6 +23,11 @@ TOOL_PORTMANTEAU_THRESHOLD = 15  # Repos with >15 tools should have portmanteau
 REQUIRED_TOOLS = ["help", "status"]  # Every MCP server should have these
 DXT_FILES = ["manifest.json", "dxt.json"]  # Desktop extension packaging
 
+# Quality tooling
+RUFF_CONFIG_FILES = ["ruff.toml", ".ruff.toml"]  # Or [tool.ruff] in pyproject.toml
+TEST_DIRS = ["tests", "test"]  # Standard test directories
+PYTEST_MARKERS = ["pytest", "test_", "_test.py"]  # Evidence of pytest usage
+
 
 @tool(
     name="analyze_runts",
@@ -160,6 +165,13 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         "has_help_tool": False,
         "has_status_tool": False,
         "has_proper_docstrings": False,
+        "has_ruff": False,
+        "has_tests": False,
+        "has_unit_tests": False,
+        "has_integration_tests": False,
+        "has_pytest_config": False,
+        "has_coverage_config": False,
+        "test_file_count": 0,
         "is_runt": False,
         "runt_reasons": [],
         "recommendations": [],
@@ -255,6 +267,83 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     if ci_dir.exists():
         info["has_ci"] = True
         info["ci_workflows"] = len(list(ci_dir.glob("*.yml")))
+        
+        # Check for ruff in CI
+        for workflow in ci_dir.glob("*.yml"):
+            try:
+                ci_content = workflow.read_text(encoding='utf-8').lower()
+                if 'ruff' in ci_content:
+                    info["has_ruff"] = True
+                    break
+            except Exception:
+                pass
+
+    # Check for ruff config files
+    if not info["has_ruff"]:
+        for ruff_file in RUFF_CONFIG_FILES:
+            if (repo_path / ruff_file).exists():
+                info["has_ruff"] = True
+                break
+        
+        # Check pyproject.toml for [tool.ruff]
+        if not info["has_ruff"] and pyproject_file.exists():
+            try:
+                pyproject_content = pyproject_file.read_text(encoding='utf-8')
+                if '[tool.ruff]' in pyproject_content:
+                    info["has_ruff"] = True
+            except Exception:
+                pass
+
+    # Check test harness
+    test_file_count = 0
+    for test_dir_name in TEST_DIRS:
+        test_dir = repo_path / test_dir_name
+        if test_dir.exists():
+            info["has_tests"] = True
+            
+            # Check for unit tests
+            unit_dir = test_dir / "unit"
+            if unit_dir.exists() and any(unit_dir.glob("test_*.py")):
+                info["has_unit_tests"] = True
+            
+            # Check for integration tests
+            integration_dir = test_dir / "integration"
+            if integration_dir.exists() and any(integration_dir.glob("test_*.py")):
+                info["has_integration_tests"] = True
+            
+            # Count test files
+            test_file_count += len(list(test_dir.rglob("test_*.py")))
+            test_file_count += len(list(test_dir.rglob("*_test.py")))
+    
+    info["test_file_count"] = test_file_count
+
+    # Check for pytest configuration
+    pytest_ini = repo_path / "pytest.ini"
+    pyproject_pytest = False
+    if pyproject_file.exists():
+        try:
+            pyproject_content = pyproject_file.read_text(encoding='utf-8')
+            if '[tool.pytest' in pyproject_content:
+                pyproject_pytest = True
+        except Exception:
+            pass
+    
+    if pytest_ini.exists() or pyproject_pytest:
+        info["has_pytest_config"] = True
+
+    # Check for coverage configuration
+    coveragerc = repo_path / ".coveragerc"
+    pyproject_coverage = False
+    if pyproject_file.exists():
+        try:
+            pyproject_content = pyproject_file.read_text(encoding='utf-8')
+            if '[tool.coverage' in pyproject_content:
+                pyproject_coverage = True
+        except Exception:
+            pass
+    
+    if coveragerc.exists() or pyproject_coverage:
+        info["has_coverage_config"] = True
 
     # Determine runt status
     _evaluate_runt_status(info, fastmcp_version)
@@ -315,6 +404,40 @@ def _evaluate_runt_status(info: Dict[str, Any], fastmcp_version: str) -> None:
         info["runt_reasons"].append("Missing proper multiline docstrings (Args/Returns)")
         info["recommendations"].append("Add comprehensive docstrings with Args, Returns, Examples")
 
+    # Check ruff linting
+    if not info["has_ruff"]:
+        info["is_runt"] = True
+        info["runt_reasons"].append("No ruff linting configured")
+        info["recommendations"].append("Add ruff to pyproject.toml and CI workflow")
+
+    # Check test harness
+    if not info["has_tests"]:
+        info["is_runt"] = True
+        info["runt_reasons"].append("No test directory (tests/)")
+        info["recommendations"].append("Add tests/ directory with unit tests")
+    else:
+        if not info["has_unit_tests"]:
+            info["runt_reasons"].append("No unit tests (tests/unit/)")
+            info["recommendations"].append("Add tests/unit/ with test_*.py files")
+        
+        if not info["has_integration_tests"]:
+            info["runt_reasons"].append("No integration tests (tests/integration/)")
+            info["recommendations"].append("Add tests/integration/ for API/E2E tests")
+        
+        if info["test_file_count"] < 3:
+            info["runt_reasons"].append(f"Only {info['test_file_count']} test files (recommend: 5+)")
+            info["recommendations"].append("Add more test coverage")
+
+    # Check pytest config
+    if not info["has_pytest_config"]:
+        info["runt_reasons"].append("No pytest configuration")
+        info["recommendations"].append("Add [tool.pytest.ini_options] to pyproject.toml")
+
+    # Check coverage config
+    if not info["has_coverage_config"]:
+        info["runt_reasons"].append("No coverage configuration")
+        info["recommendations"].append("Add [tool.coverage] to pyproject.toml")
+
     # Set status emoji based on severity
     runt_count = len(info["runt_reasons"])
     if info["is_runt"]:
@@ -372,6 +495,28 @@ def _calculate_sota_score(info: Dict[str, Any]) -> int:
     # Deduct for poor docstrings (-10)
     if not info.get("has_proper_docstrings") and info.get("tool_count", 0) > 0:
         score -= 10
+
+    # Deduct for no ruff (-10)
+    if not info.get("has_ruff"):
+        score -= 10
+
+    # Deduct for no tests (-15)
+    if not info.get("has_tests"):
+        score -= 15
+    else:
+        # Deduct for missing test types (-5 each)
+        if not info.get("has_unit_tests"):
+            score -= 5
+        if not info.get("has_integration_tests"):
+            score -= 5
+
+    # Deduct for no pytest config (-5)
+    if not info.get("has_pytest_config"):
+        score -= 5
+
+    # Deduct for no coverage config (-5)
+    if not info.get("has_coverage_config"):
+        score -= 5
 
     return max(0, score)
 

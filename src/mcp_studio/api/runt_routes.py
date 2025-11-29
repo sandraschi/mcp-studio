@@ -69,6 +69,8 @@ async def get_thresholds():
         FASTMCP_LATEST,
         FASTMCP_RUNT_THRESHOLD,
         REQUIRED_TOOLS,
+        RUFF_CONFIG_FILES,
+        TEST_DIRS,
         TOOL_PORTMANTEAU_THRESHOLD,
     )
     
@@ -78,6 +80,8 @@ async def get_thresholds():
         "portmanteau_threshold": TOOL_PORTMANTEAU_THRESHOLD,
         "required_tools": REQUIRED_TOOLS,
         "dxt_files": DXT_FILES,
+        "ruff_config_files": RUFF_CONFIG_FILES,
+        "test_dirs": TEST_DIRS,
         "criteria": {
             "critical_runt": [
                 f"FastMCP < {FASTMCP_RUNT_THRESHOLD}",
@@ -85,12 +89,35 @@ async def get_thresholds():
                 "No CI/CD workflows",
                 "No help tool",
                 "No status tool",
+                "No ruff linting",
+                "No test directory",
             ],
             "warning": [
                 "> 3 CI workflows (bloated)",
                 "No DXT packaging (manifest.json)",
                 "Missing proper multiline docstrings",
+                "No unit tests (tests/unit/)",
+                "No integration tests (tests/integration/)",
+                "No pytest configuration",
+                "No coverage configuration",
+                "< 5 test files",
             ]
+        },
+        "scoring": {
+            "fastmcp_old": -20,
+            "no_portmanteau": -25,
+            "no_ci": -20,
+            "no_help": -10,
+            "no_status": -10,
+            "no_dxt": -10,
+            "no_docstrings": -10,
+            "no_ruff": -10,
+            "no_tests": -15,
+            "no_unit_tests": -5,
+            "no_integration_tests": -5,
+            "no_pytest_config": -5,
+            "no_coverage_config": -5,
+            "too_many_ci": -5,
         },
         "status_emojis": {
             "💀": "Critical (5+ issues)",
