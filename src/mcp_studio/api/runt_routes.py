@@ -91,6 +91,9 @@ async def get_thresholds():
                 "No status tool",
                 "No ruff linting",
                 "No test directory",
+                "No proper logging (structlog/logging)",
+                "> 5 print() calls in non-test code",
+                "> 3 bare except clauses",
             ],
             "warning": [
                 "> 3 CI workflows (bloated)",
@@ -101,6 +104,7 @@ async def get_thresholds():
                 "No pytest configuration",
                 "No coverage configuration",
                 "< 5 test files",
+                "1-5 print() calls in non-test code",
             ]
         },
         "scoring": {
@@ -118,6 +122,10 @@ async def get_thresholds():
             "no_pytest_config": -5,
             "no_coverage_config": -5,
             "too_many_ci": -5,
+            "no_logging": -10,
+            "print_statements_few": -5,
+            "print_statements_many": -10,
+            "bad_error_handling": -10,
         },
         "status_emojis": {
             "💀": "Critical (5+ issues)",

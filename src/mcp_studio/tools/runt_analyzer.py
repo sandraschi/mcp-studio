@@ -28,6 +28,36 @@ RUFF_CONFIG_FILES = ["ruff.toml", ".ruff.toml"]  # Or [tool.ruff] in pyproject.t
 TEST_DIRS = ["tests", "test"]  # Standard test directories
 PYTEST_MARKERS = ["pytest", "test_", "_test.py"]  # Evidence of pytest usage
 
+# Logging patterns (good)
+LOGGING_PATTERNS = [
+    r'import\s+logging',
+    r'import\s+structlog',
+    r'from\s+logging\s+import',
+    r'from\s+structlog\s+import',
+    r'logger\s*=\s*logging\.getLogger',
+    r'logger\s*=\s*structlog\.get_logger',
+]
+
+# Bad patterns (print/console in non-test code)
+BAD_STDOUT_PATTERNS = [
+    r'^\s*print\s*\(',  # print() calls
+    r'console\.log\s*\(',  # JS-style logging
+    r'sys\.stdout\.write\s*\(',  # Direct stdout writes
+]
+
+# Error handling patterns (bad)
+BAD_ERROR_PATTERNS = [
+    r'except\s*:',  # Bare except (catches everything including KeyboardInterrupt)
+    r'except\s+Exception\s*:',  # Broad exception without handling
+]
+
+# Good error handling patterns
+GOOD_ERROR_PATTERNS = [
+    r'except\s+\w+Error',  # Specific exception types
+    r'logger\.\w+\(.*error',  # Logging errors
+    r'raise\s+\w+Error',  # Re-raising specific errors
+]
+
 
 @tool(
     name="analyze_runts",
@@ -172,6 +202,10 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         "has_pytest_config": False,
         "has_coverage_config": False,
         "test_file_count": 0,
+        "has_proper_logging": False,
+        "has_good_error_handling": True,  # Assume good until proven bad
+        "print_statement_count": 0,
+        "bare_except_count": 0,
         "is_runt": False,
         "runt_reasons": [],
         "recommendations": [],
@@ -256,6 +290,49 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                         total_tools_checked += len(docstring_matches)
                 except Exception:
                     pass
+
+    # Check for proper logging, print statements, and error handling
+    print_count = 0
+    bare_except_count = 0
+    has_logging = False
+    has_good_errors = True
+    
+    for src_dir in src_dirs:
+        if src_dir.exists():
+            for py_file in src_dir.rglob("*.py"):
+                # Skip test files for print/logging checks
+                is_test_file = "test" in str(py_file).lower()
+                if "__pycache__" in str(py_file):
+                    continue
+                    
+                try:
+                    content = py_file.read_text(encoding='utf-8')
+                    
+                    # Check for logging setup (only need to find it once)
+                    if not has_logging:
+                        for pattern in LOGGING_PATTERNS:
+                            if re.search(pattern, content):
+                                has_logging = True
+                                break
+                    
+                    # Check for print statements in non-test files
+                    if not is_test_file:
+                        for pattern in BAD_STDOUT_PATTERNS:
+                            matches = re.findall(pattern, content, re.MULTILINE)
+                            print_count += len(matches)
+                    
+                    # Check for bare except clauses
+                    for pattern in BAD_ERROR_PATTERNS:
+                        matches = re.findall(pattern, content)
+                        bare_except_count += len(matches)
+                        
+                except Exception:
+                    pass
+    
+    info["has_proper_logging"] = has_logging
+    info["print_statement_count"] = print_count
+    info["bare_except_count"] = bare_except_count
+    info["has_good_error_handling"] = bare_except_count < 3  # Allow a few, but not many
 
     info["tool_count"] = tool_count
     # Consider proper docstrings if >50% of tools have them
@@ -438,6 +515,25 @@ def _evaluate_runt_status(info: Dict[str, Any], fastmcp_version: str) -> None:
         info["runt_reasons"].append("No coverage configuration")
         info["recommendations"].append("Add [tool.coverage] to pyproject.toml")
 
+    # Check logging
+    if not info["has_proper_logging"]:
+        info["is_runt"] = True
+        info["runt_reasons"].append("No proper logging (structlog/logging)")
+        info["recommendations"].append("Add structlog or logging module for observability")
+
+    # Check print statements
+    if info["print_statement_count"] > 0:
+        info["runt_reasons"].append(f"{info['print_statement_count']} print() calls in non-test code")
+        info["recommendations"].append("Replace print() with logger calls")
+        if info["print_statement_count"] > 5:
+            info["is_runt"] = True  # Too many prints = runt
+
+    # Check error handling
+    if not info["has_good_error_handling"]:
+        info["is_runt"] = True
+        info["runt_reasons"].append(f"{info['bare_except_count']} bare except clauses")
+        info["recommendations"].append("Use specific exception types (ValueError, TypeError, etc.)")
+
     # Set status emoji based on severity
     runt_count = len(info["runt_reasons"])
     if info["is_runt"]:
@@ -517,6 +613,21 @@ def _calculate_sota_score(info: Dict[str, Any]) -> int:
     # Deduct for no coverage config (-5)
     if not info.get("has_coverage_config"):
         score -= 5
+
+    # Deduct for no proper logging (-10)
+    if not info.get("has_proper_logging"):
+        score -= 10
+
+    # Deduct for print statements (-5, or -10 if many)
+    print_count = info.get("print_statement_count", 0)
+    if print_count > 5:
+        score -= 10
+    elif print_count > 0:
+        score -= 5
+
+    # Deduct for bad error handling (-10)
+    if not info.get("has_good_error_handling"):
+        score -= 10
 
     return max(0, score)
 
