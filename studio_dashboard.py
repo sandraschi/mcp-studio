@@ -290,13 +290,18 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     
     literal_pattern = re.compile(r'Literal\[([^\]]+)\]')
     
-    # Check if repo uses portmanteau pattern (has register_tools function)
+    # Check if repo uses portmanteau pattern (has register_tools function OR portmanteau/ subdir)
     uses_portmanteau_pattern = False
+    portmanteau_dir = None
     if tools_dir:
         init_file = tools_dir / '__init__.py'
         if init_file.exists():
             init_text = init_file.read_text(encoding='utf-8', errors='ignore')
             uses_portmanteau_pattern = 'def register_tools' in init_text
+        # Also check for tools/portmanteau/ subdirectory
+        candidate_portmanteau = tools_dir / 'portmanteau'
+        if candidate_portmanteau.exists() and candidate_portmanteau.is_dir():
+            portmanteau_dir = candidate_portmanteau
     
     # Check if repo uses monolithic server pattern (all tools in server.py, no tools/ dir)
     monolithic_server = None
@@ -336,6 +341,26 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     if monolithic_server:
         search_dirs = []
         py_files_to_scan = [monolithic_server]
+    # If modular imports detected (mcp_server_clean.py), use those (takes precedence)
+    elif imported_tool_modules:
+        py_files_to_scan = None  # Will filter by imported_tool_modules
+    # If has portmanteau/ subdir with actual tools, ONLY count from there
+    elif portmanteau_dir:
+        # Check if portmanteau dir has any @tool decorators
+        has_tools = False
+        for pf in portmanteau_dir.glob('*.py'):
+            if pf.name != '__init__.py':
+                try:
+                    if '@mcp.tool' in pf.read_text(encoding='utf-8', errors='ignore') or '@app.tool' in pf.read_text(encoding='utf-8', errors='ignore'):
+                        has_tools = True
+                        break
+                except:
+                    pass
+        if has_tools:
+            search_dirs = [portmanteau_dir]
+            py_files_to_scan = None
+        else:
+            py_files_to_scan = None
     else:
         py_files_to_scan = None  # Will be computed per search_dir
     
