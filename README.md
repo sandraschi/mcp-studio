@@ -8,7 +8,7 @@
 [![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.116.1-009688.svg?logo=fastapi)](https://fastapi.tiangolo.com/)
 
-🎯 **Mission Control for the MCP Ecosystem** - A comprehensive web-based management platform for MCP (Model Context Protocol) servers, built with FastMCP 2.13.1 and FastAPI.
+🎯 **Mission Control for the MCP Zoo** 🦁🐘🦒 - A comprehensive web-based management platform for MCP (Model Context Protocol) servers, built with FastMCP 2.13.1 and FastAPI.
 
 ## 🆕 **What's New (v2.0.0)**
 
@@ -367,7 +367,7 @@ pytest
 ## 🎉 **What Makes MCP Studio Special**
 
 ### **🎯 Mission Control for MCP**
-MCP Studio is the **first comprehensive management platform** for the MCP ecosystem. It bridges the gap between raw MCP servers and user-friendly interfaces.
+MCP Studio is the **first comprehensive management platform** for the MCP Zoo. It bridges the gap between raw MCP servers and user-friendly interfaces. (Not a flea circus - these are proper beasts! 🦁)
 
 ### **⚡ Performance First**
 Built on **FastMCP 2.13.1** and **FastAPI**, providing enterprise-grade performance with developer-friendly APIs.
@@ -387,8 +387,8 @@ Distributed under the MIT License. See `LICENSE` for more information.
 - **FastMCP** by Jonathan Lowin - The foundation that makes this possible
 - **FastAPI** by Sebastián Ramirez - Excellent web framework
 - **Anthropic** - For the Model Context Protocol specification
-- **The MCP Community** - For building amazing tools and servers
+- **The MCP Zoo** 🦁🐘🦒 - For building amazing tools and servers
 
 ---
 
-**MCP Studio** - Your mission control for the MCP ecosystem! 🚀
+**MCP Studio** - Your mission control for the MCP Zoo! 🦁🐘🦒🚀

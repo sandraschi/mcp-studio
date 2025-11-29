@@ -6,7 +6,7 @@ Thank you for your interest in contributing to **MCP Studio**! This is a hybrid 
 
 ## 🎯 Project Overview
 
-**MCP Studio** is Mission Control for the MCP ecosystem - a comprehensive web-based management platform for MCP servers. It features:
+**MCP Studio** is Mission Control for the MCP Zoo 🦁🐘🦒 - a comprehensive web-based management platform for MCP servers. It features:
 
 - 🔧 **MCP Server** (FastMCP 2.11)
 - 🌐 **Web Interface** (React + FastAPI)
