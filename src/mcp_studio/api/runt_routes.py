@@ -94,7 +94,6 @@ async def get_thresholds():
                 "No proper logging (structlog/logging)",
                 "> 5 print() calls in non-test code",
                 "> 3 bare except clauses",
-                ">= 5 non-informative error messages",
             ],
             "warning": [
                 "> 3 CI workflows (bloated)",
@@ -106,7 +105,9 @@ async def get_thresholds():
                 "No coverage configuration",
                 "< 5 test files",
                 "1-5 print() calls in non-test code",
-                "1-4 non-informative error messages",
+            ],
+            "needs_polish": [
+                "Non-informative error messages (any count)",
             ],
             "lazy_error_examples": [
                 '"error"',

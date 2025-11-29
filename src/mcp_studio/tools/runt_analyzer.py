@@ -561,12 +561,11 @@ def _evaluate_runt_status(info: Dict[str, Any], fastmcp_version: str) -> None:
         info["runt_reasons"].append(f"{info['bare_except_count']} bare except clauses")
         info["recommendations"].append("Use specific exception types (ValueError, TypeError, etc.)")
 
-    # Check lazy error messages
+    # Check lazy error messages (warning only, not runt-worthy)
     if info["lazy_error_msg_count"] > 0:
-        info["runt_reasons"].append(f"{info['lazy_error_msg_count']} non-informative error messages")
+        info["runt_reasons"].append(f"{info['lazy_error_msg_count']} non-informative error messages (minor)")
         info["recommendations"].append("Use descriptive error messages with context (what failed, why, how to fix)")
-        if info["lazy_error_msg_count"] >= 5:
-            info["is_runt"] = True  # Too many lazy messages = runt
+        # Note: lazy messages alone don't make a runt - just needs polish
 
     # Set status emoji based on severity
     runt_count = len(info["runt_reasons"])
