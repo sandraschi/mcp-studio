@@ -1264,7 +1264,7 @@ async def dashboard():
         <div id="content-ai" class="tab-content hidden">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Left: Chat Interface -->
-                <div class="lg:col-span-2 glass rounded-xl overflow-hidden flex flex-col" style="height: 70vh;">
+                <div class="lg:col-span-2 glass rounded-xl overflow-hidden flex flex-col" style="height: 85vh;">
                     <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
                         <div>
                             <h2 class="font-semibold flex items-center gap-2">
@@ -1273,9 +1273,14 @@ async def dashboard():
                             </h2>
                             <p class="text-sm text-gray-400 mt-1">Powered by Ollama</p>
                         </div>
-                        <button onclick="connectAI()" id="ai-connect-btn" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-medium">
-                            🔌 Connect to LLM
-                        </button>
+                        <div class="flex gap-2">
+                            <button onclick="clearAIChat()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-medium" title="Clear chat">
+                                🗑️ Clear
+                            </button>
+                            <button onclick="connectAI()" id="ai-connect-btn" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-medium">
+                                🔌 Connect to LLM
+                            </button>
+                        </div>
                     </div>
                     
                     <!-- Chat Messages -->
@@ -2064,6 +2069,18 @@ async def dashboard():
         function askWithWebSearch(searchQuery) {{
             document.getElementById('ai-web-search').value = searchQuery;
             document.getElementById('ai-input').value = 'Based on the web search results, summarize the key points and how they apply to my MCP projects.';
+        }}
+
+        function clearAIChat() {{
+            const chatEl = document.getElementById('ai-chat');
+            chatEl.innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <div class="text-4xl mb-4">🧠</div>
+                    <div>Chat cleared</div>
+                    <div class="text-sm mt-2">Start a new conversation with the AI</div>
+                </div>
+            `;
+            aiMessages = [];
         }}
 
         function addChatMessage(role, content) {{
