@@ -783,81 +783,45 @@ async def get_ollama_models():
 
 @app.post("/api/ai/chat")
 async def ai_chat(request: Request):
-    """Chat with local-llm-mcp for AI-powered analysis."""
+    """Chat with Ollama for AI-powered analysis."""
+    import httpx
+    
     data = await request.json()
-    model_id = data.get("model_id", "ollama:llama3.2")
+    model_id = data.get("model_id", "llama3.2:3b")
     message = data.get("message", "")
     
     if not message:
         raise HTTPException(400, "message required")
     
-    if not FASTMCP_AVAILABLE:
-        raise HTTPException(503, "FastMCP not available")
-    
-    # Find local-llm-mcp config
-    repo_path = REPOS_DIR / "local-llm-mcp"
-    if not repo_path.exists():
-        raise HTTPException(404, "local-llm-mcp not found in repos")
-    
-    cursor_config = find_cursor_config_for_repo("local-llm-mcp", repo_path)
-    if not cursor_config:
-        raise HTTPException(400, "local-llm-mcp not in Cursor config")
+    log(f"🤖 AI chat with {model_id}: {message[:50]}...")
     
     try:
-        command = cursor_config.get("command", "python")
-        args = cursor_config.get("args", [])
-        cwd = cursor_config.get("cwd", str(repo_path))
-        config_env = cursor_config.get("env", {})
-        
-        env = os.environ.copy()
-        env.update(config_env)
-        env["PYTHONUNBUFFERED"] = "1"
-        
-        log(f"🤖 AI chat: {message[:50]}...")
-        
-        transport = StdioTransport(
-            command=command,
-            args=args,
-            env=env,
-            cwd=cwd,
-        )
-        
-        client = Client(transport)
-        
-        async with client:
-            await client.initialize()
-            
-            # Try chat_completion first, fall back to generate_text
-            try:
-                result = await client.call_tool("chat_completion", {
+        # Call Ollama API directly
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(
+                "http://localhost:11434/api/chat",
+                json={
                     "model": model_id,
                     "messages": [{"role": "user", "content": message}],
-                    "max_tokens": 2000,
-                })
-            except Exception:
-                # Fall back to generate_text
-                result = await client.call_tool("generate_text", {
-                    "model": model_id,
-                    "prompt": message,
-                    "max_tokens": 2000,
-                })
+                    "stream": False,
+                }
+            )
             
-            # Extract response text
-            if isinstance(result, dict):
-                response = result.get("response") or result.get("text") or result.get("content") or str(result)
-            elif isinstance(result, list) and len(result) > 0:
-                first = result[0]
-                if hasattr(first, 'text'):
-                    response = first.text
-                else:
-                    response = str(first)
-            else:
+            if resp.status_code != 200:
+                return {"error": f"Ollama returned {resp.status_code}: {resp.text}"}
+            
+            result = resp.json()
+            response = result.get("message", {}).get("content", "")
+            
+            if not response:
                 response = str(result)
             
             log(f"✅ AI response received ({len(response)} chars)")
-            
             return {"response": response}
     
+    except httpx.TimeoutException:
+        log("❌ AI chat timeout")
+        return {"error": "Request timed out. The model may be loading or the response is too long."}
     except Exception as e:
         log(f"❌ AI chat error: {e}")
         return {"error": str(e)}
@@ -1153,7 +1117,7 @@ async def dashboard():
                                 🤖 AI Assistant
                                 <span id="ai-status" class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400">Not Connected</span>
                             </h2>
-                            <p class="text-sm text-gray-400 mt-1">Powered by local-llm-mcp</p>
+                            <p class="text-sm text-gray-400 mt-1">Powered by Ollama</p>
                         </div>
                         <button onclick="connectAI()" id="ai-connect-btn" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-medium">
                             🔌 Connect to LLM
@@ -1863,37 +1827,43 @@ async def dashboard():
             const statusEl = document.getElementById('ai-status');
             const btnEl = document.getElementById('ai-connect-btn');
             const chatEl = document.getElementById('ai-chat');
+            const modelSelect = document.getElementById('ai-model');
             
-            statusEl.textContent = 'Connecting...';
+            statusEl.textContent = 'Checking Ollama...';
             statusEl.className = 'text-xs px-2 py-0.5 rounded bg-yellow-600 text-yellow-100';
             btnEl.disabled = true;
             
             try {{
-                // Connect to local-llm-mcp
-                const res = await fetch('/api/repos/local-llm-mcp/connect', {{ method: 'POST' }});
+                // Check Ollama is running
+                const res = await fetch('/api/ollama/models');
                 const data = await res.json();
                 
-                if (data.status === 'connected') {{
-                    aiConnected = true;
-                    statusEl.textContent = 'Connected (' + data.tools.length + ' tools)';
-                    statusEl.className = 'text-xs px-2 py-0.5 rounded bg-green-600 text-green-100';
-                    btnEl.textContent = '✓ Connected';
-                    btnEl.className = 'px-4 py-2 bg-green-600 rounded text-sm font-medium cursor-default';
-                    
-                    chatEl.innerHTML = `
-                        <div class="flex gap-3">
-                            <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-sm">🤖</div>
-                            <div class="flex-1 bg-white/5 rounded-lg p-4">
-                                <div class="font-medium text-purple-400 mb-1">AI Assistant</div>
-                                <div class="text-gray-300">Connected to local-llm-mcp with ${{data.tools.length}} tools! I can help you analyze your MCP zoo, suggest improvements, and answer questions about your servers. What would you like to know?</div>
-                            </div>
-                        </div>
-                    `;
-                    
-                    updateAIContext();
-                }} else {{
-                    throw new Error(data.error || 'Connection failed');
+                if (data.error) {{
+                    throw new Error(data.error);
                 }}
+                
+                if (data.models.length === 0) {{
+                    throw new Error('No models loaded in Ollama');
+                }}
+                
+                aiConnected = true;
+                const selectedModel = modelSelect.value || data.models[0].name;
+                statusEl.textContent = 'Ready (' + data.count + ' models)';
+                statusEl.className = 'text-xs px-2 py-0.5 rounded bg-green-600 text-green-100';
+                btnEl.textContent = '✓ Connected';
+                btnEl.className = 'px-4 py-2 bg-green-600 rounded text-sm font-medium cursor-default';
+                
+                chatEl.innerHTML = `
+                    <div class="flex gap-3">
+                        <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-sm">🤖</div>
+                        <div class="flex-1 bg-white/5 rounded-lg p-4">
+                            <div class="font-medium text-purple-400 mb-1">AI Assistant</div>
+                            <div class="text-gray-300">Connected to Ollama with ${{data.count}} models! Using <strong>${{selectedModel}}</strong>. I can help you analyze your MCP zoo, suggest improvements, and answer questions about your servers. What would you like to know?</div>
+                        </div>
+                    </div>
+                `;
+                
+                updateAIContext();
             }} catch(e) {{
                 statusEl.textContent = 'Error: ' + e.message;
                 statusEl.className = 'text-xs px-2 py-0.5 rounded bg-red-600 text-red-100';
