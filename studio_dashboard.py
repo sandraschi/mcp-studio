@@ -336,56 +336,94 @@ def scan_repos() -> List[Dict[str, Any]]:
 # RUNTIME - Live server connections with FastMCP
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def find_server_entrypoint(repo_name: str, repo_path: Path) -> Optional[Path]:
-    """Find the Python entrypoint file for an MCP server repo."""
-    # Variations of package name
-    pkg_variants = [
-        repo_name.replace("-", "_"),                           # ring-mcp -> ring_mcp
-        repo_name.replace("-", "_").replace("mcp_", "").replace("_mcp", ""),  # ring-mcp -> ring
-        repo_name.replace("my", "").replace("-", "_"),         # mywienerlinien -> wienerlinien
-        repo_name.replace("my", "").replace("-", "_") + "_mcp",  # mywienerlinien -> wienerlinien_mcp
-    ]
+# Cache for Cursor config
+_cursor_config_cache: Optional[Dict] = None
+
+def load_cursor_config() -> Dict[str, Dict]:
+    """Load Cursor MCP config from ~/.cursor/mcp.json"""
+    global _cursor_config_cache
+    if _cursor_config_cache is not None:
+        return _cursor_config_cache
     
-    # Direct file patterns
-    patterns = [
-        repo_path / "server.py",
-        repo_path / "main.py",
-        repo_path / "app.py",
-        repo_path / "src" / "main.py",
-        repo_path / "src" / "server.py",
-    ]
+    cursor_config_path = Path.home() / ".cursor" / "mcp.json"
+    if not cursor_config_path.exists():
+        _cursor_config_cache = {}
+        return _cursor_config_cache
     
-    # Add package-based patterns
-    for pkg in pkg_variants:
-        patterns.extend([
-            repo_path / pkg / "server.py",
-            repo_path / pkg / "main.py",
-            repo_path / pkg / "__main__.py",
-            repo_path / "src" / pkg / "server.py",
-            repo_path / "src" / pkg / "main.py",
-            repo_path / "src" / pkg / "__main__.py",
-        ])
+    try:
+        with open(cursor_config_path) as f:
+            data = json.load(f)
+            _cursor_config_cache = data.get("mcpServers", {})
+    except Exception as e:
+        log(f"⚠️ Failed to load Cursor config: {e}")
+        _cursor_config_cache = {}
     
-    for pattern in patterns:
-        if pattern.exists():
-            return pattern
+    return _cursor_config_cache
+
+def find_cursor_config_for_repo(repo_name: str, repo_path: Path) -> Optional[Dict]:
+    """Find matching Cursor MCP server config for a repository."""
+    configs = load_cursor_config()
+    repo_path_str = str(repo_path).replace("\\", "/").lower()
     
-    # Fallback: search src/ for any server.py
-    src_dir = repo_path / "src"
-    if src_dir.exists():
-        for pkg_dir in src_dir.iterdir():
-            if pkg_dir.is_dir() and not pkg_dir.name.startswith(("_", ".")):
-                server_py = pkg_dir / "server.py"
-                if server_py.exists():
-                    return server_py
-                main_py = pkg_dir / "__main__.py"
-                if main_py.exists():
-                    return main_py
+    # Try to match by cwd or path in args
+    for server_id, config in configs.items():
+        cwd = config.get("cwd", "").replace("\\", "/").lower()
+        args = " ".join(config.get("args", [])).replace("\\", "/").lower()
+        
+        if repo_path_str in cwd or repo_path_str in args or repo_name.lower() in cwd:
+            return {"id": server_id, **config}
+    
+    return None
+
+def parse_pyproject_entrypoint(repo_path: Path) -> Optional[Dict]:
+    """Parse pyproject.toml to find the MCP server entrypoint."""
+    pyproject = repo_path / "pyproject.toml"
+    if not pyproject.exists():
+        return None
+    
+    try:
+        content = pyproject.read_text()
+        
+        # Look for [project.scripts] section
+        if "[project.scripts]" in content:
+            import re
+            # Match patterns like: server = "package.module:main"
+            match = re.search(r'\[project\.scripts\][^\[]*?(\w+)\s*=\s*["\']([^"\']+)["\']', content, re.DOTALL)
+            if match:
+                script_name, entry = match.groups()
+                # Parse "package.module:main" -> "-m package.module"
+                if ":" in entry:
+                    module_path = entry.split(":")[0]
+                    return {
+                        "command": "python",
+                        "args": ["-m", module_path],
+                        "cwd": str(repo_path),
+                        "env": {"PYTHONPATH": str(repo_path / "src")},
+                        "source": "pyproject.toml"
+                    }
+        
+        # Look for [tool.poetry.scripts]
+        if "[tool.poetry.scripts]" in content:
+            import re
+            match = re.search(r'\[tool\.poetry\.scripts\][^\[]*?(\w+)\s*=\s*["\']([^"\']+)["\']', content, re.DOTALL)
+            if match:
+                script_name, entry = match.groups()
+                if ":" in entry:
+                    module_path = entry.split(":")[0]
+                    return {
+                        "command": "python",
+                        "args": ["-m", module_path],
+                        "cwd": str(repo_path),
+                        "env": {"PYTHONPATH": str(repo_path / "src")},
+                        "source": "pyproject.toml"
+                    }
+    except Exception as e:
+        log(f"⚠️ Failed to parse pyproject.toml for {repo_path.name}: {e}")
     
     return None
 
 async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
-    """Connect to an MCP server from a repository."""
+    """Connect to an MCP server from a repository using Cursor config or pyproject.toml."""
     repo_path = REPOS_DIR / repo_name
     
     if not repo_path.exists():
@@ -396,7 +434,7 @@ async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
     # Check if already connected
     if connection_id in state["connected_servers"]:
         conn = state["connected_servers"][connection_id]
-        if conn.get("status") == "connected" and conn.get("client"):
+        if conn.get("status") == "connected":
             return {
                 "id": connection_id,
                 "name": repo_name,
@@ -418,41 +456,44 @@ async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
         return result
     
     try:
-        # Find entrypoint
-        entrypoint = await find_server_entrypoint(repo_name, repo_path)
-        if not entrypoint:
+        # 1. Try Cursor config first (best option - has tested command/args/env)
+        cursor_config = find_cursor_config_for_repo(repo_name, repo_path)
+        
+        # 2. Fallback to pyproject.toml
+        if not cursor_config:
+            cursor_config = parse_pyproject_entrypoint(repo_path)
+        
+        if not cursor_config:
             result["status"] = "error"
-            result["error"] = f"No entrypoint found for {repo_name}"
+            result["error"] = f"No config found for {repo_name}. Add to Cursor mcp.json or define in pyproject.toml"
             return result
         
-        log(f"🔌 Connecting to {repo_name} via {entrypoint.name}...")
+        # Extract config
+        command = cursor_config.get("command", "python")
+        args = cursor_config.get("args", [])
+        cwd = cursor_config.get("cwd", str(repo_path))
+        config_env = cursor_config.get("env", {})
+        source = cursor_config.get("source", "cursor")
+        
+        log(f"🔌 Connecting to {repo_name} via {source} config...")
+        log(f"   cmd: {command} {' '.join(args[:3])}{'...' if len(args) > 3 else ''}")
         
         # Prepare environment
         env = os.environ.copy()
-        env["PYTHONPATH"] = str(repo_path) + os.pathsep + env.get("PYTHONPATH", "")
-        
-        # Simple approach: try running as module if in src/ or as script
-        if "src" in str(entrypoint):
-            # Module path
-            rel_path = entrypoint.relative_to(repo_path / "src")
-            module_path = ".".join(rel_path.parts).replace(".py", "")
-            args = ["-m", module_path]
-        else:
-            # Direct script
-            args = [str(entrypoint)]
+        env.update(config_env)
+        env["PYTHONUNBUFFERED"] = "1"  # Always unbuffered for stdio
         
         # Create stdio transport
         transport = StdioTransport(
-            command="python",
+            command=command,
             args=args,
             env=env,
-            cwd=str(repo_path),
+            cwd=cwd,
         )
         
-        # Create client
+        # Create client and connect
         client = Client(transport)
         
-        # Connect and initialize
         async with client:
             await client.initialize()
             tools = await client.list_tools()
@@ -469,12 +510,10 @@ async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
             result["status"] = "connected"
             result["tools"] = tool_list
             
-            # Store client (note: we'll need to keep it alive in a real implementation)
             state["connected_servers"][connection_id] = {
                 "status": "connected",
-                "client": client,  # In real impl, we'd manage lifecycle better
                 "tools": tool_list,
-                "transport": transport,
+                "config": cursor_config,
             }
             
             log(f"✅ Connected to {repo_name}: {len(tool_list)} tools")
