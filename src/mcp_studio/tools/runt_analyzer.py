@@ -227,7 +227,9 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         "is_runt": False,
         "runt_reasons": [],
         "recommendations": [],
-        "status_emoji": "✅"
+        "status_emoji": "✅",
+        "status_color": "green",
+        "status_label": "SOTA"
     }
 
     # Check for requirements.txt or pyproject.toml
@@ -567,20 +569,31 @@ def _evaluate_runt_status(info: Dict[str, Any], fastmcp_version: str) -> None:
         info["recommendations"].append("Use descriptive error messages with context (what failed, why, how to fix)")
         # Note: lazy messages alone don't make a runt - just needs polish
 
-    # Set status emoji based on severity
+    # Set status emoji, color, and label based on severity
     runt_count = len(info["runt_reasons"])
     if info["is_runt"]:
+        # RED - Real runts
+        info["status_color"] = "red"
         if runt_count >= 5:
-            info["status_emoji"] = "💀"  # Critical
+            info["status_emoji"] = "💀"
+            info["status_label"] = "Critical Runt"
         elif runt_count >= 3:
-            info["status_emoji"] = "🐛"  # Bug
+            info["status_emoji"] = "🐛"
+            info["status_label"] = "Runt"
         else:
-            info["status_emoji"] = "🐣"  # Chick (minor)
+            info["status_emoji"] = "🐣"
+            info["status_label"] = "Minor Runt"
     else:
         if runt_count > 0:
-            info["status_emoji"] = "⚠️"  # Warning (has issues but not runt)
+            # ORANGE - Improvable (has warnings but not runt)
+            info["status_emoji"] = "⚠️"
+            info["status_color"] = "orange"
+            info["status_label"] = "Needs Improvement"
         else:
-            info["status_emoji"] = "✅"  # Perfect
+            # GREEN - Perfect
+            info["status_emoji"] = "✅"
+            info["status_color"] = "green"
+            info["status_label"] = "SOTA"
 
 
 def _calculate_sota_score(info: Dict[str, Any]) -> int:
