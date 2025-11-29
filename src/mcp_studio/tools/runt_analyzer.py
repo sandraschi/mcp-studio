@@ -58,6 +58,23 @@ GOOD_ERROR_PATTERNS = [
     r'raise\s+\w+Error',  # Re-raising specific errors
 ]
 
+# Non-informative error messages (lazy/useless)
+LAZY_ERROR_MESSAGES = [
+    r'["\']error["\']',  # Just "error"
+    r'["\']an?\s+error\s+(occurred|happened)["\']',  # "an error occurred"
+    r'["\']something\s+went\s+wrong["\']',  # "something went wrong"
+    r'["\']failed["\']',  # Just "failed"
+    r'["\']unknown\s+error["\']',  # "unknown error"
+    r'["\']error:\s*["\']',  # "error: " with nothing after
+    r'["\']exception["\']',  # Just "exception"
+    r'["\']oops["\']',  # "oops"
+    r'["\']uh\s*oh["\']',  # "uh oh"
+    r'["\']something\s+broke["\']',  # "something broke"
+    r'["\']it\s+failed["\']',  # "it failed"
+    r'["\']error\s+in\s+\w+["\']',  # "error in X" without details
+    r'raise\s+Exception\s*\(\s*["\'][^"\']{0,15}["\']\s*\)',  # raise Exception("short msg")
+]
+
 
 @tool(
     name="analyze_runts",
@@ -206,6 +223,7 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         "has_good_error_handling": True,  # Assume good until proven bad
         "print_statement_count": 0,
         "bare_except_count": 0,
+        "lazy_error_msg_count": 0,
         "is_runt": False,
         "runt_reasons": [],
         "recommendations": [],
@@ -294,6 +312,7 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     # Check for proper logging, print statements, and error handling
     print_count = 0
     bare_except_count = 0
+    lazy_error_count = 0
     has_logging = False
     has_good_errors = True
     
@@ -307,6 +326,7 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     
                 try:
                     content = py_file.read_text(encoding='utf-8')
+                    content_lower = content.lower()
                     
                     # Check for logging setup (only need to find it once)
                     if not has_logging:
@@ -325,6 +345,12 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     for pattern in BAD_ERROR_PATTERNS:
                         matches = re.findall(pattern, content)
                         bare_except_count += len(matches)
+                    
+                    # Check for lazy/non-informative error messages
+                    if not is_test_file:
+                        for pattern in LAZY_ERROR_MESSAGES:
+                            matches = re.findall(pattern, content_lower, re.IGNORECASE)
+                            lazy_error_count += len(matches)
                         
                 except Exception:
                     pass
@@ -332,7 +358,8 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     info["has_proper_logging"] = has_logging
     info["print_statement_count"] = print_count
     info["bare_except_count"] = bare_except_count
-    info["has_good_error_handling"] = bare_except_count < 3  # Allow a few, but not many
+    info["lazy_error_msg_count"] = lazy_error_count
+    info["has_good_error_handling"] = bare_except_count < 3 and lazy_error_count < 5
 
     info["tool_count"] = tool_count
     # Consider proper docstrings if >50% of tools have them
@@ -529,10 +556,17 @@ def _evaluate_runt_status(info: Dict[str, Any], fastmcp_version: str) -> None:
             info["is_runt"] = True  # Too many prints = runt
 
     # Check error handling
-    if not info["has_good_error_handling"]:
+    if info["bare_except_count"] >= 3:
         info["is_runt"] = True
         info["runt_reasons"].append(f"{info['bare_except_count']} bare except clauses")
         info["recommendations"].append("Use specific exception types (ValueError, TypeError, etc.)")
+
+    # Check lazy error messages
+    if info["lazy_error_msg_count"] > 0:
+        info["runt_reasons"].append(f"{info['lazy_error_msg_count']} non-informative error messages")
+        info["recommendations"].append("Use descriptive error messages with context (what failed, why, how to fix)")
+        if info["lazy_error_msg_count"] >= 5:
+            info["is_runt"] = True  # Too many lazy messages = runt
 
     # Set status emoji based on severity
     runt_count = len(info["runt_reasons"])
@@ -625,9 +659,16 @@ def _calculate_sota_score(info: Dict[str, Any]) -> int:
     elif print_count > 0:
         score -= 5
 
-    # Deduct for bad error handling (-10)
-    if not info.get("has_good_error_handling"):
+    # Deduct for bare except clauses (-10)
+    if info.get("bare_except_count", 0) >= 3:
         score -= 10
+
+    # Deduct for lazy error messages (-5 or -10)
+    lazy_count = info.get("lazy_error_msg_count", 0)
+    if lazy_count >= 5:
+        score -= 10
+    elif lazy_count > 0:
+        score -= 5
 
     return max(0, score)
 
