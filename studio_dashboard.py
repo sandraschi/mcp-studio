@@ -756,6 +756,31 @@ async def get_logs():
     """Get recent log messages."""
     return {"logs": state["logs"][-100:]}
 
+@app.get("/api/ollama/models")
+async def get_ollama_models():
+    """Get list of available Ollama models."""
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get("http://localhost:11434/api/tags")
+            if resp.status_code == 200:
+                data = resp.json()
+                models = []
+                for model in data.get("models", []):
+                    name = model.get("name", "")
+                    size_gb = model.get("size", 0) / (1024**3)
+                    models.append({
+                        "name": name,
+                        "size": f"{size_gb:.1f}GB",
+                        "modified": model.get("modified_at", "")[:10],
+                        "family": model.get("details", {}).get("family", "unknown")
+                    })
+                return {"models": models, "count": len(models)}
+            else:
+                return {"models": [], "error": f"Ollama returned {resp.status_code}"}
+    except Exception as e:
+        return {"models": [], "error": str(e)}
+
 @app.post("/api/ai/chat")
 async def ai_chat(request: Request):
     """Chat with local-llm-mcp for AI-powered analysis."""
@@ -1215,17 +1240,19 @@ async def dashboard():
                     
                     <!-- Model Settings -->
                     <div class="glass rounded-xl overflow-hidden">
-                        <div class="px-4 py-3 border-b border-white/10">
+                        <div class="px-4 py-3 border-b border-white/10 flex items-center justify-between">
                             <h3 class="font-semibold text-sm">⚙️ Model</h3>
+                            <button onclick="loadOllamaModels()" class="text-xs text-purple-400 hover:text-purple-300">↻ Refresh</button>
                         </div>
                         <div class="p-4 space-y-3">
                             <div>
-                                <label class="text-xs text-gray-400">Model ID</label>
-                                <input id="ai-model" type="text" value="ollama:llama3.2" 
-                                       class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-3 py-2 text-sm">
+                                <label class="text-xs text-gray-400">Ollama Model</label>
+                                <select id="ai-model" class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-3 py-2 text-sm">
+                                    <option value="">Loading models...</option>
+                                </select>
                             </div>
-                            <div class="text-xs text-gray-500">
-                                Examples: ollama:llama3.2, lmstudio:default, openai:gpt-4
+                            <div id="ai-model-info" class="text-xs text-gray-500">
+                                Click Refresh to load available Ollama models
                             </div>
                         </div>
                     </div>
@@ -1798,6 +1825,40 @@ async def dashboard():
         let aiConnected = false;
         let aiMessages = [];
 
+        async function loadOllamaModels() {{
+            const select = document.getElementById('ai-model');
+            const info = document.getElementById('ai-model-info');
+            
+            select.innerHTML = '<option value="">Loading...</option>';
+            info.textContent = 'Fetching from Ollama...';
+            
+            try {{
+                const res = await fetch('/api/ollama/models');
+                const data = await res.json();
+                
+                if (data.error) {{
+                    select.innerHTML = '<option value="">❌ ' + data.error + '</option>';
+                    info.textContent = 'Make sure Ollama is running (ollama serve)';
+                    return;
+                }}
+                
+                if (data.models.length === 0) {{
+                    select.innerHTML = '<option value="">No models found</option>';
+                    info.textContent = 'Run "ollama pull llama3.2" to download a model';
+                    return;
+                }}
+                
+                select.innerHTML = data.models.map(m => 
+                    `<option value="ollama:${{m.name}}">${{m.name}} (${{m.size}})</option>`
+                ).join('');
+                
+                info.innerHTML = `<span class="text-green-400">${{data.count}} models available</span>`;
+            }} catch(e) {{
+                select.innerHTML = '<option value="">❌ Connection failed</option>';
+                info.textContent = 'Cannot connect to Ollama at localhost:11434';
+            }}
+        }}
+
         async function connectAI() {{
             const statusEl = document.getElementById('ai-status');
             const btnEl = document.getElementById('ai-connect-btn');
@@ -1964,6 +2025,7 @@ Please provide helpful, specific advice about MCP server development, tool desig
 
         // Initial load
         loadClients();
+        loadOllamaModels();  // Load available models
         setInterval(loadLogs, 5000);
         setInterval(loadConsoleServers, 3000);
         setInterval(updateAIContext, 5000);  // Keep AI context updated
