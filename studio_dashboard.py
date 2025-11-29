@@ -317,10 +317,10 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         if candidate_portmanteau.exists() and candidate_portmanteau.is_dir():
             portmanteau_dir = candidate_portmanteau
     
-    # Check if repo uses monolithic server pattern (all tools in server.py, no tools/ dir)
+    # Check if repo uses monolithic server pattern (all tools in server.py)
     monolithic_server = None
-    # Only check for monolithic if there's no tools directory with register_tools
-    if not uses_portmanteau_pattern and not tools_dir:
+    # Check for monolithic if no portmanteau pattern detected AND no portmanteau_dir
+    if not uses_portmanteau_pattern and not portmanteau_modules and not portmanteau_dir:
         for server_file in ['server.py', 'main.py', '__main__.py']:
             candidate = (repo_path / "src" / pkg_name_underscore / server_file)
             if not candidate.exists():
