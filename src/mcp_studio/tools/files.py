@@ -98,7 +98,7 @@ async def create_temp_file() -> str:
     description="Copy a file",
     tags=["filesystem", "file", "copy"]
 )
-@retry_on_failure(max_attempts=3)
+@retry_on_failure(max_retries=3)
 async def copy_file(source: str, destination: str) -> FileInfo:
     """Copy a file from source to destination."""
     source = Path(source).resolve()

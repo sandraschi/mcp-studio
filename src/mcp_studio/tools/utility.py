@@ -64,7 +64,6 @@ def generate_id(prefix: str = "", length: int = 8) -> str:
     tags=["utility", "text", "formatting"]
 )
 @structured_log()
-@validate_input(TextProcessingInput)
 def format_text(
     text: str,
     variables: Dict[str, Any],
@@ -182,7 +181,7 @@ def validate_json(
     tags=["utility", "http", "api"]
 )
 @structured_log()
-@retry_on_failure(max_attempts=3, delay=1.0)
+@retry_on_failure(max_retries=3, delay=1.0)
 async def make_http_request(
     url: str,
     method: str = "GET",

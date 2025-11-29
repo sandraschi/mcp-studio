@@ -27,6 +27,8 @@
 
 ```
 docs/
+├── MCP_ZOO_RUNT_ANALYZER.md   🦁 MCP server quality analyzer (NEW!)
+│
 ├── repository-protection/      🛡️ Git, GitHub, backup & AI workflow
 │   ├── README.md              → Protection strategy hub
 │   ├── BRANCH_PROTECTION_SETTINGS.md → GitHub setup (5 min)

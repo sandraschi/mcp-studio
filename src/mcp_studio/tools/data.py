@@ -33,7 +33,6 @@ class DataTransformationInput(BaseModel):
     tags=["data", "conversion"]
 )
 @structured_log()
-@validate_input(DataTransformationInput)
 async def convert_data(
     data: Any,
     input_format: Optional[DataFormat] = None,
