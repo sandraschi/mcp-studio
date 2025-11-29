@@ -31,6 +31,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 import uvicorn
 
+# FastMCP client imports
+try:
+    from fastmcp import Client
+    from fastmcp.client.transports import StdioTransport
+    FASTMCP_AVAILABLE = True
+except ImportError:
+    FASTMCP_AVAILABLE = False
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -73,7 +81,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 state = {
     "discovered_servers": {},      # From MCP client configs
     "repo_analysis": {},           # Static analysis results
-    "connected_servers": {},       # Live connections
+    "connected_servers": {},       # Live connections (client instances)
     "scan_progress": {"current": "", "total": 0, "done": 0, "status": "idle"},
     "logs": [],
 }
@@ -325,38 +333,206 @@ def scan_repos() -> List[Dict[str, Any]]:
     return results
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# RUNTIME - Live server connections
+# RUNTIME - Live server connections with FastMCP
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def connect_server(server_config: Dict) -> Dict[str, Any]:
-    """Connect to an MCP server and list its tools."""
+async def find_server_entrypoint(repo_name: str, repo_path: Path) -> Optional[Path]:
+    """Find the Python entrypoint file for an MCP server repo."""
+    # Common patterns
+    patterns = [
+        repo_path / "server.py",
+        repo_path / "main.py",
+        repo_path / "app.py",
+        repo_path / "src" / "main.py",
+        repo_path / "src" / "server.py",
+        repo_path / f"{repo_name.replace('-', '_')}" / "server.py",
+    ]
+    
+    # Also check package __main__ entrypoints
+    pkg_name = repo_name.replace("-", "_").replace("mcp_", "").replace("_mcp", "")
+    patterns.extend([
+        repo_path / "src" / pkg_name / "__main__.py",
+        repo_path / pkg_name / "__main__.py",
+    ])
+    
+    for pattern in patterns:
+        if pattern.exists():
+            return pattern
+    
+    return None
+
+async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
+    """Connect to an MCP server from a repository."""
+    repo_path = REPOS_DIR / repo_name
+    
+    if not repo_path.exists():
+        raise HTTPException(404, f"Repository {repo_name} not found")
+    
+    connection_id = f"repo:{repo_name}"
+    
+    # Check if already connected
+    if connection_id in state["connected_servers"]:
+        conn = state["connected_servers"][connection_id]
+        if conn.get("status") == "connected" and conn.get("client"):
+            return {
+                "id": connection_id,
+                "name": repo_name,
+                "status": "connected",
+                "tools": conn.get("tools", []),
+            }
+    
     result = {
-        "id": server_config["id"],
+        "id": connection_id,
+        "name": repo_name,
+        "status": "connecting",
+        "tools": [],
+        "error": None,
+    }
+    
+    if not FASTMCP_AVAILABLE:
+        result["status"] = "error"
+        result["error"] = "FastMCP not installed. Install with: pip install fastmcp"
+        return result
+    
+    try:
+        # Find entrypoint
+        entrypoint = await find_server_entrypoint(repo_name, repo_path)
+        if not entrypoint:
+            result["status"] = "error"
+            result["error"] = f"No entrypoint found for {repo_name}"
+            return result
+        
+        log(f"🔌 Connecting to {repo_name} via {entrypoint.name}...")
+        
+        # Prepare environment
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(repo_path) + os.pathsep + env.get("PYTHONPATH", "")
+        
+        # Simple approach: try running as module if in src/ or as script
+        if "src" in str(entrypoint):
+            # Module path
+            rel_path = entrypoint.relative_to(repo_path / "src")
+            module_path = ".".join(rel_path.parts).replace(".py", "")
+            args = ["-m", module_path]
+        else:
+            # Direct script
+            args = [str(entrypoint)]
+        
+        # Create stdio transport
+        transport = StdioTransport(
+            command="python",
+            args=args,
+            env=env,
+            cwd=str(repo_path),
+        )
+        
+        # Create client
+        client = Client(transport)
+        
+        # Connect and initialize
+        async with client:
+            await client.initialize()
+            tools = await client.list_tools()
+            
+            # Convert tools to dict format
+            tool_list = []
+            for tool in tools:
+                tool_list.append({
+                    "name": tool.name,
+                    "description": tool.description or "No description",
+                    "inputSchema": tool.inputSchema if hasattr(tool, 'inputSchema') else {},
+                })
+            
+            result["status"] = "connected"
+            result["tools"] = tool_list
+            
+            # Store client (note: we'll need to keep it alive in a real implementation)
+            state["connected_servers"][connection_id] = {
+                "status": "connected",
+                "client": client,  # In real impl, we'd manage lifecycle better
+                "tools": tool_list,
+                "transport": transport,
+            }
+            
+            log(f"✅ Connected to {repo_name}: {len(tool_list)} tools")
+    
+    except Exception as e:
+        result["status"] = "error"
+        result["error"] = str(e)
+        log(f"❌ Failed to connect to {repo_name}: {e}")
+    
+    return result
+
+async def connect_config_server(client: str, server_id: str, server_config: Dict) -> Dict[str, Any]:
+    """Connect to an MCP server from client configuration."""
+    connection_id = f"{client}:{server_id}"
+    
+    if connection_id in state["connected_servers"]:
+        conn = state["connected_servers"][connection_id]
+        if conn.get("status") == "connected":
+            return {
+                "id": connection_id,
+                "name": server_config["name"],
+                "status": "connected",
+                "tools": conn.get("tools", []),
+            }
+    
+    result = {
+        "id": connection_id,
         "name": server_config["name"],
         "status": "connecting",
         "tools": [],
         "error": None,
     }
     
+    if not FASTMCP_AVAILABLE:
+        result["status"] = "error"
+        result["error"] = "FastMCP not installed"
+        return result
+    
     try:
-        # Build command
         cmd = server_config["command"]
         args = server_config.get("args", [])
         cwd = server_config.get("cwd")
         env = {**os.environ, **server_config.get("env", {})}
         
-        # For Python servers, we can try to get tool info
-        if "python" in cmd.lower():
-            # Try to import and introspect
-            result["status"] = "connected"
-            result["tools"] = [{"name": "pending", "description": "Tool discovery pending..."}]
-        else:
-            result["status"] = "unknown"
-            result["tools"] = []
+        log(f"🔌 Connecting to {server_config['name']}...")
+        
+        transport = StdioTransport(
+            command=cmd,
+            args=args,
+            env=env,
+            cwd=cwd,
+        )
+        
+        client_obj = Client(transport)
+        
+        async with client_obj:
+            await client_obj.initialize()
+            tools = await client_obj.list_tools()
             
+            tool_list = []
+            for tool in tools:
+                tool_list.append({
+                    "name": tool.name,
+                    "description": tool.description or "No description",
+                    "inputSchema": tool.inputSchema if hasattr(tool, 'inputSchema') else {},
+                })
+            
+            result["status"] = "connected"
+            result["tools"] = tool_list
+            
+            state["connected_servers"][connection_id] = {
+                "status": "connected",
+                "tools": tool_list,
+            }
+            
+            log(f"✅ Connected to {server_config['name']}: {len(tool_list)} tools")
+    
     except Exception as e:
         result["status"] = "error"
         result["error"] = str(e)
+        log(f"❌ Failed to connect: {e}")
     
     return result
 
@@ -401,18 +577,59 @@ async def get_server_details(client: str, server_id: str):
 
 @app.post("/api/servers/{client}/{server_id}/connect")
 async def connect_to_server(client: str, server_id: str):
-    """Connect to a server and discover its tools."""
+    """Connect to a server from client config and discover its tools."""
     clients = discover_mcp_clients()
     if client not in clients:
         raise HTTPException(404, f"Client {client} not found")
     
     for server in clients[client]["servers"]:
         if server["id"] == server_id:
-            result = await connect_server(server)
-            state["connected_servers"][f"{client}:{server_id}"] = result
+            result = await connect_config_server(client, server_id, server)
             return result
     
     raise HTTPException(404, f"Server {server_id} not found")
+
+@app.post("/api/repos/{repo_name}/connect")
+async def connect_repo_endpoint(repo_name: str):
+    """Connect to an MCP server from a repository."""
+    return await connect_repo_server(repo_name)
+
+@app.get("/api/connections/{connection_id}/tools")
+async def get_connection_tools(connection_id: str):
+    """Get tools from a connected server."""
+    if connection_id not in state["connected_servers"]:
+        raise HTTPException(404, f"Connection {connection_id} not found")
+    
+    conn = state["connected_servers"][connection_id]
+    if conn.get("status") != "connected":
+        raise HTTPException(400, f"Server not connected: {conn.get('error', 'Unknown error')}")
+    
+    return {"tools": conn.get("tools", [])}
+
+@app.post("/api/connections/{connection_id}/tools/{tool_name}/execute")
+async def execute_tool(connection_id: str, tool_name: str, parameters: dict):
+    """Execute a tool on a connected server."""
+    if connection_id not in state["connected_servers"]:
+        raise HTTPException(404, f"Connection {connection_id} not found")
+    
+    conn = state["connected_servers"][connection_id]
+    if conn.get("status") != "connected":
+        raise HTTPException(400, f"Server not connected")
+    
+    if not FASTMCP_AVAILABLE:
+        raise HTTPException(503, "FastMCP not available")
+    
+    try:
+        # For a real implementation, we'd need to keep the client alive
+        # This is a simplified version - in production you'd manage client lifecycle
+        return {
+            "status": "not_implemented",
+            "message": "Tool execution requires persistent client connections",
+            "tool": tool_name,
+            "parameters": parameters,
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Tool execution failed: {str(e)}")
 
 @app.get("/api/progress")
 async def get_progress():
@@ -1062,15 +1279,52 @@ async def dashboard():
                             <div class="text-xs text-gray-500 mt-2">Actions within consolidated tools</div>
                         </div>
                     </div>
-                    <div class="mt-6 p-4 bg-white/5 rounded-lg">
-                        <p class="text-sm text-gray-400">
-                            <span class="text-yellow-400">💡 Note:</span> 
-                            This shows static analysis from code scanning. For live tool discovery with schemas and docstrings, 
-                            the server would need to be started via stdio transport.
-                        </p>
+                    <div class="mt-6 flex gap-4 items-center">
+                        <button onclick="connectRepo('${{repo.name}}')" 
+                                class="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded font-medium">
+                            🔌 Connect Live
+                        </button>
+                        <div id="repo-connection-status-${{repo.name}}" class="text-sm text-gray-400"></div>
+                    </div>
+                    <div id="repo-live-tools-${{repo.name}}" class="mt-6 hidden">
+                        <h4 class="font-semibold mb-4">🔴 Live Tools</h4>
+                        <div id="live-tools-list-${{repo.name}}" class="space-y-2"></div>
                     </div>
                 </div>
             `;
+        }}
+
+        async function connectRepo(repoName) {{
+            const statusDiv = document.getElementById('repo-connection-status-' + repoName);
+            const liveToolsDiv = document.getElementById('repo-live-tools-' + repoName);
+            const toolsList = document.getElementById('live-tools-list-' + repoName);
+            
+            statusDiv.textContent = 'Connecting...';
+            statusDiv.className = 'text-sm text-yellow-400';
+            
+            try {{
+                const res = await fetch('/api/repos/' + repoName + '/connect', {{method: 'POST'}});
+                const data = await res.json();
+                
+                if (data.status === 'connected') {{
+                    statusDiv.textContent = '✅ Connected (' + data.tools.length + ' tools)';
+                    statusDiv.className = 'text-sm text-green-400';
+                    
+                    liveToolsDiv.classList.remove('hidden');
+                    toolsList.innerHTML = data.tools.map(tool => `
+                        <div class="p-3 bg-white/5 rounded-lg">
+                            <div class="font-medium">${{tool.name}}</div>
+                            <div class="text-sm text-gray-400 mt-1">${{tool.description}}</div>
+                        </div>
+                    `).join('');
+                }} else {{
+                    statusDiv.textContent = '❌ Error: ' + (data.error || data.status);
+                    statusDiv.className = 'text-sm text-red-400';
+                }}
+            }} catch(e) {{
+                statusDiv.textContent = '❌ Failed: ' + e.message;
+                statusDiv.className = 'text-sm text-red-400';
+            }}
         }}
 
         // Filter change
@@ -1103,6 +1357,12 @@ if __name__ == "__main__":
     
     log("🚀 Starting MCP Studio...")
     log(f"📂 Repos directory: {REPOS_DIR}")
+    
+    if FASTMCP_AVAILABLE:
+        log("✅ FastMCP available - live connections enabled")
+    else:
+        log("⚠️  FastMCP not available - install with: pip install fastmcp")
+        log("   Live server connections will be disabled")
     
     # Discover clients on startup
     clients = discover_mcp_clients()
