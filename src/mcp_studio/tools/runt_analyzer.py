@@ -75,6 +75,68 @@ LAZY_ERROR_MESSAGES = [
     r'raise\s+Exception\s*\(\s*["\'][^"\']{0,15}["\']\s*\)',  # raise Exception("short msg")
 ]
 
+# ============================================================================
+# MCP ZOO CLASSIFICATION 🦁🐘🦒
+# Not a flea circus - these are proper beasts!
+# ============================================================================
+
+# Keywords indicating heavy/jumbo MCPs (database, virtualization, etc.)
+JUMBO_INDICATORS = [
+    "database", "postgres", "mysql", "sqlite", "mongo", "redis",  # Databases
+    "docker", "kubernetes", "k8s", "container", "virtualization",  # Virtualization
+    "virtualbox", "vmware", "qemu", "hyperv",  # VMs
+    "davinci", "resolve", "premiere", "video", "render",  # Heavy video
+    "blender", "3d", "modeling",  # 3D software
+    "ai-", "llm-", "ml-", "machine-learning",  # AI/ML heavy
+    "obs", "stream", "broadcast",  # Streaming
+]
+
+# Keywords indicating mini/chipmunk MCPs (simple, single-purpose)
+CHIPMUNK_INDICATORS = [
+    "txt", "text", "generator", "simple", "mini", "tiny", "lite",
+    "basic", "hello", "echo", "demo", "example", "starter", "template",
+    "clipboard", "timer", "counter", "converter", "calculator",
+]
+
+# Zoo animal classification based on tool count and complexity
+ZOO_ANIMALS = {
+    # Jumbos - Heavy/Complex MCPs (🐘 Elephant, 🦛 Hippo, 🦏 Rhino)
+    "jumbo": {
+        "emoji": "🐘",
+        "label": "Jumbo",
+        "description": "Heavy MCP - DB, virtualization, video processing",
+        "min_tools": 20,
+    },
+    # Large - Substantial MCPs (🦁 Lion, 🐻 Bear, 🦒 Giraffe)
+    "large": {
+        "emoji": "🦁",
+        "label": "Large",
+        "description": "Substantial MCP with many features",
+        "min_tools": 10,
+    },
+    # Medium - Standard MCPs (🦊 Fox, 🐺 Wolf, 🦌 Deer)
+    "medium": {
+        "emoji": "🦊",
+        "label": "Medium",
+        "description": "Standard MCP with moderate complexity",
+        "min_tools": 5,
+    },
+    # Small - Lightweight MCPs (🐰 Rabbit, 🦝 Raccoon, 🦡 Badger)
+    "small": {
+        "emoji": "🐰",
+        "label": "Small",
+        "description": "Lightweight MCP with focused purpose",
+        "min_tools": 2,
+    },
+    # Chipmunk - Mini MCPs (🐿️ Chipmunk, 🐹 Hamster, 🐁 Mouse)
+    "chipmunk": {
+        "emoji": "🐿️",
+        "label": "Chipmunk",
+        "description": "Mini MCP - simple, single-purpose tool",
+        "min_tools": 0,
+    },
+}
+
 
 @tool(
     name="analyze_runts",
@@ -229,7 +291,9 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         "recommendations": [],
         "status_emoji": "✅",
         "status_color": "green",
-        "status_label": "SOTA"
+        "status_label": "SOTA",
+        "zoo_class": "unknown",
+        "zoo_animal": "🦔"  # Default: hedgehog (unknown size)
     }
 
     # Check for requirements.txt or pyproject.toml
@@ -594,6 +658,41 @@ def _evaluate_runt_status(info: Dict[str, Any], fastmcp_version: str) -> None:
             info["status_emoji"] = "✅"
             info["status_color"] = "green"
             info["status_label"] = "SOTA"
+
+    # Add zoo classification
+    _classify_zoo_animal(info)
+
+
+def _classify_zoo_animal(info: Dict[str, Any]) -> None:
+    """Classify repo into MCP Zoo animal size category."""
+    name_lower = info.get("name", "").lower()
+    tool_count = info.get("tool_count", 0)
+
+    # Check for jumbo indicators in name
+    is_jumbo_type = any(ind in name_lower for ind in JUMBO_INDICATORS)
+
+    # Check for chipmunk indicators in name
+    is_chipmunk_type = any(ind in name_lower for ind in CHIPMUNK_INDICATORS)
+
+    # Determine class based on indicators and tool count
+    if is_jumbo_type or tool_count >= 20:
+        info["zoo_class"] = "jumbo"
+        info["zoo_animal"] = "🐘"
+    elif is_chipmunk_type and tool_count <= 3:
+        info["zoo_class"] = "chipmunk"
+        info["zoo_animal"] = "🐿️"
+    elif tool_count >= 10:
+        info["zoo_class"] = "large"
+        info["zoo_animal"] = "🦁"
+    elif tool_count >= 5:
+        info["zoo_class"] = "medium"
+        info["zoo_animal"] = "🦊"
+    elif tool_count >= 2:
+        info["zoo_class"] = "small"
+        info["zoo_animal"] = "🐰"
+    else:
+        info["zoo_class"] = "chipmunk"
+        info["zoo_animal"] = "🐿️"
 
 
 def _calculate_sota_score(info: Dict[str, Any]) -> int:
