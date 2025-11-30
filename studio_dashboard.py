@@ -16,6 +16,7 @@ Dashboard: http://localhost:8888
 
 import asyncio
 import json
+import logging
 import os
 import re
 import subprocess
@@ -25,6 +26,14 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stderr)]
+)
+logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -369,8 +378,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     if has_tools:
                         monolithic_server = candidate
                         break
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Error reading {candidate}: {e}")
     
     # Check for modular entry point pattern (mcp_main.py -> mcp_server_clean.py -> tools/)
     imported_tool_modules = set()
@@ -384,8 +393,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     tool_imports = re.findall(r'import\s+\w+\.tools\.(\w+)\.(\w+)', content)
                     for pkg, mod in tool_imports:
                         imported_tool_modules.add(f"{pkg}/{mod}.py")
-                except:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Error parsing imports in {candidate}: {e}")
     
     # If monolithic server, ONLY count from that file
     if monolithic_server:
@@ -408,8 +417,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     if '@mcp.tool' in pf.read_text(encoding='utf-8', errors='ignore') or '@app.tool' in pf.read_text(encoding='utf-8', errors='ignore'):
                         has_tools = True
                         break
-                except:
-                    pass
+                except Exception:
+                    pass  # Non-critical file read error
         if has_tools:
             search_dirs = [portmanteau_dir]
             # Also include plugins/ subdirs that DON'T have a corresponding portmanteau
@@ -519,8 +528,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     if tool_pattern.search(content):
                         has_server_tools = True
                         break
-                except:
-                    pass
+                except Exception:
+                    pass  # Non-critical file read error
         if has_server_tools:
             break
     
@@ -532,8 +541,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     if tool_pattern.search(content):
                         has_tools_dir_tools = True
                         break
-                except:
-                    pass
+                except Exception:
+                    pass  # Non-critical file read error
     
     if has_server_tools and has_tools_dir_tools:
         info["runt_reasons"].append("Tools split between server.py and tools/ (incomplete refactor)")
@@ -672,8 +681,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             try:
                 config_content = git_config.read_text(encoding='utf-8', errors='ignore')
                 has_remote = '[remote "origin"]' in config_content or '[remote ' in config_content
-            except:
-                pass
+            except Exception:
+                pass  # Git config read error
         if not has_remote:
             info["runt_reasons"].append("No git remote configured")
             info["issues"].append("No git remote")
@@ -701,8 +710,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             stderr_prints = re_module.findall(r'print\s*\([^)]*file\s*=', server_content)
             console_prints = re_module.findall(r'console\.print\s*\(', server_content)
             print_count = len(prints) - len(stderr_prints) - len(console_prints)
-        except:
-            pass
+        except Exception:
+            pass  # Print count check failed
     if print_count > 3:
         info["runt_reasons"].append(f"{print_count} print() calls in server (use logging)")
         info["issues"].append(f"{print_count} print() statements")
@@ -713,8 +722,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     if monolithic_server:
         try:
             server_lines = len(monolithic_server.read_text(encoding='utf-8', errors='ignore').splitlines())
-        except:
-            pass
+        except Exception:
+            pass  # Server file line count failed
     if server_lines > 1000:
         info["runt_reasons"].append(f"Monolithic server.py ({server_lines} lines)")
         info["issues"].append(f"Server file too large ({server_lines} lines)")
@@ -764,8 +773,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                             if '/health' in content or '@app.get("/health")' in content or "health" in content.lower():
                                 has_health_endpoint = True
                             break
-                    except:
-                        pass
+                    except Exception:
+                        pass  # FastAPI file read error
     
     info["has_dual_interface"] = has_mcp_server and has_fastapi_server
     info["has_http_interface"] = has_fastapi_server
@@ -808,8 +817,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                         content = py_file.read_text(encoding='utf-8', errors='ignore')
                         matches = docstring_pattern.findall(content)
                         proper_docstrings += len(matches)
-                    except:
-                        pass
+                    except Exception:
+                        pass  # Docstring scan error
     
     info["has_proper_docstrings"] = proper_docstrings > 0 and proper_docstrings >= tool_count * 0.5
     if tool_count >= 3 and not info["has_proper_docstrings"]:
@@ -844,8 +853,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     if re.search(r'def \w+\([^)]*:\s*\w+|-> \w+|\[[\w\[\], ]+\]', content):
                         has_type_hints = True
                         break
-                except:
-                    pass
+                except Exception:
+                    pass  # Non-critical file read error
             if has_type_hints:
                 break
     
@@ -865,8 +874,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     if 'import logging' in content or 'from logging' in content:
                         has_logging = True
                         break
-                except:
-                    pass
+                except Exception:
+                    pass  # Non-critical file read error
             if has_logging:
                 break
     
@@ -939,11 +948,15 @@ def scan_repos() -> List[Dict[str, Any]]:
         state["scan_progress"]["current"] = repo_path.name
         state["scan_progress"]["done"] = i + 1
         
-        # analyze_repo returns None if not MCP repo
-        info = analyze_repo(repo_path)
-        if info:
-            results.append(info)
-            log(f"  {info['zoo_emoji']} {info['status_emoji']} {info['name']} v{info['fastmcp_version'] or '?'} tools={info['tools']}")
+        try:
+            # analyze_repo returns None if not MCP repo
+            info = analyze_repo(repo_path)
+            if info:
+                results.append(info)
+                log(f"  {info['zoo_emoji']} {info['status_emoji']} {info['name']} v{info['fastmcp_version'] or '?'} tools={info['tools']}")
+        except Exception as e:
+            logger.error(f"Error analyzing {repo_path.name}: {e}", exc_info=True)
+            log(f"  ❌ {repo_path.name}: SCAN ERROR - {str(e)[:50]}")
     
     state["scan_progress"]["status"] = "complete"
     log(f"✅ Found {len(results)} MCP repos")
