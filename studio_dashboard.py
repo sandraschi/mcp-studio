@@ -227,8 +227,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
 
     # Count tools - SMART APPROACH from runt_api.py
     # Match various tool decorator patterns:
-    # @app.tool(), @mcp.tool(), @self.mcp.tool(), @server.tool(), @tool()
-    tool_pattern = re.compile(r'@(?:(?:app|mcp|self\.mcp(?:_server\.mcp)?|server)\.)?tool(?:\s*\(|(?=\s*(?:\r?\n|def\s)))', re.MULTILINE)
+    # @app.tool(), @mcp.tool(), @self.mcp.tool(), @server.tool(), @tool(), @self.tool()
+    tool_pattern = re.compile(r'@(?:(?:app|mcp|self(?:\.mcp)?(?:_server\.mcp)?|server)\.)?tool(?:\s*\(|(?=\s*(?:\r?\n|def\s)))', re.MULTILINE)
     nonconforming_pattern = re.compile(r'def register_\w+_tool\s*\(|\.add_tool\s*\(|register_tool\s*\(')
     tool_count = 0
     
@@ -335,7 +335,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     monolithic_server = None
     # Check for monolithic if no portmanteau pattern detected AND no portmanteau_dir
     if not uses_portmanteau_pattern and not portmanteau_modules and not portmanteau_dir:
-        for server_file in ['server.py', 'main.py', '__main__.py']:
+        # Check fastmcp_server.py first as it's often the entry point
+        for server_file in ['fastmcp_server.py', 'mcp_server.py', 'server.py', 'main.py', '__main__.py']:
             candidate = (repo_path / "src" / pkg_name_underscore / server_file)
             if not candidate.exists():
                 candidate = (repo_path / "src" / pkg_name / server_file)
@@ -344,7 +345,9 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             if candidate.exists():
                 try:
                     server_content = candidate.read_text(encoding='utf-8', errors='ignore')
-                    if '@self.mcp.tool' in server_content or '@mcp.tool' in server_content:
+                    # Check for various tool patterns
+                    has_tools = any(p in server_content for p in ['@self.mcp.tool', '@mcp.tool', '@app.tool', '@self.tool', '@tool('])
+                    if has_tools:
                         monolithic_server = candidate
                         break
                 except:
