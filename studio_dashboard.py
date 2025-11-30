@@ -301,12 +301,16 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     for pkg_dir_name in [pkg_name, pkg_name_short, pkg_name_underscore]:
         for base in [repo_path / "src", repo_path]:
             pkg_dir = base / pkg_dir_name
-            if pkg_dir.exists() and pkg_dir.is_dir():
+            if pkg_dir.exists() and pkg_dir.is_dir() and pkg_dir not in search_dirs:
                 search_dirs.append(pkg_dir)
     
-    # Also check tools/ subdirectory if it exists
+    # Only add tools/ subdirectory if NOT already covered by a parent search_dir
     if tools_dir and tools_dir.exists():
-        search_dirs.append(tools_dir)
+        is_child_of_existing = any(
+            tools_dir.is_relative_to(d) for d in search_dirs
+        )
+        if not is_child_of_existing:
+            search_dirs.append(tools_dir)
     
     # Fallback to src or repo root
     if not search_dirs:
