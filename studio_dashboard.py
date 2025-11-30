@@ -376,23 +376,28 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     # Check for monolithic if no portmanteau pattern detected AND no portmanteau_dir
     if not uses_portmanteau_pattern and not portmanteau_modules and not portmanteau_dir:
         # Check fastmcp_server.py first as it's often the entry point
+        # Also check repo root for server.py (notion-mcp pattern)
         for server_file in ['fastmcp_server.py', 'mcp_server.py', 'server.py', 'main.py', '__main__.py']:
-            candidate = (repo_path / "src" / pkg_name_underscore / server_file)
-            if not candidate.exists():
-                candidate = (repo_path / "src" / pkg_name / server_file)
-            if not candidate.exists():
-                candidate = (repo_path / pkg_name / server_file)
-            if candidate.exists():
-                try:
-                    server_content = candidate.read_text(encoding='utf-8', errors='ignore')
-                    # Check for actual tool decorators (not just mentions in comments)
-                    # Look for decorator at start of line with proper indentation
-                    actual_tools = tool_pattern.findall(server_content)
-                    if actual_tools:
-                        monolithic_server = candidate
-                        break
-                except Exception as e:
-                    logger.debug(f"Error reading {candidate}: {e}")
+            # Check in package dirs first
+            for base_path in [
+                repo_path / "src" / pkg_name_underscore,
+                repo_path / "src" / pkg_name,
+                repo_path / pkg_name,
+                repo_path,  # Also check repo root!
+            ]:
+                candidate = base_path / server_file
+                if candidate.exists():
+                    try:
+                        server_content = candidate.read_text(encoding='utf-8', errors='ignore')
+                        # Check for actual tool decorators (not just mentions in comments)
+                        actual_tools = tool_pattern.findall(server_content)
+                        if actual_tools:
+                            monolithic_server = candidate
+                            break
+                    except Exception as e:
+                        logger.debug(f"Error reading {candidate}: {e}")
+            if monolithic_server:
+                break
     
     # Check for modular entry point pattern (mcp_main.py -> mcp_server_clean.py -> tools/)
     imported_tool_modules = set()
