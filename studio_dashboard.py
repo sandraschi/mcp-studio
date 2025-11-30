@@ -817,8 +817,10 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     # Check for proper multiline docstrings with Args/Returns
     proper_docstrings = 0
     if tool_count > 0:
+        # Pattern matches @tool() decorator followed by def with proper docstring
+        # Uses [^)]* for params and [^:]* for return type to avoid greedy matching
         docstring_pattern = re.compile(
-            r'@(?:app|mcp|self\.(?:app|mcp)|server)\.tool.*?\n\s*(?:async\s+)?def\s+\w+[^:]+:\s*\n\s*"""[\s\S]*?(?:Args:|Returns:|Examples:)[\s\S]*?"""',
+            r'@(?:app|mcp|self\.(?:app|mcp)|server)\.tool\(\)\s*\n(?:async\s+)?def\s+\w+\([^)]*\)[^:]*:\s*\n\s*"""[\s\S]*?(?:Args:|Returns:|Examples:)[\s\S]*?"""',
             re.MULTILINE
         )
         for search_dir in dual_search_dirs:
