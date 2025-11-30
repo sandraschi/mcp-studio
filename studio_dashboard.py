@@ -606,6 +606,27 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         info["issues"].append("No .cursorrules")
         info["recommendations"].append("Add .cursorrules for Cursor AI context")
     
+    # Check for git repository
+    has_git = (repo_path / ".git").exists()
+    if not has_git:
+        info["runt_reasons"].append("No git repository")
+        info["issues"].append("No .git")
+        info["recommendations"].append("Initialize git: git init")
+    else:
+        # Check for git remote
+        git_config = repo_path / ".git" / "config"
+        has_remote = False
+        if git_config.exists():
+            try:
+                config_content = git_config.read_text(encoding='utf-8', errors='ignore')
+                has_remote = '[remote "origin"]' in config_content or '[remote ' in config_content
+            except:
+                pass
+        if not has_remote:
+            info["runt_reasons"].append("No git remote configured")
+            info["issues"].append("No git remote")
+            info["recommendations"].append("Add remote: git remote add origin <url>")
+    
     # Check for setup.py without pyproject.toml (old packaging)
     has_setup_py = (repo_path / "setup.py").exists()
     has_pyproject = (repo_path / "pyproject.toml").exists()
