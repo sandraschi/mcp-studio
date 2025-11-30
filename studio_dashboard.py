@@ -226,7 +226,9 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     info["fastmcp_version"] = fastmcp_version
 
     # Count tools - SMART APPROACH from runt_api.py
-    tool_pattern = re.compile(r'@(?:app|mcp|self\.mcp(?:_server\.mcp)?|server)\.tool(?:\s*\(|(?=\s*(?:\r?\n|def\s)))', re.MULTILINE)
+    # Match various tool decorator patterns:
+    # @app.tool(), @mcp.tool(), @self.mcp.tool(), @server.tool(), @tool()
+    tool_pattern = re.compile(r'@(?:(?:app|mcp|self\.mcp(?:_server\.mcp)?|server)\.)?tool(?:\s*\(|(?=\s*(?:\r?\n|def\s)))', re.MULTILINE)
     nonconforming_pattern = re.compile(r'def register_\w+_tool\s*\(|\.add_tool\s*\(|register_tool\s*\(')
     tool_count = 0
     
@@ -285,6 +287,14 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             search_dirs.append(pkg_dir)
         if not search_dirs:
             search_dirs.append(repo_path)
+    
+    # Also check package __init__.py for tools (system-admin-mcp pattern)
+    pkg_init_files = []
+    for pkg_base in [repo_path / "src" / pkg_name_underscore, repo_path / "src" / pkg_name]:
+        init_file = pkg_base / "__init__.py"
+        if init_file.exists():
+            pkg_init_files.append(init_file)
+            break
     
     # Also check plugins/ directory if it exists (virtualization-mcp pattern)
     plugins_dir = None
@@ -453,6 +463,16 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     nonconforming_count += len(nc_matches)
             except Exception:
                 pass
+    
+    # Also scan package __init__.py for tools (some repos define tools there)
+    for init_file in pkg_init_files:
+        try:
+            content = init_file.read_text(encoding='utf-8', errors='ignore')
+            matches = tool_pattern.findall(content)
+            tool_count += len(matches)
+            individual_tools += len(matches)
+        except Exception:
+            pass
     
     info["tool_count"] = tool_count
     info["tools"] = tool_count  # Alias
