@@ -200,6 +200,10 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         "has_tools_dir": False,
         "has_mcpb": False,
         "has_dxt": False,
+        "has_dual_interface": False,
+        "has_http_interface": False,
+        "has_health_endpoint": False,
+        "features": [],
     }
 
     # Check for requirements.txt or pyproject.toml
@@ -663,6 +667,59 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         info["runt_reasons"].append(f"Monolithic server.py ({server_lines} lines)")
         info["issues"].append(f"Server file too large ({server_lines} lines)")
         info["recommendations"].append("Split server.py into modules (tools/, handlers/)")
+    
+    # Check for dual interface (stdio MCP + HTTP/FastAPI)
+    has_mcp_server = False
+    has_fastapi_server = False
+    has_health_endpoint = False
+    
+    # Look for MCP server file
+    mcp_server_files = ['mcp_server.py', 'fastmcp_server.py']
+    for mcp_file in mcp_server_files:
+        for search_dir in [repo_path / 'src' / pkg_name, repo_path / 'src' / pkg_name_short, 
+                           repo_path / 'src' / pkg_name_underscore, repo_path / pkg_name,
+                           repo_path / pkg_name_short, repo_path]:
+            if search_dir.exists() and (search_dir / mcp_file).exists():
+                has_mcp_server = True
+                break
+    
+    # Look for FastAPI server file (main.py, server.py with FastAPI)
+    fastapi_files = ['main.py', 'server.py', 'app.py']
+    for fa_file in fastapi_files:
+        for search_dir in [repo_path / 'src' / pkg_name, repo_path / 'src' / pkg_name_short,
+                           repo_path / 'src' / pkg_name_underscore, repo_path / pkg_name,
+                           repo_path / pkg_name_short, repo_path]:
+            if search_dir.exists():
+                file_path = search_dir / fa_file
+                if file_path.exists():
+                    try:
+                        content = file_path.read_text(encoding='utf-8', errors='ignore')
+                        if 'FastAPI' in content or 'fastapi' in content:
+                            has_fastapi_server = True
+                            # Check for health endpoint
+                            if '/health' in content or '@app.get("/health")' in content or "health" in content.lower():
+                                has_health_endpoint = True
+                            break
+                    except:
+                        pass
+    
+    info["has_dual_interface"] = has_mcp_server and has_fastapi_server
+    info["has_http_interface"] = has_fastapi_server
+    info["has_health_endpoint"] = has_health_endpoint
+    
+    # Flag dual interface as advantage
+    if has_mcp_server and has_fastapi_server:
+        if has_health_endpoint:
+            info["features"].append("Dual interface (stdio + HTTP)")
+        else:
+            info["runt_reasons"].append("HTTP interface missing /health endpoint")
+            info["issues"].append("No /health endpoint")
+            info["recommendations"].append("Add @app.get('/health') endpoint to FastAPI server")
+    elif has_fastapi_server and not has_mcp_server and tool_count == 0:
+        # Has FastAPI but no MCP tools - needs MCP server
+        info["runt_reasons"].append("REST API only, no MCP tools")
+        info["issues"].append("No MCP interface")
+        info["recommendations"].append("Add mcp_server.py with @mcp.tool decorators")
     
     if has_nonconforming:
         if tool_count == 0 and nonconforming_count > 10:
