@@ -198,6 +198,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         "has_tests": False,
         "has_scripts": False,
         "has_tools_dir": False,
+        "has_mcpb": False,
+        "has_dxt": False,
     }
 
     # Check for requirements.txt or pyproject.toml
@@ -566,6 +568,22 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         info["runt_reasons"].append(f"Multiple server files: {', '.join(server_files)}")
         info["issues"].append(f"Multiple server files ({len(server_files)})")
         info["recommendations"].append("Keep only the main server file, delete obsolete ones")
+    
+    # Check for MCPB packaging (manifest.json)
+    has_mcpb = (repo_path / "manifest.json").exists()
+    has_dxt = (repo_path / "dxt").exists() or (repo_path / "dxt").is_dir() if (repo_path / "dxt").exists() else False
+    info["has_mcpb"] = has_mcpb
+    info["has_dxt"] = has_dxt
+    
+    if not has_mcpb and tool_count >= 5:
+        info["runt_reasons"].append("No MCPB packaging (manifest.json)")
+        info["issues"].append("No MCPB packaging")
+        info["recommendations"].append("Add manifest.json for MCPB distribution")
+    
+    if has_dxt and not has_mcpb:
+        info["runt_reasons"].append("Uses deprecated DXT instead of MCPB")
+        info["issues"].append("DXT without MCPB")
+        info["recommendations"].append("Migrate from DXT to MCPB (manifest.json)")
     
     if has_nonconforming:
         if tool_count == 0 and nonconforming_count > 10:
