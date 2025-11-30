@@ -205,11 +205,15 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     pyproject_file = repo_path / "pyproject.toml"
 
     fastmcp_version = None
-    for config_file in [req_file, pyproject_file]:
+    # Prefer pyproject.toml (more authoritative) over requirements.txt
+    for config_file in [pyproject_file, req_file]:
         if config_file.exists():
             try:
                 content = config_file.read_text(encoding='utf-8', errors='ignore')
-                match = re.search(r'fastmcp.*?(\d+\.\d+\.?\d*)', content, re.IGNORECASE)
+                # Prefer version specifiers (>=, ==, ~=) over plain text mentions
+                match = re.search(r'fastmcp[>=<~]+(\d+\.\d+\.?\d*)', content, re.IGNORECASE)
+                if not match:
+                    match = re.search(r'fastmcp.*?(\d+\.\d+\.?\d*)', content, re.IGNORECASE)
                 if match:
                     fastmcp_version = match.group(1)
                     break
