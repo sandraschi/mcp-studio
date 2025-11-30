@@ -285,18 +285,26 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                 pass
             break
     
-    # Search directories
+    # Search directories - ALWAYS include the package root for tools in server.py
     search_dirs = []
+    
+    # Always check main package directories for tools in server.py
+    for pkg_dir_name in [pkg_name, pkg_name_short, pkg_name_underscore]:
+        for base in [repo_path / "src", repo_path]:
+            pkg_dir = base / pkg_dir_name
+            if pkg_dir.exists() and pkg_dir.is_dir():
+                search_dirs.append(pkg_dir)
+    
+    # Also check tools/ subdirectory if it exists
     if tools_dir and tools_dir.exists():
         search_dirs.append(tools_dir)
-    else:
+    
+    # Fallback to src or repo root
+    if not search_dirs:
         src_dir = repo_path / "src"
         if src_dir.exists():
             search_dirs.append(src_dir)
-        pkg_dir = repo_path / pkg_name
-        if pkg_dir.exists() and pkg_dir.is_dir():
-            search_dirs.append(pkg_dir)
-        if not search_dirs:
+        else:
             search_dirs.append(repo_path)
     
     # Also check package __init__.py for tools (system-admin-mcp pattern)
