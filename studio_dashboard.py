@@ -585,6 +585,57 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         info["issues"].append("DXT without MCPB")
         info["recommendations"].append("Migrate from DXT to MCPB (manifest.json)")
     
+    # Check for README
+    has_readme = any((repo_path / f).exists() for f in ['README.md', 'README.rst', 'README.txt', 'README'])
+    if not has_readme:
+        info["runt_reasons"].append("No README")
+        info["issues"].append("No README")
+        info["recommendations"].append("Add README.md with usage instructions")
+    
+    # Check for LICENSE
+    has_license = any((repo_path / f).exists() for f in ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'COPYING'])
+    if not has_license:
+        info["runt_reasons"].append("No LICENSE file")
+        info["issues"].append("No LICENSE")
+        info["recommendations"].append("Add LICENSE file (MIT recommended)")
+    
+    # Check for setup.py without pyproject.toml (old packaging)
+    has_setup_py = (repo_path / "setup.py").exists()
+    has_pyproject = (repo_path / "pyproject.toml").exists()
+    if has_setup_py and not has_pyproject:
+        info["runt_reasons"].append("Uses setup.py without pyproject.toml")
+        info["issues"].append("Old packaging (setup.py)")
+        info["recommendations"].append("Migrate to pyproject.toml")
+    
+    # Check for print() statements outside tests (scan main server file)
+    print_count = 0
+    if monolithic_server:
+        try:
+            server_content = monolithic_server.read_text(encoding='utf-8', errors='ignore')
+            # Count print( but not print(file=sys.stderr or print(..., file=
+            import re as re_module
+            prints = re_module.findall(r'\bprint\s*\(', server_content)
+            stderr_prints = re_module.findall(r'print\s*\([^)]*file\s*=', server_content)
+            print_count = len(prints) - len(stderr_prints)
+        except:
+            pass
+    if print_count > 3:
+        info["runt_reasons"].append(f"{print_count} print() calls in server (use logging)")
+        info["issues"].append(f"{print_count} print() statements")
+        info["recommendations"].append("Replace print() with logging or print(file=sys.stderr)")
+    
+    # Check for oversized server file (>1000 lines)
+    server_lines = 0
+    if monolithic_server:
+        try:
+            server_lines = len(monolithic_server.read_text(encoding='utf-8', errors='ignore').splitlines())
+        except:
+            pass
+    if server_lines > 1000:
+        info["runt_reasons"].append(f"Monolithic server.py ({server_lines} lines)")
+        info["issues"].append(f"Server file too large ({server_lines} lines)")
+        info["recommendations"].append("Split server.py into modules (tools/, handlers/)")
+    
     if has_nonconforming:
         if tool_count == 0 and nonconforming_count > 10:
             info["is_runt"] = True
