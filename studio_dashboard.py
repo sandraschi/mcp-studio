@@ -203,6 +203,11 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         "has_dual_interface": False,
         "has_http_interface": False,
         "has_health_endpoint": False,
+        "has_proper_docstrings": False,
+        "has_prompt_templates": False,
+        "has_type_hints": False,
+        "has_logging": False,
+        "test_count": 0,
         "features": [],
     }
 
@@ -739,6 +744,101 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             info["runt_reasons"].append(f"All tools non-FastMCP ({nonconforming_count}x)")
             info["issues"].append(f"All tools non-FastMCP ({nonconforming_count}x)")
         info["recommendations"].append("Use @app.tool decorators")
+    
+    # Check for proper multiline docstrings with Args/Returns
+    proper_docstrings = 0
+    if tool_count > 0:
+        docstring_pattern = re.compile(
+            r'@(?:app|mcp|self\.(?:app|mcp)|server)\.tool.*?\n\s*(?:async\s+)?def\s+\w+[^:]+:\s*\n\s*"""[\s\S]*?(?:Args:|Returns:|Examples:)[\s\S]*?"""',
+            re.MULTILINE
+        )
+        for search_dir in dual_search_dirs:
+            if search_dir.exists():
+                for py_file in search_dir.rglob("*.py"):
+                    if any(skip in str(py_file) for skip in SKIP_DIRS):
+                        continue
+                    try:
+                        content = py_file.read_text(encoding='utf-8', errors='ignore')
+                        matches = docstring_pattern.findall(content)
+                        proper_docstrings += len(matches)
+                    except:
+                        pass
+    
+    info["has_proper_docstrings"] = proper_docstrings > 0 and proper_docstrings >= tool_count * 0.5
+    if tool_count >= 3 and not info["has_proper_docstrings"]:
+        info["runt_reasons"].append("Missing proper docstrings (Args/Returns)")
+        info["issues"].append("Poor docstrings")
+        info["recommendations"].append("Add multiline docstrings with Args, Returns, Examples sections")
+    elif info["has_proper_docstrings"]:
+        info["features"].append("Good docstrings")
+    
+    # Check for prompt templates (assets/prompts/)
+    prompts_dir = repo_path / "assets" / "prompts"
+    has_prompts = prompts_dir.exists() and any(prompts_dir.glob("*.md"))
+    mcpb_prompts = repo_path / "mcpb" / "assets" / "prompts"
+    has_mcpb_prompts = mcpb_prompts.exists() and any(mcpb_prompts.glob("*.md"))
+    
+    info["has_prompt_templates"] = has_prompts or has_mcpb_prompts
+    if has_prompts or has_mcpb_prompts:
+        prompt_count = len(list(prompts_dir.glob("*.md"))) if has_prompts else 0
+        prompt_count += len(list(mcpb_prompts.glob("*.md"))) if has_mcpb_prompts else 0
+        info["features"].append(f"Prompt templates ({prompt_count})")
+    
+    # Check for type hints usage
+    has_type_hints = False
+    for search_dir in dual_search_dirs:
+        if search_dir.exists():
+            for py_file in search_dir.rglob("*.py"):
+                if any(skip in str(py_file) for skip in SKIP_DIRS):
+                    continue
+                try:
+                    content = py_file.read_text(encoding='utf-8', errors='ignore')
+                    # Check for type annotations: -> Type, : Type, List[, Dict[, Optional[
+                    if re.search(r'def \w+\([^)]*:\s*\w+|-> \w+|\[[\w\[\], ]+\]', content):
+                        has_type_hints = True
+                        break
+                except:
+                    pass
+            if has_type_hints:
+                break
+    
+    info["has_type_hints"] = has_type_hints
+    if has_type_hints:
+        info["features"].append("Type hints")
+    
+    # Check for proper logging (not just print)
+    has_logging = False
+    for search_dir in dual_search_dirs:
+        if search_dir.exists():
+            for py_file in search_dir.rglob("*.py"):
+                if any(skip in str(py_file) for skip in SKIP_DIRS):
+                    continue
+                try:
+                    content = py_file.read_text(encoding='utf-8', errors='ignore')
+                    if 'import logging' in content or 'from logging' in content:
+                        has_logging = True
+                        break
+                except:
+                    pass
+            if has_logging:
+                break
+    
+    info["has_logging"] = has_logging
+    if has_logging:
+        info["features"].append("Proper logging")
+    
+    # Check for comprehensive tests
+    tests_dir = repo_path / "tests"
+    test_count = 0
+    if tests_dir.exists():
+        test_files = list(tests_dir.rglob("test_*.py")) + list(tests_dir.rglob("*_test.py"))
+        test_count = len(test_files)
+    
+    info["test_count"] = test_count
+    if test_count >= 3:
+        info["features"].append(f"Test suite ({test_count} files)")
+    elif test_count == 0 and tool_count >= 5:
+        info["recommendations"].append("Add tests/ directory with test files")
 
     # Set status
     runt_count = len(info["runt_reasons"])
