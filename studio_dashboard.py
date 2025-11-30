@@ -450,7 +450,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                 if rel_path not in imported_tool_modules:
                     continue
             # If we have an __init__.py with imports, only count imported modules
-            elif imported_modules:
+            # BUT only apply this filter when scanning tools/ directory, not main package
+            elif imported_modules and tools_dir and py_file.is_relative_to(tools_dir):
                 # Check if file matches OR if file's parent dir matches (for packages)
                 file_matches = py_file.stem in imported_modules
                 parent_matches = py_file.parent.name in imported_modules
@@ -504,6 +505,40 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     info["has_portmanteau"] = portmanteau_tools > 0
     info["has_nonconforming_registration"] = has_nonconforming
     info["nonconforming_count"] = nonconforming_count
+    
+    # Check for split tools antipattern: tools in BOTH server.py AND tools/ directory
+    # This indicates incomplete refactoring
+    has_server_tools = False
+    has_tools_dir_tools = False
+    for base in [repo_path / "src" / pkg_name_underscore, repo_path / "src" / pkg_name, repo_path / pkg_name]:
+        for server_file in ['server.py', 'mcp_server.py', 'fastmcp_server.py']:
+            candidate = base / server_file
+            if candidate.exists():
+                try:
+                    content = candidate.read_text(encoding='utf-8', errors='ignore')
+                    if tool_pattern.search(content):
+                        has_server_tools = True
+                        break
+                except:
+                    pass
+        if has_server_tools:
+            break
+    
+    if tools_dir and tools_dir.exists():
+        for py_file in tools_dir.glob('*.py'):
+            if py_file.name != '__init__.py':
+                try:
+                    content = py_file.read_text(encoding='utf-8', errors='ignore')
+                    if tool_pattern.search(content):
+                        has_tools_dir_tools = True
+                        break
+                except:
+                    pass
+    
+    if has_server_tools and has_tools_dir_tools:
+        info["runt_reasons"].append("Tools split between server.py and tools/ (incomplete refactor)")
+        info["issues"].append("Split tools (server.py + tools/)")
+        info["recommendations"].append("Move all tools to tools/ directory, keep server.py clean")
 
     # Check CI
     workflows_dir = repo_path / ".github" / "workflows"
