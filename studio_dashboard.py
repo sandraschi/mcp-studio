@@ -599,6 +599,13 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         info["issues"].append("No LICENSE")
         info["recommendations"].append("Add LICENSE file (MIT recommended)")
     
+    # Check for .cursorrules
+    has_cursorrules = (repo_path / ".cursorrules").exists()
+    if not has_cursorrules:
+        info["runt_reasons"].append("No .cursorrules")
+        info["issues"].append("No .cursorrules")
+        info["recommendations"].append("Add .cursorrules for Cursor AI context")
+    
     # Check for setup.py without pyproject.toml (old packaging)
     has_setup_py = (repo_path / "setup.py").exists()
     has_pyproject = (repo_path / "pyproject.toml").exists()
