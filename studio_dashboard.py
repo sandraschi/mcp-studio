@@ -381,9 +381,10 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             if candidate.exists():
                 try:
                     server_content = candidate.read_text(encoding='utf-8', errors='ignore')
-                    # Check for various tool patterns
-                    has_tools = any(p in server_content for p in ['@self.mcp.tool', '@mcp.tool', '@app.tool', '@self.tool', '@tool('])
-                    if has_tools:
+                    # Check for actual tool decorators (not just mentions in comments)
+                    # Look for decorator at start of line with proper indentation
+                    actual_tools = tool_pattern.findall(server_content)
+                    if actual_tools:
                         monolithic_server = candidate
                         break
                 except Exception as e:
