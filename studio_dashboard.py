@@ -624,12 +624,8 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             info["issues"].append("No CI/CD workflows")
         info["recommendations"].append("Add CI workflow")
 
-    # Structure checks - only flag if no proper package structure at all
-    # Root server.py with a package dir is acceptable (notion-mcp pattern)
-    has_package_dir = (repo_path / pkg_name).exists() or (repo_path / pkg_name_short).exists()
-    has_root_server = (repo_path / "server.py").exists() and monolithic_server == repo_path / "server.py"
-    if not has_src and not has_package_dir and not has_root_server:
-        info["is_runt"] = True
+    # Structure checks - always flag missing src/
+    if not has_src:
         info["runt_reasons"].append("No src/ directory")
         info["issues"].append("No src/ directory")
         info["recommendations"].append("Use proper src/ layout")
