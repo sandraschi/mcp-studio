@@ -348,7 +348,15 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         init_file = tools_dir / '__init__.py'
         if init_file.exists():
             init_text = init_file.read_text(encoding='utf-8', errors='ignore')
-            uses_portmanteau_pattern = 'def register_tools' in init_text
+            # Portmanteau pattern requires BOTH register_tools AND from .manage_ or .query_ imports
+            # This distinguishes it from general register_tools functions (like blender-mcp)
+            has_register_tools = 'def register_tools' in init_text
+            has_portmanteau_imports = (
+                'from .manage_' in init_text or 
+                'from .query_' in init_text or
+                'from .analyze_' in init_text
+            )
+            uses_portmanteau_pattern = has_register_tools and has_portmanteau_imports
             # Check for PORTMANTEAU_MODULES list pattern (pywinauto-mcp style)
             if 'PORTMANTEAU_MODULES' in init_text:
                 # Extract module names from list
