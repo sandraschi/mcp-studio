@@ -555,6 +555,18 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         info["issues"].append("No tests/ directory")
         info["recommendations"].append("Add tests/ with pytest")
     
+    # Check for multiple server files (code smell)
+    server_files = []
+    for server_name in ['server.py', 'fastmcp_server.py', 'mcp_server.py', 'simple_mcp_server.py', 'mcp_compliant_server.py']:
+        for base in [repo_path / "src" / pkg_name_underscore, repo_path / "src" / pkg_name, repo_path / pkg_name]:
+            if (base / server_name).exists():
+                server_files.append(server_name)
+                break
+    if len(server_files) > 1:
+        info["runt_reasons"].append(f"Multiple server files: {', '.join(server_files)}")
+        info["issues"].append(f"Multiple server files ({len(server_files)})")
+        info["recommendations"].append("Keep only the main server file, delete obsolete ones")
+    
     if has_nonconforming:
         if tool_count == 0 and nonconforming_count > 10:
             info["is_runt"] = True
