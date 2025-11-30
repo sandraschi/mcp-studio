@@ -459,6 +459,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     info["portmanteau_tools"] = portmanteau_tools
     info["portmanteau_ops"] = portmanteau_ops
     info["individual_tools"] = individual_tools
+    info["has_portmanteau"] = portmanteau_tools > 0
     info["has_nonconforming_registration"] = has_nonconforming
     info["nonconforming_count"] = nonconforming_count
 
@@ -476,7 +477,9 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     has_scripts = (repo_path / "scripts").exists()
     
     tools_paths = [
+        repo_path / "src" / pkg_name_underscore / "tools",
         repo_path / "src" / pkg_name / "tools",
+        repo_path / pkg_name_underscore / "tools",
         repo_path / pkg_name / "tools",
         repo_path / "tools",
     ]
