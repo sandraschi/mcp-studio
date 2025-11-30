@@ -649,11 +649,15 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     if monolithic_server:
         try:
             server_content = monolithic_server.read_text(encoding='utf-8', errors='ignore')
-            # Count print( but not print(file=sys.stderr or print(..., file=
+            # Count print( but not:
+            # - print(file=sys.stderr) or print(..., file=
+            # - console.print() (Rich console to stderr)
+            # - logger.print() or similar
             import re as re_module
-            prints = re_module.findall(r'\bprint\s*\(', server_content)
+            prints = re_module.findall(r'(?<!\w)print\s*\(', server_content)
             stderr_prints = re_module.findall(r'print\s*\([^)]*file\s*=', server_content)
-            print_count = len(prints) - len(stderr_prints)
+            console_prints = re_module.findall(r'console\.print\s*\(', server_content)
+            print_count = len(prints) - len(stderr_prints) - len(console_prints)
         except:
             pass
     if print_count > 3:
