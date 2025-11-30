@@ -673,12 +673,26 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     has_fastapi_server = False
     has_health_endpoint = False
     
+    # Build comprehensive search dirs including actual src subdirectories
+    dual_search_dirs = [
+        repo_path / 'src' / pkg_name, 
+        repo_path / 'src' / pkg_name_short, 
+        repo_path / 'src' / pkg_name_underscore, 
+        repo_path / pkg_name,
+        repo_path / pkg_name_short, 
+        repo_path
+    ]
+    # Add actual subdirectories under src/
+    src_dir = repo_path / 'src'
+    if src_dir.exists():
+        for subdir in src_dir.iterdir():
+            if subdir.is_dir() and not subdir.name.startswith('.') and not subdir.name.startswith('_'):
+                dual_search_dirs.append(subdir)
+    
     # Look for MCP server file
     mcp_server_files = ['mcp_server.py', 'fastmcp_server.py']
     for mcp_file in mcp_server_files:
-        for search_dir in [repo_path / 'src' / pkg_name, repo_path / 'src' / pkg_name_short, 
-                           repo_path / 'src' / pkg_name_underscore, repo_path / pkg_name,
-                           repo_path / pkg_name_short, repo_path]:
+        for search_dir in dual_search_dirs:
             if search_dir.exists() and (search_dir / mcp_file).exists():
                 has_mcp_server = True
                 break
@@ -686,9 +700,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     # Look for FastAPI server file (main.py, server.py with FastAPI)
     fastapi_files = ['main.py', 'server.py', 'app.py']
     for fa_file in fastapi_files:
-        for search_dir in [repo_path / 'src' / pkg_name, repo_path / 'src' / pkg_name_short,
-                           repo_path / 'src' / pkg_name_underscore, repo_path / pkg_name,
-                           repo_path / pkg_name_short, repo_path]:
+        for search_dir in dual_search_dirs:
             if search_dir.exists():
                 file_path = search_dir / fa_file
                 if file_path.exists():
