@@ -26,24 +26,41 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+import traceback
+import httpx  # type: ignore[import-untyped]
 
-# Configure logging
+# Load environment variables from .env
+try:
+    from dotenv import load_dotenv  # type: ignore[import-untyped]
+    load_dotenv()
+except ImportError:
+    pass  # dotenv not available, will use system env vars only
+
+# Configure logging with file handler
+LOG_DIR = Path(__file__).parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+LOG_FILE = LOG_DIR / f"mcp-studio-{datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stderr)]
+    format='%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stderr),
+        logging.FileHandler(LOG_FILE, encoding='utf-8')
+    ]
 )
 logger = logging.getLogger(__name__)
+logger.info(f"Logging initialized. Log file: {LOG_FILE}")
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
-import uvicorn
+from fastapi import FastAPI, HTTPException, Request  # type: ignore[import-untyped]
+from fastapi.middleware.cors import CORSMiddleware  # type: ignore[import-untyped]
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse  # type: ignore[import-untyped]
+import uvicorn  # type: ignore[import-untyped]
 
 # FastMCP client imports
 try:
-    from fastmcp import Client
-    from fastmcp.client.transports import StdioTransport
+    from fastmcp import Client  # type: ignore[import-untyped]
+    from fastmcp.client.transports import StdioTransport  # type: ignore[import-untyped]
     FASTMCP_AVAILABLE = True
 except ImportError:
     FASTMCP_AVAILABLE = False
@@ -52,11 +69,17 @@ except ImportError:
 # CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-REPOS_DIR = Path(r"D:\Dev\repos")
-PORT = 8888
+REPOS_DIR = Path(os.getenv("REPOS_DIR", r"D:\Dev\repos"))  # Configurable via env var
+PORT = int(os.getenv("PORT", "8001"))  # Read from .env, default 8001 (no trailing 00!)
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")  # Configurable for Docker
 VERSION = "1.0.0"
 
 # MCP Client config locations
+# Discovery mechanism: Hardcoded list of known config file paths for each client
+# The discover_mcp_clients() function iterates through these paths and checks if files exist
+# If a config file is found, it's parsed to extract MCP server definitions
+# This approach is fast and reliable for known clients, but requires maintaining this list
+# for new clients or config locations
 MCP_CLIENT_CONFIGS = {
     "claude-desktop": [
         Path(os.environ.get("APPDATA", "")) / "Claude" / "claude_desktop_config.json",
@@ -66,8 +89,32 @@ MCP_CLIENT_CONFIGS = {
         Path(os.environ.get("APPDATA", "")) / "Cursor" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json",
         Path.home() / ".cursor" / "mcp.json",
     ],
-    "windsurf": [
+    "windsurf-ide": [
+        # Windsurf IDE (Codeium) - multiple possible locations
+        Path(os.environ.get("APPDATA", "")) / "Codeium" / "Windsurf" / "mcp_config.json",  # Primary location
         Path(os.environ.get("APPDATA", "")) / "Windsurf" / "User" / "globalStorage" / "rooveterinaryinc.roo-cline" / "settings" / "mcp_settings.json",
+        Path(os.environ.get("APPDATA", "")) / "Windsurf" / "mcp_settings.json",
+        Path(os.environ.get("APPDATA", "")) / "Windsurf" / "mcp_servers.json",
+        Path(os.environ.get("APPDATA", "")) / "Windsurf" / "mcp_config.json",
+        Path.home() / ".config" / "Windsurf" / "mcp_settings.json",
+        Path.home() / ".config" / "Codeium" / "Windsurf" / "mcp_config.json",  # Linux
+        Path.home() / ".windsurf" / "mcp_settings.json",
+    ],
+    "zed-ide": [
+        Path(os.environ.get("APPDATA", "")) / "Zed" / "settings.json",
+        Path.home() / ".config" / "zed" / "settings.json",
+        Path.home() / "Library" / "Application Support" / "Zed" / "settings.json",  # Mac
+    ],
+    "antigravity-ide": [
+        # Antigravity IDE - config managed through UI, check common locations
+        Path(os.environ.get("APPDATA", "")) / "Antigravity" / "mcp_config.json",
+        Path(os.environ.get("APPDATA", "")) / "Antigravity" / "mcp.json",
+        Path(os.environ.get("APPDATA", "")) / "GitKraken" / "Antigravity" / "mcp_config.json",  # GitKraken owns Antigravity
+        Path.home() / ".config" / "antigravity" / "mcp_config.json",
+        Path.home() / ".config" / "antigravity" / "mcp.json",
+        Path.home() / ".antigravity" / "mcp_config.json",
+        Path.home() / ".antigravity" / "mcp.json",
+        Path.home() / "Library" / "Application Support" / "Antigravity" / "mcp_config.json",  # Mac
     ],
     "cline": [
         Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json",
@@ -88,6 +135,89 @@ FASTMCP_LATEST = "2.13.1"
 FASTMCP_RUNT_THRESHOLD = "2.10.0"
 FASTMCP_WARN_THRESHOLD = "2.12.0"
 
+# AI Assistant Preprompts - Multiple personalities!
+PREPROMPTS = {
+    "dev": {
+        "name": "🛠️ MCP Developer",
+        "prompt": """You are an AI assistant for MCP Studio, helping analyze and manage MCP (Model Context Protocol) servers.
+You have access to:
+- The user's MCP repositories at D:/Dev/repos
+- Web search capabilities
+- File reading capabilities
+
+When helping with code:
+- Be specific and reference actual files/functions
+- Suggest concrete improvements
+- Follow FastMCP best practices
+
+When the user asks about their repos, you can see the provided context."""
+    },
+    "butterfly": {
+        "name": "🦋 Butterfly Fancier",
+        "prompt": """You are a delightful butterfly enthusiast who happens to be helping with MCP servers!
+You have access to:
+- The user's MCP repositories (like a beautiful garden!)
+- Web search (for finding butterfly-themed solutions!)
+- File reading (each file is like a flower!)
+
+When helping with code:
+- Compare code patterns to butterfly wing patterns
+- Suggest improvements with butterfly metaphors
+- Celebrate elegant solutions like spotting a rare butterfly
+- Still be technical and accurate, just with flair!
+
+Remember: Beautiful code is like a butterfly - it should be light, graceful, and make people smile!"""
+    },
+    "pirate": {
+        "name": "🏴‍☠️ Code Pirate",
+        "prompt": """Ahoy! Ye be speakin' to a code pirate who knows the MCP seas!
+Ye treasure chest contains:
+- Yer MCP repositories at D:/Dev/repos (the treasure map!)
+- Web search capabilities (like a spyglass!)
+- File readin' powers (plunderin' the code!)
+
+When helpin' with code:
+- Call bugs "scurvy code barnacles"
+- Suggest improvements like chartin' a course
+- Follow FastMCP best practices (the Pirate's Code!)
+- Still be technically accurate, just with pirate spirit!
+
+Arr! Let's make yer code seaworthy!"""
+    },
+    "zen": {
+        "name": "🧘 Zen Master",
+        "prompt": """You are a wise Zen master helping with MCP servers and mindful coding.
+You have access to:
+- The user's MCP repositories (observe the patterns)
+- Web search capabilities (seek wisdom)
+- File reading capabilities (read with awareness)
+
+When helping with code:
+- Offer insights with calm wisdom
+- Suggest improvements through gentle guidance
+- Follow the path of clean code
+- Be present in each response
+
+Remember: The best code is like water - simple, clear, and flowing naturally."""
+    },
+    "aussie": {
+        "name": "🦘 Aussie Coder",
+        "prompt": """G'day mate! You're chattin' with an Aussie coder who knows MCP servers like the back of me hand!
+You've got:
+- Your MCP repos at D:/Dev/repos (fair dinkum code!)
+- Web search (for findin' ripper solutions!)
+- File reading (havin' a good squiz at the code!)
+
+When helpin' with code:
+- Call bugs "dodgy bits"
+- Suggest improvements that are "bonzer"
+- Follow FastMCP best practices (she'll be right!)
+- Keep it friendly and no worries!
+
+No worries mate, we'll sort your code out!"""
+    }
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # FASTAPI APP
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -100,7 +230,16 @@ state = {
     "discovered_servers": {},      # From MCP client configs
     "repo_analysis": {},           # Static analysis results
     "connected_servers": {},       # Live connections (client instances)
-    "scan_progress": {"current": "", "total": 0, "done": 0, "status": "idle"},
+    "scan_progress": {
+        "current": "", 
+        "total": 0, 
+        "done": 0, 
+        "status": "idle",
+        "mcp_repos_found": 0,
+        "errors": 0,
+        "skipped": 0,
+        "activity_log": []
+    },
     "logs": [],
 }
 
@@ -109,34 +248,103 @@ state = {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def discover_mcp_clients() -> Dict[str, List[Dict]]:
-    """Discover MCP servers from all known client configurations."""
+    """
+    Discover MCP servers from all known client configurations.
+    
+    Discovery mechanism:
+    1. Iterates through MCP_CLIENT_CONFIGS dictionary (hardcoded list of known paths)
+    2. For each client, checks multiple possible config file locations
+    3. If running in Docker, maps paths to mounted host directories
+    4. Reads and parses JSON config files to extract MCP server definitions
+    5. Supports multiple config formats (mcpServers, mcp.servers, servers)
+    
+    Returns:
+        Dictionary mapping client names to their discovered MCP servers
+    """
     results = {}
+    
+    # Check if running in Docker - if so, map paths to mounted locations
+    in_docker = Path("/.dockerenv").exists() or os.path.exists("/.dockerenv")
     
     for client_name, config_paths in MCP_CLIENT_CONFIGS.items():
         for config_path in config_paths:
-            if not config_path.exists():
+            # If in Docker, try to map paths to mounted locations
+            check_path = config_path
+            if in_docker:
+                # Map Windows paths to mounted locations
+                path_str = str(config_path)
+                if "AppData" in path_str or "APPDATA" in path_str or "Roaming" in path_str:
+                    # Map %APPDATA% paths to /host/appdata
+                    # Extract path after Roaming/
+                    try:
+                        parts = Path(path_str).parts
+                        if "Roaming" in parts:
+                            roaming_idx = [i for i, p in enumerate(parts) if p == "Roaming"][0]
+                            rel_path = Path(*parts[roaming_idx + 1:])
+                            mapped_path = Path("/host/appdata") / rel_path
+                            if mapped_path.exists():
+                                check_path = mapped_path
+                    except (IndexError, ValueError):
+                        pass
+                elif str(config_path).startswith(str(Path.home())):
+                    # Map home directory paths to /host/home
+                    try:
+                        rel_path = config_path.relative_to(Path.home())
+                        mapped_path = Path("/host/home") / rel_path
+                        if mapped_path.exists():
+                            check_path = mapped_path
+                    except ValueError:
+                        pass
+            
+            if not check_path.exists():
                 continue
             
             try:
-                with open(config_path, 'r', encoding='utf-8') as f:
+                with open(check_path, 'r', encoding='utf-8') as f:
                     config = json.load(f)
                 
-                servers = config.get("mcpServers", {})
+                # Different clients use different JSON structures
+                servers = {}
+                
+                # Standard format: { "mcpServers": {...} }
+                if "mcpServers" in config:
+                    servers = config.get("mcpServers", {})
+                # Zed format: { "mcp": { "servers": {...} } }
+                elif "mcp" in config and isinstance(config.get("mcp"), dict):
+                    servers = config.get("mcp", {}).get("servers", {})
+                # Antigravity format: { "servers": {...} }
+                elif "servers" in config:
+                    servers = config.get("servers", {})
+                
                 if servers:
                     results[client_name] = {
-                        "path": str(config_path),
+                        "path": str(check_path),
                         "servers": []
                     }
                     for server_id, server_config in servers.items():
-                        results[client_name]["servers"].append({
-                            "id": server_id,
-                            "name": server_id.replace("-", " ").replace("_", " ").title(),
-                            "command": server_config.get("command", ""),
-                            "args": server_config.get("args", []),
-                            "cwd": server_config.get("cwd"),
-                            "env": server_config.get("env", {}),
-                            "status": "discovered",
-                        })
+                        # Handle different config formats
+                        if isinstance(server_config, dict):
+                            # Standard MCP format
+                            results[client_name]["servers"].append({
+                                "id": server_id,
+                                "name": server_id.replace("-", " ").replace("_", " ").title(),
+                                "command": server_config.get("command", ""),
+                                "args": server_config.get("args", []),
+                                "cwd": server_config.get("cwd"),
+                                "env": server_config.get("env", {}),
+                                "type": server_config.get("type", "stdio"),  # stdio or http
+                                "url": server_config.get("url", ""),  # For http type
+                                "status": "discovered",
+                            })
+                        elif isinstance(server_config, str):
+                            # Simple string format (less common)
+                            results[client_name]["servers"].append({
+                                "id": server_id,
+                                "name": server_id.replace("-", " ").replace("_", " ").title(),
+                                "command": server_config,
+                                "args": [],
+                                "status": "discovered",
+                            })
                     break  # Found config for this client
             except Exception as e:
                 log(f"Error reading {client_name} config: {e}")
@@ -964,6 +1172,13 @@ def scan_repos() -> List[Dict[str, Any]]:
     dirs = [d for d in REPOS_DIR.iterdir() if d.is_dir() and not d.name.startswith('.')]
     state["scan_progress"]["total"] = len(dirs)
     state["scan_progress"]["status"] = "scanning"
+    state["scan_progress"]["mcp_repos_found"] = 0
+    state["scan_progress"]["errors"] = 0
+    state["scan_progress"]["skipped"] = 0
+    state["scan_progress"]["activity_log"] = []
+    
+    # Add initial activity
+    state["scan_progress"]["activity_log"].append(f"🔍 Starting scan of {len(dirs)} directories...")
     
     for i, repo_path in enumerate(dirs):
         state["scan_progress"]["current"] = repo_path.name
@@ -974,13 +1189,33 @@ def scan_repos() -> List[Dict[str, Any]]:
             info = analyze_repo(repo_path)
             if info:
                 results.append(info)
-                log(f"  {info['zoo_emoji']} {info['status_emoji']} {info['name']} v{info['fastmcp_version'] or '?'} tools={info['tools']}")
+                mcp_count = state["scan_progress"]["mcp_repos_found"] + 1
+                state["scan_progress"]["mcp_repos_found"] = mcp_count
+                activity_msg = f"  {info['zoo_emoji']} {info['status_emoji']} {info['name']} v{info['fastmcp_version'] or '?'} ({info['tools']} tools)"
+                state["scan_progress"]["activity_log"].append(activity_msg)
+                # Keep only last 20 entries to avoid memory bloat
+                if len(state["scan_progress"]["activity_log"]) > 20:
+                    state["scan_progress"]["activity_log"].pop(0)
+                log(activity_msg)
+            else:
+                skipped = state["scan_progress"]["skipped"] + 1
+                state["scan_progress"]["skipped"] = skipped
         except Exception as e:
+            errors = state["scan_progress"]["errors"] + 1
+            state["scan_progress"]["errors"] = errors
             logger.error(f"Error analyzing {repo_path.name}: {e}", exc_info=True)
-            log(f"  ❌ {repo_path.name}: SCAN ERROR - {str(e)[:50]}")
+            error_msg = f"  ❌ {repo_path.name}: {str(e)[:50]}"
+            state["scan_progress"]["activity_log"].append(error_msg)
+            # Keep only last 20 entries
+            if len(state["scan_progress"]["activity_log"]) > 20:
+                state["scan_progress"]["activity_log"].pop(0)
+            log(error_msg)
     
+    # Final summary
     state["scan_progress"]["status"] = "complete"
-    log(f"✅ Found {len(results)} MCP repos")
+    summary = f"✅ Scan complete: {len(results)} MCP repos found, {state['scan_progress']['skipped']} skipped, {state['scan_progress']['errors']} errors"
+    state["scan_progress"]["activity_log"].append(summary)
+    log(summary)
     
     return results
 
@@ -997,7 +1232,16 @@ def load_cursor_config() -> Dict[str, Dict]:
     if _cursor_config_cache is not None:
         return _cursor_config_cache
     
+    # Check if running in Docker - if so, map paths to mounted locations
+    in_docker = Path("/.dockerenv").exists() or os.path.exists("/.dockerenv")
+    
     cursor_config_path = Path.home() / ".cursor" / "mcp.json"
+    if in_docker:
+        # Try mounted path
+        mounted_path = Path("/host/home") / ".cursor" / "mcp.json"
+        if mounted_path.exists():
+            cursor_config_path = mounted_path
+    
     if not cursor_config_path.exists():
         _cursor_config_cache = {}
         return _cursor_config_cache
@@ -1024,6 +1268,112 @@ def find_cursor_config_for_repo(repo_name: str, repo_path: Path) -> Optional[Dic
         
         if repo_path_str in cwd or repo_path_str in args or repo_name.lower() in cwd:
             return {"id": server_id, **config}
+    
+    return None
+
+def parse_readme_config(repo_path: Path) -> Optional[Dict]:
+    """Parse README to find MCP server configuration JSON snippets."""
+    readme_files = [
+        repo_path / "README.md",
+        repo_path / "README.rst",
+        repo_path / "README.txt",
+        repo_path / "README"
+    ]
+    
+    for readme_file in readme_files:
+        if not readme_file.exists():
+            continue
+        
+        try:
+            content = readme_file.read_text(encoding='utf-8', errors='ignore')
+            
+            # Look for JSON code blocks with mcpServers
+            import re
+            
+            # Pattern 1: JSON code blocks with mcpServers
+            # Matches ```json ... "mcpServers": {...} ... ```
+            json_block_pattern = r'```(?:json|javascript)?\s*\n(.*?"mcpServers"\s*:\s*\{[^`]*?\})\s*```'
+            matches = re.finditer(json_block_pattern, content, re.DOTALL | re.IGNORECASE)
+            
+            for match in matches:
+                json_str = match.group(1)
+                try:
+                    # Try to parse the JSON
+                    config = json.loads(json_str)
+                    if "mcpServers" in config and isinstance(config["mcpServers"], dict):
+                        # Extract first server (most repos show one example)
+                        for server_id, server_config in config["mcpServers"].items():
+                            if isinstance(server_config, dict):
+                                return {
+                                    "id": server_id,
+                                    "command": server_config.get("command", ""),
+                                    "args": server_config.get("args", []),
+                                    "cwd": server_config.get("cwd"),
+                                    "env": server_config.get("env", {}),
+                                    "type": server_config.get("type", "stdio"),
+                                    "url": server_config.get("url", ""),
+                                    "source": "README.md"
+                                }
+                except json.JSONDecodeError:
+                    # Try to extract just the server config part
+                    # Look for patterns like: "server-name": { "command": "...", "args": [...] }
+                    server_pattern = r'"([^"]+)"\s*:\s*\{[^}]*"command"\s*:\s*"([^"]+)"[^}]*"args"\s*:\s*\[([^\]]*?)\][^}]*\}'
+                    server_match = re.search(server_pattern, json_str, re.DOTALL)
+                    if server_match:
+                        server_id = server_match.group(1)
+                        command = server_match.group(2)
+                        args_str = server_match.group(3)
+                        # Parse args array
+                        args = []
+                        for arg_match in re.finditer(r'"([^"]+)"', args_str):
+                            args.append(arg_match.group(1))
+                        
+                        # Look for cwd and env in the same block
+                        cwd_match = re.search(r'"cwd"\s*:\s*"([^"]+)"', json_str)
+                        cwd = cwd_match.group(1) if cwd_match else None
+                        
+                        env = {}
+                        env_match = re.search(r'"env"\s*:\s*\{([^}]*?)\}', json_str, re.DOTALL)
+                        if env_match:
+                            for env_pair in re.finditer(r'"([^"]+)"\s*:\s*"([^"]+)"', env_match.group(1)):
+                                env[env_pair.group(1)] = env_pair.group(2)
+                        
+                        return {
+                            "id": server_id,
+                            "command": command,
+                            "args": args,
+                            "cwd": cwd,
+                            "env": env,
+                            "source": "README.md"
+                        }
+            
+            # Pattern 2: Look for installation/configuration sections with JSON examples
+            # Common section headers: Installation, Configuration, Setup, Usage
+            section_pattern = r'(?:##?\s+(?:Installation|Configuration|Setup|Usage|Getting Started|Quick Start)[^\n]*\n.*?)(?:```(?:json|javascript)?\s*\n(.*?"mcpServers"[^`]*?)\s*```)'
+            section_match = re.search(section_pattern, content, re.DOTALL | re.IGNORECASE)
+            if section_match:
+                json_str = section_match.group(1)
+                try:
+                    config = json.loads(json_str)
+                    if "mcpServers" in config and isinstance(config["mcpServers"], dict):
+                        for server_id, server_config in config["mcpServers"].items():
+                            if isinstance(server_config, dict):
+                                return {
+                                    "id": server_id,
+                                    "command": server_config.get("command", ""),
+                                    "args": server_config.get("args", []),
+                                    "cwd": server_config.get("cwd"),
+                                    "env": server_config.get("env", {}),
+                                    "type": server_config.get("type", "stdio"),
+                                    "url": server_config.get("url", ""),
+                                    "source": "README.md"
+                                }
+                except json.JSONDecodeError:
+                    pass
+            
+        except Exception as e:
+            log(f"⚠️ Failed to parse README for {repo_path.name}: {e}")
+            continue
     
     return None
 
@@ -1078,8 +1428,8 @@ async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
     """Connect to an MCP server from a repository using Cursor config or pyproject.toml."""
     repo_path = REPOS_DIR / repo_name
     
-    if not repo_path.exists():
-        raise HTTPException(404, f"Repository {repo_name} not found")
+    if not repo_path.exists() or not repo_path.is_dir():
+        raise HTTPException(404, f"Repository {repo_name} not found at {repo_path}")
     
     connection_id = f"repo:{repo_name}"
     
@@ -1162,6 +1512,8 @@ async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
             result["status"] = "connected"
             result["tools"] = tool_list
             
+            # Store connection state (note: actual client connection closes after async with block)
+            # This is intentional - we only store tool metadata, not the live connection
             state["connected_servers"][connection_id] = {
                 "status": "connected",
                 "tools": tool_list,
@@ -1173,6 +1525,12 @@ async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
     except Exception as e:
         result["status"] = "error"
         result["error"] = str(e)
+        # Store error state so UI can display it
+        state["connected_servers"][connection_id] = {
+            "status": "error",
+            "error": str(e),
+            "tools": [],
+        }
         log(f"❌ Failed to connect to {repo_name}: {e}")
     
     return result
@@ -1186,14 +1544,14 @@ async def connect_config_server(client: str, server_id: str, server_config: Dict
         if conn.get("status") == "connected":
             return {
                 "id": connection_id,
-                "name": server_config["name"],
+                "name": server_config.get("name", server_id),
                 "status": "connected",
                 "tools": conn.get("tools", []),
             }
     
     result = {
         "id": connection_id,
-        "name": server_config["name"],
+        "name": server_config.get("name", server_id),
         "status": "connecting",
         "tools": [],
         "error": None,
@@ -1205,12 +1563,18 @@ async def connect_config_server(client: str, server_id: str, server_config: Dict
         return result
     
     try:
-        cmd = server_config["command"]
+        cmd = server_config.get("command")
+        if not cmd:
+            result["status"] = "error"
+            result["error"] = "Missing 'command' in server configuration"
+            return result
+        
         args = server_config.get("args", [])
         cwd = server_config.get("cwd")
         env = {**os.environ, **server_config.get("env", {})}
         
-        log(f"🔌 Connecting to {server_config['name']}...")
+        server_name = server_config.get("name", server_id)
+        log(f"🔌 Connecting to {server_name}...")
         
         transport = StdioTransport(
             command=cmd,
@@ -1236,16 +1600,24 @@ async def connect_config_server(client: str, server_id: str, server_config: Dict
             result["status"] = "connected"
             result["tools"] = tool_list
             
+            # Store connection state (note: actual client connection closes after async with block)
+            # This is intentional - we only store tool metadata, not the live connection
             state["connected_servers"][connection_id] = {
                 "status": "connected",
                 "tools": tool_list,
             }
             
-            log(f"✅ Connected to {server_config['name']}: {len(tool_list)} tools")
+            log(f"✅ Connected to {server_name}: {len(tool_list)} tools")
     
     except Exception as e:
         result["status"] = "error"
         result["error"] = str(e)
+        # Store error state so UI can display it
+        state["connected_servers"][connection_id] = {
+            "status": "error",
+            "error": str(e),
+            "tools": [],
+        }
         log(f"❌ Failed to connect: {e}")
     
     return result
@@ -1271,10 +1643,524 @@ async def get_discovered_clients():
     """Get all discovered MCP client configurations."""
     return discover_mcp_clients()
 
+@app.get("/api/clients/{client_name}/servers")
+async def get_client_servers(client_name: str):
+    """Get all servers for a specific client."""
+    clients = discover_mcp_clients()
+    if client_name not in clients:
+        raise HTTPException(404, f"Client {client_name} not found")
+    return {
+        "client": client_name,
+        "path": clients[client_name]["path"],
+        "servers": clients[client_name]["servers"]
+    }
+
+@app.post("/api/clients/{client_name}/servers")
+async def create_server(client_name: str, server_data: dict):
+    """Add a new MCP server to a client configuration."""
+    clients = discover_mcp_clients()
+    if client_name not in clients:
+        raise HTTPException(404, f"Client {client_name} not found")
+    
+    config_path = Path(clients[client_name]["path"])
+    
+    # Map path if in Docker
+    in_docker = Path("/.dockerenv").exists() or os.path.exists("/.dockerenv")
+    if in_docker:
+        path_str = str(config_path)
+        if "AppData" in path_str or "Roaming" in path_str:
+            try:
+                parts = Path(path_str).parts
+                if "Roaming" in parts:
+                    roaming_idx = [i for i, p in enumerate(parts) if p == "Roaming"][0]
+                    rel_path = Path(*parts[roaming_idx + 1:])
+                    config_path = Path("/host/appdata") / rel_path
+            except (IndexError, ValueError):
+                pass
+        elif str(config_path).startswith(str(Path.home())):
+            try:
+                rel_path = config_path.relative_to(Path.home())
+                config_path = Path("/host/home") / rel_path
+            except ValueError:
+                pass
+    
+    if not config_path.exists():
+        raise HTTPException(404, f"Config file not found: {config_path}")
+    
+    try:
+        # Read existing config
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        
+        # Determine config structure
+        if "mcpServers" in config:
+            servers = config["mcpServers"]
+        elif "mcp" in config and isinstance(config.get("mcp"), dict):
+            servers = config["mcp"]["servers"]
+        elif "servers" in config:
+            servers = config["servers"]
+        else:
+            # Default to mcpServers format
+            config["mcpServers"] = {}
+            servers = config["mcpServers"]
+        
+        # Add new server
+        server_id = server_data.get("id", server_data.get("name", "").lower().replace(" ", "-"))
+        if server_id in servers:
+            raise HTTPException(400, f"Server '{server_id}' already exists")
+        
+        servers[server_id] = {
+            "command": server_data.get("command", ""),
+            "args": server_data.get("args", []),
+        }
+        if "cwd" in server_data:
+            servers[server_id]["cwd"] = server_data["cwd"]
+        if "env" in server_data:
+            servers[server_id]["env"] = server_data["env"]
+        if "type" in server_data:
+            servers[server_id]["type"] = server_data["type"]
+        if "url" in server_data:
+            servers[server_id]["url"] = server_data["url"]
+        
+        # Write back to file
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2)
+        
+        log(f"✅ Added server '{server_id}' to {client_name}")
+        return {"success": True, "server_id": server_id}
+    
+    except Exception as e:
+        log(f"❌ Error adding server: {e}")
+        raise HTTPException(500, f"Failed to add server: {str(e)}")
+
+@app.put("/api/clients/{client_name}/servers/{server_id}")
+async def update_server(client_name: str, server_id: str, server_data: dict):
+    """Update an existing MCP server configuration."""
+    clients = discover_mcp_clients()
+    if client_name not in clients:
+        raise HTTPException(404, f"Client {client_name} not found")
+    
+    config_path = Path(clients[client_name]["path"])
+    
+    # Map path if in Docker (same logic as create)
+    in_docker = Path("/.dockerenv").exists() or os.path.exists("/.dockerenv")
+    if in_docker:
+        path_str = str(config_path)
+        if "AppData" in path_str or "Roaming" in path_str:
+            try:
+                parts = Path(path_str).parts
+                if "Roaming" in parts:
+                    roaming_idx = [i for i, p in enumerate(parts) if p == "Roaming"][0]
+                    rel_path = Path(*parts[roaming_idx + 1:])
+                    config_path = Path("/host/appdata") / rel_path
+            except (IndexError, ValueError):
+                pass
+        elif str(config_path).startswith(str(Path.home())):
+            try:
+                rel_path = config_path.relative_to(Path.home())
+                config_path = Path("/host/home") / rel_path
+            except ValueError:
+                pass
+    
+    if not config_path.exists():
+        raise HTTPException(404, f"Config file not found: {config_path}")
+    
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        
+        # Determine config structure
+        if "mcpServers" in config:
+            servers = config["mcpServers"]
+        elif "mcp" in config and isinstance(config.get("mcp"), dict):
+            servers = config["mcp"]["servers"]
+        elif "servers" in config:
+            servers = config["servers"]
+        else:
+            raise HTTPException(404, f"Server '{server_id}' not found")
+        
+        if server_id not in servers:
+            raise HTTPException(404, f"Server '{server_id}' not found")
+        
+        # Update server config
+        if "command" in server_data:
+            servers[server_id]["command"] = server_data["command"]
+        if "args" in server_data:
+            servers[server_id]["args"] = server_data["args"]
+        if "cwd" in server_data:
+            servers[server_id]["cwd"] = server_data["cwd"]
+        if "env" in server_data:
+            servers[server_id]["env"] = server_data["env"]
+        if "type" in server_data:
+            servers[server_id]["type"] = server_data["type"]
+        if "url" in server_data:
+            servers[server_id]["url"] = server_data["url"]
+        
+        # Write back
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2)
+        
+        log(f"✅ Updated server '{server_id}' in {client_name}")
+        return {"success": True, "server_id": server_id}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        log(f"❌ Error updating server: {e}")
+        raise HTTPException(500, f"Failed to update server: {str(e)}")
+
+@app.delete("/api/clients/{client_name}/servers/{server_id}")
+async def delete_server(client_name: str, server_id: str):
+    """Delete an MCP server from a client configuration."""
+    clients = discover_mcp_clients()
+    if client_name not in clients:
+        raise HTTPException(404, f"Client {client_name} not found")
+    
+    config_path = Path(clients[client_name]["path"])
+    
+    # Map path if in Docker (same logic as create)
+    in_docker = Path("/.dockerenv").exists() or os.path.exists("/.dockerenv")
+    if in_docker:
+        path_str = str(config_path)
+        if "AppData" in path_str or "Roaming" in path_str:
+            try:
+                parts = Path(path_str).parts
+                if "Roaming" in parts:
+                    roaming_idx = [i for i, p in enumerate(parts) if p == "Roaming"][0]
+                    rel_path = Path(*parts[roaming_idx + 1:])
+                    config_path = Path("/host/appdata") / rel_path
+            except (IndexError, ValueError):
+                pass
+        elif str(config_path).startswith(str(Path.home())):
+            try:
+                rel_path = config_path.relative_to(Path.home())
+                config_path = Path("/host/home") / rel_path
+            except ValueError:
+                pass
+    
+    if not config_path.exists():
+        raise HTTPException(404, f"Config file not found: {config_path}")
+    
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+        
+        # Determine config structure
+        if "mcpServers" in config:
+            servers = config["mcpServers"]
+        elif "mcp" in config and isinstance(config.get("mcp"), dict):
+            servers = config["mcp"]["servers"]
+        elif "servers" in config:
+            servers = config["servers"]
+        else:
+            raise HTTPException(404, f"Server '{server_id}' not found")
+        
+        if server_id not in servers:
+            raise HTTPException(404, f"Server '{server_id}' not found")
+        
+        # Delete server
+        del servers[server_id]
+        
+        # Write back
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config, f, indent=2)
+        
+        log(f"✅ Deleted server '{server_id}' from {client_name}")
+        return {"success": True, "server_id": server_id}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        log(f"❌ Error deleting server: {e}")
+        raise HTTPException(500, f"Failed to delete server: {str(e)}")
+
 @app.get("/api/repos")
 async def get_repo_analysis():
     """Get static analysis of all MCP repositories."""
     return scan_repos()
+
+def detect_installation_methods(repo_path: Path) -> Dict[str, Any]:
+    """Detect available installation methods for an MCP server."""
+    methods = {
+        "mcpb": False,
+        "npm": False,
+        "npx": False,
+        "python": True,  # Always available as fallback
+        "mcpb_path": None,
+        "npm_package": None,
+        "npx_command": None
+    }
+    
+    # Check for MCPB (manifest.json)
+    manifest_path = repo_path / "manifest.json"
+    if manifest_path.exists():
+        methods["mcpb"] = True
+        methods["mcpb_path"] = str(manifest_path)
+    
+    # Check for npm/npx setup (package.json)
+    package_json = repo_path / "package.json"
+    if package_json.exists():
+        try:
+            with open(package_json, 'r', encoding='utf-8') as f:
+                pkg = json.load(f)
+            
+            # Check for bin field (npx support)
+            if "bin" in pkg:
+                methods["npx"] = True
+                if isinstance(pkg["bin"], dict):
+                    # Get first bin command
+                    methods["npx_command"] = list(pkg["bin"].keys())[0]
+                elif isinstance(pkg["bin"], str):
+                    methods["npx_command"] = pkg["name"] if "name" in pkg else repo_path.name
+            
+            # Check for name field (npm package)
+            if "name" in pkg:
+                methods["npm"] = True
+                methods["npm_package"] = pkg["name"]
+        except Exception:
+            pass
+    
+    return methods
+
+def get_client_config_hints(client_name: str) -> Dict[str, str]:
+    """Get installation hints for different MCP clients."""
+    hints = {
+        "claude-desktop": {
+            "config_path": "Claude → Settings → Developer → Edit Config",
+            "config_file": "claude_desktop_config.json",
+            "location": "%APPDATA%\\Claude\\claude_desktop_config.json (Windows) or ~/.config/Claude/claude_desktop_config.json (Linux/Mac)",
+            "mcpb_hint": "Open Claude Desktop → Settings → Developer → Add MCP Server → Paste manifest.json path or drag & drop"
+        },
+        "cursor": {
+            "config_path": "Cursor → Settings → Extensions → MCP",
+            "config_file": "mcp.json",
+            "location": "%APPDATA%\\Cursor\\User\\globalStorage\\...\\cline_mcp_settings.json or ~/.cursor/mcp.json",
+            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
+        },
+        "windsurf-ide": {
+            "config_path": "Windsurf → Settings → MCP Servers",
+            "config_file": "mcp_config.json",
+            "location": "%APPDATA%\\Codeium\\Windsurf\\mcp_config.json",
+            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
+        },
+        "zed-ide": {
+            "config_path": "Zed → Settings → MCP",
+            "config_file": "settings.json",
+            "location": "~/.config/zed/settings.json or ~/Library/Application Support/Zed/settings.json",
+            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
+        },
+        "antigravity-ide": {
+            "config_path": "Antigravity → Agent Panel → MCP Servers → Manage",
+            "config_file": "mcp_config.json",
+            "location": "%APPDATA%\\Antigravity\\mcp_config.json",
+            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
+        }
+    }
+    return hints.get(client_name, {
+        "config_path": "Client settings",
+        "config_file": "config.json",
+        "location": "Check client documentation",
+        "mcpb_hint": "Check if client supports MCPB"
+    })
+
+def detect_installation_methods(repo_path: Path) -> Dict[str, Any]:
+    """Detect available installation methods for an MCP server."""
+    methods = {
+        "mcpb": False,
+        "npm": False,
+        "npx": False,
+        "python": True,  # Always available as fallback
+        "mcpb_path": None,
+        "npm_package": None,
+        "npx_command": None
+    }
+    
+    # Check for MCPB (manifest.json)
+    manifest_path = repo_path / "manifest.json"
+    if manifest_path.exists():
+        methods["mcpb"] = True
+        methods["mcpb_path"] = str(manifest_path)
+    
+    # Check for npm/npx setup (package.json)
+    package_json = repo_path / "package.json"
+    if package_json.exists():
+        try:
+            with open(package_json, 'r', encoding='utf-8') as f:
+                pkg = json.load(f)
+            
+            # Check for bin field (npx support)
+            if "bin" in pkg:
+                methods["npx"] = True
+                if isinstance(pkg["bin"], dict):
+                    # Get first bin command
+                    methods["npx_command"] = list(pkg["bin"].keys())[0]
+                elif isinstance(pkg["bin"], str):
+                    methods["npx_command"] = pkg["name"] if "name" in pkg else repo_path.name
+            
+            # Check for name field (npm package)
+            if "name" in pkg:
+                methods["npm"] = True
+                methods["npm_package"] = pkg["name"]
+        except Exception:
+            pass
+    
+    return methods
+
+def get_client_config_hints(client_name: str) -> Dict[str, str]:
+    """Get installation hints for different MCP clients."""
+    hints = {
+        "claude-desktop": {
+            "config_path": "Claude → Settings → Developer → Edit Config",
+            "config_file": "claude_desktop_config.json",
+            "location": "%APPDATA%\\Claude\\claude_desktop_config.json (Windows) or ~/.config/Claude/claude_desktop_config.json (Linux/Mac)",
+            "mcpb_hint": "Open Claude Desktop → Settings → Developer → Add MCP Server → Paste manifest.json path or drag & drop"
+        },
+        "cursor": {
+            "config_path": "Cursor → Settings → Extensions → MCP",
+            "config_file": "mcp.json",
+            "location": "%APPDATA%\\Cursor\\User\\globalStorage\\...\\cline_mcp_settings.json or ~/.cursor/mcp.json",
+            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
+        },
+        "windsurf-ide": {
+            "config_path": "Windsurf → Settings → MCP Servers",
+            "config_file": "mcp_config.json",
+            "location": "%APPDATA%\\Codeium\\Windsurf\\mcp_config.json",
+            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
+        },
+        "zed-ide": {
+            "config_path": "Zed → Settings → MCP",
+            "config_file": "settings.json",
+            "location": "~/.config/zed/settings.json or ~/Library/Application Support/Zed/settings.json",
+            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
+        },
+        "antigravity-ide": {
+            "config_path": "Antigravity → Agent Panel → MCP Servers → Manage",
+            "config_file": "mcp_config.json",
+            "location": "%APPDATA%\\Antigravity\\mcp_config.json",
+            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
+        }
+    }
+    return hints.get(client_name, {
+        "config_path": "Client settings",
+        "config_file": "config.json",
+        "location": "Check client documentation",
+        "mcpb_hint": "Check if client supports MCPB"
+    })
+
+@app.get("/api/available-servers")
+async def get_available_servers():
+    """Get list of available MCP servers from scanned repositories."""
+    available = []
+    
+    if not REPOS_DIR.exists():
+        return available
+    
+    repos = scan_repos()  # Get scanned repos
+    for repo in repos:
+        repo_path = Path(repo["path"])
+        
+        # Detect installation methods
+        install_methods = detect_installation_methods(repo_path)
+        
+        # Determine best config source (prioritize MCPB, then npm/npx, then README, then pyproject, then inferred)
+        config_data = None
+        source = "inferred"
+        
+        # Priority 1: MCPB (if available)
+        if install_methods["mcpb"]:
+            # For MCPB, we still need to provide a JSON snippet for clients that don't support MCPB directly
+            # But mark it as MCPB-preferred
+            source = "MCPB (preferred)"
+        
+        # Priority 2: npm/npx (if available)
+        if install_methods["npx"]:
+            if not config_data:
+                config_data = {
+                    "command": "npx",
+                    "args": ["-y", install_methods["npx_command"] or repo["name"]],
+                    "cwd": None,
+                    "env": {},
+                    "type": "stdio"
+                }
+                source = "npm/npx"
+        elif install_methods["npm"]:
+            if not config_data:
+                # npm install then use local
+                config_data = {
+                    "command": "npx",
+                    "args": [install_methods["npm_package"] or repo["name"]],
+                    "cwd": None,
+                    "env": {},
+                    "type": "stdio"
+                }
+                source = "npm"
+        
+        # Priority 3: Try README (but user says these are often wrong, so lower priority)
+        if not config_data:
+            readme_config = parse_readme_config(repo_path)
+            if readme_config:
+                config_data = readme_config
+                source = "README.md (verify accuracy)"
+        
+        # Priority 4: pyproject.toml
+        if not config_data:
+            entrypoint = parse_pyproject_entrypoint(repo_path)
+            if entrypoint:
+                config_data = entrypoint
+                source = "pyproject.toml"
+        
+        # Priority 5: Infer from structure
+        if not config_data:
+            # Look for common entry points
+            server_files = [
+                repo_path / "fastmcp_server.py",
+                repo_path / "mcp_server.py",
+                repo_path / "server.py",
+                repo_path / "main.py"
+            ]
+            
+            for server_file in server_files:
+                if server_file.exists():
+                    if "src" in str(repo_path):
+                        pkg_name = repo_path.name.replace("-", "_")
+                        config_data = {
+                            "command": "python",
+                            "args": ["-m", pkg_name],
+                            "cwd": str(repo_path),
+                            "env": {"PYTHONPATH": str(repo_path / "src")},
+                            "source": "inferred (package structure)"
+                        }
+                    else:
+                        config_data = {
+                            "command": "python",
+                            "args": [str(server_file.relative_to(repo_path))],
+                            "cwd": str(repo_path),
+                            "env": {},
+                            "source": "inferred (file structure)"
+                        }
+                    break
+        
+        # If we have config data, add to available list
+        if config_data:
+            available.append({
+                "id": repo["name"].replace("_", "-").replace(" ", "-").lower(),
+                "name": repo["name"].replace("-", " ").replace("_", " ").title(),
+                "repo": repo["name"],
+                "command": config_data.get("command", "python"),
+                "args": config_data.get("args", []),
+                "cwd": config_data.get("cwd", str(repo_path)),
+                "env": config_data.get("env", {}),
+                "type": config_data.get("type", "stdio"),
+                "url": config_data.get("url", ""),
+                "source": source,
+                "tools": repo.get("tools", 0),
+                "fastmcp_version": repo.get("fastmcp_version"),
+                "install_methods": install_methods,
+                "has_mcpb": install_methods["mcpb"],
+                "has_npm": install_methods["npm"] or install_methods["npx"]
+            })
+    
+    return available
 
 @app.get("/api/servers/{client}/{server_id}")
 async def get_server_details(client: str, server_id: str):
@@ -1349,8 +2235,8 @@ async def execute_tool_endpoint(request: Request):
         raise HTTPException(503, "FastMCP not available")
     
     repo_path = REPOS_DIR / repo_name
-    if not repo_path.exists():
-        raise HTTPException(404, f"Repository {repo_name} not found")
+    if not repo_path.exists() or not repo_path.is_dir():
+        raise HTTPException(404, f"Repository {repo_name} not found at {repo_path}")
     
     # Find config for this repo
     cursor_config = find_cursor_config_for_repo(repo_name, repo_path)
@@ -1452,8 +2338,6 @@ async def ai_read_file(path: str):
 @app.get("/api/ai/search-web")
 async def ai_search_web(query: str, num_results: int = 5):
     """Search the web using DuckDuckGo (no API key needed)."""
-    import httpx
-    
     try:
         # Use DuckDuckGo HTML search (no API key required)
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -1516,10 +2400,9 @@ async def ai_list_repos():
 @app.get("/api/ollama/models")
 async def get_ollama_models():
     """Get list of available Ollama models."""
-    import httpx
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get("http://localhost:11434/api/tags")
+            resp = await client.get(f"{OLLAMA_URL}/api/tags")
             if resp.status_code == 200:
                 data = resp.json()
                 models = []
@@ -1538,11 +2421,193 @@ async def get_ollama_models():
     except Exception as e:
         return {"models": [], "error": str(e)}
 
+@app.get("/api/ai/preprompts")
+async def get_preprompts():
+    """Get available AI preprompt personalities from database."""
+    try:
+        import preprompt_db
+        preprompts = preprompt_db.list_preprompts()
+        return {
+            "preprompts": preprompts,
+            "count": len(preprompts),
+            "default": "MCP Developer"
+        }
+    except Exception as e:
+        # Fallback to builtin preprompts
+        log(f"❌ Error loading preprompts: {e}")
+        return {
+            "preprompts": [
+                {"id": key, "name": value["name"], "emoji": value["name"].split()[0]}
+                for key, value in PREPROMPTS.items()
+            ],
+            "count": len(PREPROMPTS),
+            "default": "dev",
+            "error": str(e)
+        }
+
+@app.post("/api/preprompts/add")
+async def add_preprompt_endpoint(request: Request):
+    """Add a new preprompt."""
+    import preprompt_db
+    data = await request.json()
+    
+    result = preprompt_db.add_preprompt(
+        name=data.get("name"),
+        prompt_text=data.get("prompt_text"),
+        emoji=data.get("emoji", "🤖"),
+        source=data.get("source", "user"),
+        author=data.get("author", "user"),
+        tags=data.get("tags")
+    )
+    return result
+
+@app.post("/api/preprompts/import")
+async def import_preprompt_markdown(request: Request):
+    """Import preprompt from markdown file."""
+    import preprompt_db
+    data = await request.json()
+    
+    content = data.get("content", "")
+    filename = data.get("filename", "imported.md")
+    
+    result = preprompt_db.import_from_markdown(content, filename)
+    return result
+
+@app.post("/api/preprompts/ai-refine")
+async def ai_refine_preprompt(request: Request):
+    """AI-generate an elaborate preprompt from simple text."""
+    import preprompt_db
+    
+    data = await request.json()
+    simple_text = data.get("text", "")
+    
+    if not simple_text:
+        return {"success": False, "error": "No text provided"}
+    
+    # Generate preprompt using Ollama
+    refine_prompt = f"""You are a creative AI assistant helping design preprompts for an AI assistant personality.
+
+Given this simple concept: "{simple_text}"
+
+Create an elaborate, engaging preprompt that:
+1. Gives the AI a distinctive personality related to "{simple_text}"
+2. Maintains technical accuracy while being entertaining
+3. Includes metaphors and creative language
+4. Still helps with MCP server development effectively
+5. Is 150-250 words long
+
+Format the output as a preprompt that starts with "You are..." and describes the personality, capabilities, and how they should help with code.
+
+Be creative and fun while staying professional!"""
+    
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{OLLAMA_URL}/api/generate",
+                json={
+                    "model": data.get("model_id", "qwen2.5:14b"),
+                    "prompt": refine_prompt,
+                    "stream": False
+                }
+            )
+            
+            if resp.status_code != 200:
+                return {"success": False, "error": f"Ollama returned {resp.status_code}"}
+            
+            result = resp.json()
+            generated_prompt = result.get("response", "")
+            
+            # Extract emoji from simple_text or generate one
+            emoji_map = {
+                "coin": "🪙", "butterfly": "🦋", "pirate": "🏴‍☠️",
+                "zen": "🧘", "aussie": "🦘", "artist": "🎨",
+                "chef": "👨‍🍳", "detective": "🕵️", "wizard": "🧙",
+                "robot": "🤖", "cat": "🐱", "dog": "🐕"
+            }
+            
+            emoji = "🤖"
+            for key, val in emoji_map.items():
+                if key in simple_text.lower():
+                    emoji = val
+                    break
+            
+            # Save to database
+            name = simple_text.title()
+            save_result = preprompt_db.add_preprompt(
+                name=name,
+                prompt_text=generated_prompt,
+                emoji=emoji,
+                source="ai_generated",
+                author="ai"
+            )
+            
+            return {
+                "success": save_result["success"],
+                "preprompt": generated_prompt,
+                "name": name,
+                "emoji": emoji,
+                "id": save_result.get("id")
+            }
+    
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/preprompts/{identifier}")
+async def get_preprompt_endpoint(identifier: str):
+    """Get a specific preprompt by ID or name."""
+    import preprompt_db
+    preprompt = preprompt_db.get_preprompt(identifier)
+    
+    if preprompt:
+        return preprompt
+    else:
+        return {"error": "Preprompt not found"}
+
+@app.put("/api/preprompts/{identifier}")
+async def update_preprompt_endpoint(identifier: str, request: Request):
+    """Update a preprompt."""
+    import preprompt_db
+    data = await request.json()
+    
+    result = preprompt_db.update_preprompt(
+        identifier=identifier,
+        name=data.get("name"),
+        emoji=data.get("emoji"),
+        prompt_text=data.get("prompt_text"),
+        tags=data.get("tags")
+    )
+    return result
+
+@app.delete("/api/preprompts/{identifier}")
+async def delete_preprompt_endpoint(identifier: str):
+    """Delete a preprompt."""
+    import preprompt_db
+    result = preprompt_db.delete_preprompt(identifier)
+    return result
+
+@app.post("/api/preprompts/seed")
+async def seed_preprompts():
+    """Seed database with built-in preprompts."""
+    import preprompt_db
+    try:
+        preprompt_db.seed_builtin_preprompts()
+        return {"success": True, "message": "Built-in preprompts seeded"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/preprompts/stats/usage")
+async def get_usage_stats():
+    """Get usage statistics for all preprompts."""
+    import preprompt_db
+    try:
+        stats = preprompt_db.get_usage_stats()
+        return {"success": True, "stats": stats, "count": len(stats)}
+    except Exception as e:
+        return {"success": False, "error": str(e), "stats": []}
+
 @app.post("/api/ai/chat")
 async def ai_chat(request: Request):
     """Chat with Ollama for AI-powered analysis with tool capabilities."""
-    import httpx
-    
     data = await request.json()
     model_id = data.get("model_id", "llama3.2:3b")
     message = data.get("message", "")
@@ -1580,19 +2645,26 @@ async def ai_chat(request: Request):
         repos_str = "\n".join([f"- {r['name']} ({r.get('type', 'unknown')})" for r in repos_result['repos'][:30]])
         context_parts.append(f"AVAILABLE REPOS in {repos_result['base_path']}:\n{repos_str}")
     
-    # Build full prompt
-    system_prompt = """You are an AI assistant for MCP Studio, helping analyze and manage MCP (Model Context Protocol) servers.
-You have access to:
-- The user's MCP repositories at D:/Dev/repos
-- Web search capabilities
-- File reading capabilities
-
-When helping with code:
-- Be specific and reference actual files/functions
-- Suggest concrete improvements
-- Follow FastMCP best practices
-
-When the user asks about their repos, you can see the provided context."""
+    # Get system prompt from database (use selected preprompt or default)
+    preprompt_name = request.get("preprompt", "MCP Developer")
+    
+    try:
+        import preprompt_db
+        preprompt_data = preprompt_db.get_preprompt(preprompt_name)
+        if preprompt_data:
+            system_prompt = preprompt_data["prompt_text"]
+            log(f"✓ Loaded preprompt: {preprompt_name}")
+            # Track usage
+            preprompt_db.track_usage(preprompt_name)
+        else:
+            log(f"⚠️ Preprompt not found: {preprompt_name}, using default")
+            # Fallback to builtin
+            system_prompt = PREPROMPTS.get("dev", {}).get("prompt", "You are a helpful AI assistant.")
+    except Exception as e:
+        log(f"❌ Error loading preprompt: {e}")
+        import traceback
+        log(f"Traceback: {traceback.format_exc()}")
+        system_prompt = PREPROMPTS.get("dev", {}).get("prompt", "You are a helpful AI assistant.")
 
     full_message = message
     if context_parts:
@@ -1601,7 +2673,7 @@ When the user asks about their repos, you can see the provided context."""
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(
-                "http://localhost:11434/api/chat",
+                f"{OLLAMA_URL}/api/chat",
                 json={
                     "model": model_id,
                     "messages": [
@@ -1622,7 +2694,12 @@ When the user asks about their repos, you can see the provided context."""
                 response = str(result)
             
             log(f"✅ AI response received ({len(response)} chars)")
-            return {"response": response, "context_used": list(context_parts) if context_parts else None}
+            return {
+                "response": response, 
+                "context_used": list(context_parts) if context_parts else None,
+                "preprompt_used": preprompt_name,
+                "preprompt_found": preprompt_data is not None if 'preprompt_data' in locals() else False
+            }
     
     except httpx.TimeoutException:
         log("❌ AI chat timeout")
@@ -1645,6 +2722,9 @@ async def dashboard():
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🦁 MCP Studio - Mission Control</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Toastify for notifications -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <script>
         tailwind.config = {{
             darkMode: 'class',
@@ -1671,6 +2751,17 @@ async def dashboard():
         .pulse {{ animation: pulse 2s infinite; }}
         @keyframes pulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0.5; }} }}
         .gradient-text {{ background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
+        
+        /* Tool docstring formatting */
+        .tool-description {{ line-height: 1.6; }}
+        .tool-description code {{ background: rgba(0, 0, 0, 0.3); padding: 0.125rem 0.25rem; border-radius: 0.25rem; font-size: 0.875rem; }}
+        .tool-description strong {{ color: #ffffff; font-weight: 600; }}
+        .tool-description ul {{ list-style-type: disc; margin-left: 1.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }}
+        .tool-description li {{ margin-top: 0.25rem; }}
+        .tool-description pre {{ background: rgba(0, 0, 0, 0.4); padding: 0.75rem; border-radius: 0.375rem; border: 1px solid rgba(255, 255, 255, 0.1); overflow-x: auto; margin-top: 0.5rem; margin-bottom: 0.5rem; }}
+        .tool-description pre code {{ background: transparent; padding: 0; }}
+        .tool-description-compact {{ max-height: 200px; overflow-y: auto; }}
+        .tool-description-compact .space-y-4 > * {{ margin-top: 0.5rem; margin-bottom: 0.5rem; }}
     </style>
 </head>
 <body class="bg-midnight-900 text-gray-100 min-h-screen">
@@ -1830,6 +2921,9 @@ async def dashboard():
                             <option value="improvable">⚠️ Improvable</option>
                             <option value="runt">🐛 Runts</option>
                         </select>
+                        <button onclick="showScannerCriteria()" class="px-4 py-1 bg-purple-600/50 hover:bg-purple-600/70 rounded text-sm border border-purple-500/30" title="View classification criteria">
+                            📋 Criteria
+                        </button>
                         <button onclick="loadRepos()" class="px-4 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">
                             🔍 Scan
                         </button>
@@ -1917,12 +3011,20 @@ async def dashboard():
                 <!-- Left: Chat Interface -->
                 <div class="lg:col-span-2 glass rounded-xl overflow-hidden flex flex-col" style="height: 90vh; min-height: 800px;">
                     <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
-                        <div>
+                        <div class="flex-1">
                             <h2 class="font-semibold flex items-center gap-2">
                                 🤖 AI Assistant
                                 <span id="ai-status" class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400">Not Connected</span>
                             </h2>
-                            <p class="text-sm text-gray-400 mt-1">Powered by Ollama</p>
+                            <div class="flex items-center gap-3 mt-2">
+                                <p class="text-sm text-gray-400">Powered by Ollama</p>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500">Personality:</label>
+                                    <select id="ai-preprompt" class="bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs" onchange="updatePreprompt()">
+                                        <option value="">⏳ Loading...</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                         <div class="flex gap-2">
                             <button onclick="clearAIChat()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-medium" title="Clear chat">
@@ -1978,6 +3080,43 @@ async def dashboard():
                                 <label class="text-xs text-gray-400">🌐 Web search</label>
                                 <input id="ai-web-search" type="text" placeholder="FastMCP best practices" 
                                        class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Preprompt Manager -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10">
+                            <h3 class="font-semibold text-sm">🎭 Preprompt Manager</h3>
+                        </div>
+                        <div class="p-4 space-y-3">
+                            <!-- AI Refine -->
+                            <div>
+                                <label class="text-xs text-gray-400 mb-1 block">🤖 AI Refine (Generate)</label>
+                                <div class="flex gap-2">
+                                    <input id="ai-refine-text" type="text" placeholder="coin collector, chef, detective..." 
+                                           class="flex-1 bg-midnight-800 border border-white/10 rounded px-2 py-1.5 text-xs">
+                                    <button onclick="aiRefinePreprompt()" 
+                                            class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded text-xs font-medium whitespace-nowrap">
+                                        Generate
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Import MD File -->
+                            <div>
+                                <label class="text-xs text-gray-400 mb-1 block">📁 Import .md File</label>
+                                <input id="preprompt-file-upload" type="file" accept=".md,.txt" 
+                                       onchange="importPrepromptFile(this)"
+                                       class="w-full text-xs bg-midnight-800 border border-white/10 rounded px-2 py-1.5 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-purple-600 file:text-white hover:file:bg-purple-500">
+                            </div>
+                            
+                            <!-- Library Browser -->
+                            <div>
+                                <button onclick="togglePrepromptLibrary()" 
+                                        class="w-full text-left p-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium">
+                                    📚 Browse Library
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -2060,7 +3199,7 @@ async def dashboard():
     </main>
 
     <!-- Detail Modal -->
-    <div id="modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+    <div id="modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4" onclick="if(event.target.id==='modal'){{closeModal();}}">
         <div class="glass rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
             <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
                 <h2 id="modal-title" class="font-semibold text-lg">Details</h2>
@@ -2072,6 +3211,386 @@ async def dashboard():
     </div>
 
     <script>
+        // ═══════════════════════════════════════════════════════════════════
+        // DOCSTRING FORMATTER - Makes tool docstrings human-readable
+        // ═══════════════════════════════════════════════════════════════════
+        
+        function formatDocstring(docstring) {{
+            if (!docstring || docstring.trim() === '') {{
+                return '<div class="text-gray-500 italic">No description available</div>';
+            }}
+            
+            // Clean up the docstring
+            let text = docstring.trim();
+            
+            // Split into sections
+            const sections = {{
+                brief: '',
+                detailed: '',
+                args: '',
+                returns: '',
+                examples: '',
+                usage: '',
+                raises: '',
+                notes: '',
+                seeAlso: ''
+            }};
+            
+            // Extract brief description (first line or paragraph)
+            const lines = text.split('\\n');
+            let currentSection = 'brief';
+            let currentContent = [];
+            let inCodeBlock = false;
+            
+            for (let i = 0; i < lines.length; i++) {{
+                const originalLine = lines[i];
+                const trimmed = originalLine.trim();
+                
+                // Skip empty lines at start
+                if (i === 0 && trimmed === '') continue;
+                
+                // Detect code blocks (preserve original line including leading spaces)
+                if (trimmed.startsWith('```')) {{
+                    inCodeBlock = !inCodeBlock;
+                    currentContent.push(originalLine);
+                    continue;
+                }}
+                
+                // If in code block, preserve line as-is
+                if (inCodeBlock) {{
+                    currentContent.push(originalLine);
+                    continue;
+                }}
+                
+                const line = trimmed;
+                
+                // Detect section headers (case-insensitive)
+                const sectionPatterns = {{
+                    'args': /^(Args|Parameters|Arguments):/i,
+                    'returns': /^(Returns?|Return):/i,
+                    'examples': /^(Examples?|Example):/i,
+                    'usage': /^(Usage|When to use):/i,
+                    'raises': /^(Raises?|Exceptions?):/i,
+                    'notes': /^(Notes?|Note):/i,
+                    'seeAlso': /^(See Also|See|Related):/i
+                }};
+                
+                let sectionFound = false;
+                for (const [section, pattern] of Object.entries(sectionPatterns)) {{
+                    if (pattern.test(line)) {{
+                        // Save previous section
+                        if (currentSection !== 'brief' && currentContent.length > 0) {{
+                            sections[currentSection] = currentContent.join('\\n').trim();
+                        }} else if (currentSection === 'brief' && currentContent.length > 0) {{
+                            sections.brief = currentContent.join('\\n').trim();
+                            sections.detailed = '';
+                        }}
+                        // Start new section
+                        currentSection = section;
+                        currentContent = [];
+                        sectionFound = true;
+                        break;
+                    }}
+                }}
+                
+                if (!sectionFound) {{
+                    // First non-empty line after brief becomes detailed description
+                    if (currentSection === 'brief' && line && sections.brief && !sections.detailed) {{
+                        sections.detailed = line;
+                        currentContent = [line];
+                    }} else {{
+                        currentContent.push(line);
+                    }}
+                }}
+            }}
+            
+            // Save last section
+            if (currentContent.length > 0) {{
+                if (currentSection === 'brief') {{
+                    sections.brief = currentContent.join('\\n').trim();
+                }} else {{
+                    sections[currentSection] = currentContent.join('\\n').trim();
+                }}
+            }}
+            
+            // If no sections found, treat entire docstring as brief
+            if (!sections.brief && !sections.args && !sections.returns) {{
+                sections.brief = text;
+            }}
+            
+            // Build HTML
+            let html = '<div class="space-y-4">';
+            
+            // Brief description
+            if (sections.brief) {{
+                html += `<div class="text-base text-gray-200 leading-relaxed">${{formatText(sections.brief)}}</div>`;
+            }}
+            
+            // Detailed description
+            if (sections.detailed) {{
+                html += `<div class="text-sm text-gray-300 mt-2 leading-relaxed">${{formatText(sections.detailed)}}</div>`;
+            }}
+            
+            // Usage section
+            if (sections.usage) {{
+                html += `<div class="mt-4 pt-3 border-t border-white/10">
+                    <div class="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-2">Usage</div>
+                    <div class="text-sm text-gray-300 leading-relaxed">${{formatText(sections.usage)}}</div>
+                </div>`;
+            }}
+            
+            // Args section
+            if (sections.args) {{
+                html += `<div class="mt-4 pt-3 border-t border-white/10">
+                    <div class="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-2">Parameters</div>
+                    <div class="text-sm text-gray-300 space-y-2">${{formatArgs(sections.args)}}</div>
+                </div>`;
+            }}
+            
+            // Returns section
+            if (sections.returns) {{
+                html += `<div class="mt-4 pt-3 border-t border-white/10">
+                    <div class="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-2">Returns</div>
+                    <div class="text-sm text-gray-300 leading-relaxed">${{formatText(sections.returns)}}</div>
+                </div>`;
+            }}
+            
+            // Examples section
+            if (sections.examples) {{
+                html += `<div class="mt-4 pt-3 border-t border-white/10">
+                    <div class="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-2">Examples</div>
+                    <div class="text-sm text-gray-300">${{formatExamples(sections.examples)}}</div>
+                </div>`;
+            }}
+            
+            // Raises section
+            if (sections.raises) {{
+                html += `<div class="mt-4 pt-3 border-t border-white/10">
+                    <div class="text-xs font-semibold text-yellow-400 uppercase tracking-wide mb-2">Raises</div>
+                    <div class="text-sm text-gray-300">${{formatText(sections.raises)}}</div>
+                </div>`;
+            }}
+            
+            // Notes section
+            if (sections.notes) {{
+                html += `<div class="mt-4 pt-3 border-t border-white/10">
+                    <div class="text-xs font-semibold text-blue-400 uppercase tracking-wide mb-2">Notes</div>
+                    <div class="text-sm text-gray-300">${{formatText(sections.notes)}}</div>
+                </div>`;
+            }}
+            
+            // See Also section
+            if (sections.seeAlso) {{
+                html += `<div class="mt-4 pt-3 border-t border-white/10">
+                    <div class="text-xs font-semibold text-purple-400 uppercase tracking-wide mb-2">See Also</div>
+                    <div class="text-sm text-gray-300">${{formatText(sections.seeAlso)}}</div>
+                </div>`;
+            }}
+            
+            html += '</div>';
+            return html;
+        }}
+        
+        function escapeHtml(text) {{
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }}
+        
+        function formatText(text) {{
+            if (!text) return '';
+            
+            // Handle code blocks first (before escaping HTML)
+            const codeBlockRegex = /```(\\w+)?\\n([\\s\\S]*?)```/g;
+            const codeBlocks = [];
+            let codeBlockIndex = 0;
+            let processed = text.replace(codeBlockRegex, (match, lang, code) => {{
+                const placeholder = `__CODE_BLOCK_${{codeBlockIndex}}__`;
+                codeBlocks.push({{ lang: lang || '', code: code.trim() }});
+                codeBlockIndex++;
+                return placeholder;
+            }});
+            
+            // Convert markdown-style formatting
+            let formatted = escapeHtml(processed);
+            
+            // Restore code blocks with proper formatting
+            codeBlocks.forEach((block, idx) => {{
+                const placeholder = `__CODE_BLOCK_${{idx}}__`;
+                formatted = formatted.replace(placeholder, 
+                    `<pre class="bg-black/40 p-3 rounded text-xs text-gray-300 font-mono overflow-x-auto border border-white/10 my-2"><code>${{escapeHtml(block.code)}}</code></pre>`
+                );
+            }});
+            
+            // Convert **bold** to <strong>
+            formatted = formatted.replace(/\\*\\*(.+?)\\*\\*/g, '<strong class="text-white font-semibold">$1</strong>');
+            
+            // Convert *italic* to <em>
+            formatted = formatted.replace(/(?<!\\*)\\*(?!\\*)([^*]+?)\\*(?!\\*)/g, '<em class="text-gray-300">$1</em>');
+            
+            // Convert `code` to <code> (inline code, not in code blocks)
+            formatted = formatted.replace(/`([^`\\n]+)`/g, '<code class="bg-black/30 px-1 py-0.5 rounded text-indigo-300 font-mono text-xs">$1</code>');
+            
+            // Convert bullet points (properly handle lists)
+            const lines = formatted.split('<br>');
+            let inList = false;
+            let listItems = [];
+            let result = [];
+            
+            for (let i = 0; i < lines.length; i++) {{
+                const line = lines[i];
+                const bulletMatch = line.match(/^([-*]|\\d+\\.)\\s+(.+)$/);
+                
+                if (bulletMatch) {{
+                    if (!inList) {{
+                        if (listItems.length > 0) {{
+                            result.push(listItems.join(''));
+                            listItems = [];
+                        }}
+                        inList = true;
+                    }}
+                    listItems.push(`<li class="ml-4 mb-1">${{bulletMatch[2]}}</li>`);
+                }} else {{
+                    if (inList) {{
+                        result.push(`<ul class="list-disc space-y-1 my-2 ml-4">${{listItems.join('')}}</ul>`);
+                        listItems = [];
+                        inList = false;
+                    }}
+                    if (line.trim()) {{
+                        result.push(line);
+                    }}
+                }}
+            }}
+            
+            if (inList && listItems.length > 0) {{
+                result.push(`<ul class="list-disc space-y-1 my-2 ml-4">${{listItems.join('')}}</ul>`);
+            }}
+            
+            formatted = result.length > 0 ? result.join('<br>') : formatted;
+            
+            // Convert line breaks (but preserve existing HTML)
+            if (!formatted.includes('<pre>') && !formatted.includes('<ul>')) {{
+                formatted = formatted.replace(/\\n/g, '<br>');
+            }}
+            
+            return formatted;
+        }}
+        
+        function formatArgs(argsText) {{
+            if (!argsText) return '';
+            
+            const lines = argsText.split('\\n');
+            let html = '';
+            let currentParam = null;
+            let paramDetails = [];
+            
+            for (const line of lines) {{
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                
+                // Check if this is a parameter name (supports various formats):
+                // - name: description
+                // - name (type): description
+                // - name (type, optional): description
+                const paramMatch = trimmed.match(/^(\\w+)(?:\\s*\\(([^)]+)\\))?:\\s*(.+)$/);
+                if (paramMatch) {{
+                    // Save previous param
+                    if (currentParam) {{
+                        const typeInfo = currentParam.type ? `<span class="text-purple-400 text-xs">(${{currentParam.type}})</span>` : '';
+                        html += `<div class="mb-3 pb-2 border-b border-white/5">
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-indigo-300 font-semibold">${{currentParam.name}}</span>
+                                ${{typeInfo}}
+                            </div>
+                            <div class="text-gray-400 text-xs ml-4 mt-1">${{formatText(currentParam.desc)}}</div>
+                            ${{paramDetails.length > 0 ? `<ul class="text-xs text-gray-500 ml-6 mt-1 space-y-1 list-disc">${{paramDetails.map(d => `<li>${{formatText(d)}}</li>`).join('')}}</ul>` : ''}}
+                        </div>`;
+                    }}
+                    // Start new param
+                    currentParam = {{ 
+                        name: paramMatch[1], 
+                        type: paramMatch[2] || null,
+                        desc: paramMatch[3] 
+                    }};
+                    paramDetails = [];
+                }} else if (trimmed.match(/^[-*]\\s+/) && currentParam) {{
+                    // Detail line for current param (bullet point)
+                    paramDetails.push(trimmed.replace(/^[-*]\\s+/, ''));
+                }} else if (trimmed.match(/^\\s{4,}/) && currentParam) {{
+                    // Indented continuation line
+                    currentParam.desc += ' ' + trimmed.trim();
+                }} else if (currentParam && !trimmed.match(/^\\w+:/)) {{
+                    // Continuation of param description (not a new param)
+                    currentParam.desc += ' ' + trimmed;
+                }}
+            }}
+            
+            // Save last param
+            if (currentParam) {{
+                const typeInfo = currentParam.type ? `<span class="text-purple-400 text-xs">(${{currentParam.type}})</span>` : '';
+                html += `<div class="mb-3 pb-2 border-b border-white/5">
+                    <div class="flex items-center gap-2">
+                        <span class="font-mono text-indigo-300 font-semibold">${{currentParam.name}}</span>
+                        ${{typeInfo}}
+                    </div>
+                    <div class="text-gray-400 text-xs ml-4 mt-1">${{formatText(currentParam.desc)}}</div>
+                    ${{paramDetails.length > 0 ? `<ul class="text-xs text-gray-500 ml-6 mt-1 space-y-1 list-disc">${{paramDetails.map(d => `<li>${{formatText(d)}}</li>`).join('')}}</ul>` : ''}}
+                </div>`;
+            }}
+            
+            return html || formatText(argsText);
+        }}
+        
+        function formatExamples(examplesText) {{
+            if (!examplesText) return '';
+            
+            // Check if it's already a code block
+            const codeBlockMatch = examplesText.match(/```(\\w+)?\\n([\\s\\S]*?)```/);
+            if (codeBlockMatch) {{
+                return `<pre class="bg-black/40 p-3 rounded text-xs text-gray-300 font-mono overflow-x-auto border border-white/10 my-2"><code>${{escapeHtml(codeBlockMatch[2].trim())}}</code></pre>`;
+            }}
+            
+            // Split by example headers (e.g., "Example 1:", "Basic usage:", etc.)
+            const parts = examplesText.split(/(?:^|\\n)([A-Z][^:\\n]+:)/gm);
+            let html = '<div class="space-y-4">';
+            let hasStructured = false;
+            
+            for (let i = 0; i < parts.length; i += 2) {{
+                if (i + 1 < parts.length && parts[i + 2]) {{
+                    const title = parts[i + 1].replace(':', '').trim();
+                    const code = parts[i + 2].trim();
+                    
+                    if (code) {{
+                        hasStructured = true;
+                        html += `<div class="mb-4">
+                            <div class="text-xs font-semibold text-green-400 mb-2">${{escapeHtml(title)}}</div>
+                            <pre class="bg-black/40 p-3 rounded text-xs text-gray-300 font-mono overflow-x-auto border border-white/10"><code>${{escapeHtml(code)}}</code></pre>
+                        </div>`;
+                    }}
+                }}
+            }}
+            
+            // If no structured examples, check for plain code or format as text
+            if (!hasStructured) {{
+                const trimmed = examplesText.trim();
+                // If it looks like code (has indentation, keywords, etc.), format as code block
+                if (trimmed.match(/^(def |class |import |from |\\s{4,})/m)) {{
+                    html = `<pre class="bg-black/40 p-3 rounded text-xs text-gray-300 font-mono overflow-x-auto border border-white/10"><code>${{escapeHtml(trimmed)}}</code></pre>`;
+                }} else {{
+                    // Format as regular text with markdown support
+                    html = formatText(trimmed);
+                }}
+            }} else {{
+                html += '</div>';
+            }}
+            
+            return html;
+        }}
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // END DOCSTRING FORMATTER
+        // ═══════════════════════════════════════════════════════════════════
+        
         // State
         let clientsData = {{}};
         let reposData = [];
@@ -2115,15 +3634,17 @@ async def dashboard():
             for (const [client, data] of Object.entries(clientsData)) {{
                 const icon = client.includes('claude') ? '🟣' : client.includes('cursor') ? '🔵' : '🟢';
                 listHtml += `
-                    <div class="flex items-center justify-between p-3 bg-white/5 rounded-lg hover:bg-white/10 cursor-pointer" onclick="showClientDetail('${{client}}')">
-                        <div class="flex items-center gap-3">
+                    <div class="flex items-center justify-between p-3 bg-white/5 rounded-lg hover:bg-white/10">
+                        <div class="flex items-center gap-3 flex-1 cursor-pointer" onclick="switchTab('clients'); setTimeout(() => document.getElementById('clients-detail').scrollIntoView({{behavior: 'smooth', block: 'start'}}), 100);">
                             <span class="text-lg">${{icon}}</span>
                             <div>
                                 <div class="font-medium">${{client.replace('-', ' ').replace(/\\b\\w/g, l => l.toUpperCase())}}</div>
                                 <div class="text-xs text-gray-400">${{data.servers.length}} servers</div>
                             </div>
                         </div>
-                        <span class="text-gray-400">→</span>
+                        <button class="text-gray-400 hover:text-indigo-400 transition-colors px-2 py-1 rounded hover:bg-white/5" onclick="event.stopPropagation(); showClientInfo('${{client}}')" title="Show client information">
+                            →
+                        </button>
                     </div>
                 `;
             }}
@@ -2164,20 +3685,705 @@ async def dashboard():
             detail.innerHTML = detailHtml;
         }}
 
-        // Load repos
-        async function loadRepos() {{
-            document.getElementById('repos-health').innerHTML = '<div class="text-gray-400">Scanning repositories...</div>';
-            document.getElementById('repos-detail').innerHTML = '<div class="text-gray-400">Scanning repositories...</div>';
+        // Client information database
+        const clientInfo = {{
+            'claude-desktop': {{
+                name: 'Claude Desktop',
+                description: 'Official desktop application from Anthropic for interacting with Claude AI.',
+                website: 'https://claude.ai/download',
+                configLocation: 'Config file contains MCP server definitions used by Claude Desktop.',
+                icon: '🟣',
+                developer: 'Anthropic'
+            }},
+            'cursor': {{
+                name: 'Cursor IDE',
+                description: 'AI-first code editor built on VS Code, designed for pair programming with AI.',
+                website: 'https://cursor.sh',
+                configLocation: 'Uses Cline extension settings or .cursor/mcp.json for MCP server configuration.',
+                icon: '🔵',
+                developer: 'Cursor'
+            }},
+            'windsurf-ide': {{
+                name: 'Windsurf IDE',
+                description: 'AI-powered code editor from Codeium, built for modern development workflows.',
+                website: 'https://codeium.com/windsurf',
+                configLocation: 'MCP servers configured in Windsurf settings or mcp_config.json.',
+                icon: '🟢',
+                developer: 'Codeium'
+            }},
+            'zed-ide': {{
+                name: 'Zed Editor',
+                description: 'High-performance, multiplayer code editor written in Rust with AI capabilities.',
+                website: 'https://zed.dev',
+                configLocation: 'MCP servers configured in settings.json under mcpServers key.',
+                icon: '⚡',
+                developer: 'Zed Industries'
+            }},
+            'antigravity-ide': {{
+                name: 'Antigravity IDE',
+                description: 'AI-powered IDE from GitKraken with integrated MCP server support.',
+                website: 'https://www.gitkraken.com/antigravity',
+                configLocation: 'MCP servers managed through the IDE UI, stored in mcp_config.json.',
+                icon: '🚀',
+                developer: 'GitKraken'
+            }},
+            'cline': {{
+                name: 'Cline (VSCode Extension)',
+                description: 'VSCode extension for Claude AI, formerly known as Claude Dev.',
+                website: 'https://marketplace.visualstudio.com/items?itemName=saoudrizwan.claude-dev',
+                configLocation: 'MCP servers configured in VSCode globalStorage settings.',
+                icon: '💜',
+                developer: 'Saoud Rizwan'
+            }}
+        }};
+
+        function showClientInfo(clientName) {{
+            const info = clientInfo[clientName] || {{
+                name: clientName.replace('-', ' ').replace(/\\b\\w/g, l => l.toUpperCase()),
+                description: 'MCP client application.',
+                website: '',
+                configLocation: 'Configuration file location varies.',
+                icon: '🔌',
+                developer: 'Unknown'
+            }};
             
+            const clientData = clientsData[clientName] || {{ servers: [], path: 'Not found' }};
+            
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+            
+            modalTitle.innerHTML = `${{info.icon}} ${{info.name}}`;
+            modalContent.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-400 mb-2">Description</h3>
+                        <p class="text-sm text-gray-300">${{info.description}}</p>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-400 mb-2">Developer</h3>
+                        <p class="text-sm text-gray-300">${{info.developer}}</p>
+                    </div>
+                    
+                    ${{info.website ? `
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-400 mb-2">Website</h3>
+                        <a href="${{info.website}}" target="_blank" class="text-sm text-indigo-400 hover:text-indigo-300 underline">${{info.website}}</a>
+                    </div>
+                    ` : ''}}
+                    
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-400 mb-2">Configuration</h3>
+                        <p class="text-xs text-gray-400 mono bg-black/30 p-2 rounded">${{clientData.path}}</p>
+                        <p class="text-xs text-gray-500 mt-1">${{info.configLocation}}</p>
+                    </div>
+                    
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-sm font-semibold text-gray-400">MCP Servers (${{clientData.servers.length}})</h3>
+                            <button onclick="showAddServerForm('${{clientName}}')" class="text-xs px-3 py-1 bg-indigo-600 hover:bg-indigo-500 rounded">
+                                + Add Server
+                            </button>
+                        </div>
+                        ${{clientData.servers.length > 0 ? `
+                        <div class="mt-2 space-y-2 max-h-64 overflow-y-auto">
+                            ${{clientData.servers.map(s => `
+                                <div class="bg-black/30 p-3 rounded-lg border border-white/10">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <span class="text-sm font-medium text-indigo-400">${{s.name}}</span>
+                                                <span class="text-xs text-gray-500">(${{s.id}})</span>
+                                                ${{s.type && s.type !== 'stdio' ? `<span class="text-xs px-1.5 py-0.5 bg-purple-600/30 text-purple-300 rounded">${{s.type}}</span>` : ''}}
+                                            </div>
+                                            <div class="text-xs text-gray-400 mono space-y-1">
+                                                <div><span class="text-gray-500">Command:</span> ${{s.command || '(none)'}}</div>
+                                                ${{s.args && s.args.length > 0 ? `<div><span class="text-gray-500">Args:</span> ${{s.args.join(' ')}}</div>` : ''}}
+                                                ${{s.cwd ? `<div><span class="text-gray-500">CWD:</span> ${{s.cwd}}</div>` : ''}}
+                                                ${{s.url ? `<div><span class="text-gray-500">URL:</span> ${{s.url}}</div>` : ''}}
+                                                ${{s.env && Object.keys(s.env).length > 0 ? `<div><span class="text-gray-500">Env:</span> ${{Object.keys(s.env).length}} variable(s)</div>` : ''}}
+                                            </div>
+                                        </div>
+                                        <div class="flex gap-1 ml-2">
+                                            <button onclick="editServer('${{clientName}}', '${{s.id}}')" class="text-xs px-2 py-1 bg-blue-600/50 hover:bg-blue-600 rounded" title="Edit">
+                                                ✏️
+                                            </button>
+                                            <button onclick="deleteServer('${{clientName}}', '${{s.id}}')" class="text-xs px-2 py-1 bg-red-600/50 hover:bg-red-600 rounded" title="Delete">
+                                                🗑️
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}}
+                        </div>
+                        ` : '<p class="text-xs text-gray-500 italic">No servers configured. Click "Add Server" to add one.</p>'}}
+                    </div>
+                </div>
+            `;
+            modal.classList.remove('hidden');
+        }}
+
+        async function showAddServerForm(clientName) {{
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+            
+            // Load available servers from repos
+            let availableServers = [];
+            try {{
+                const res = await fetch('/api/available-servers');
+                availableServers = await res.json();
+            }} catch (e) {{
+                console.error('Error loading available servers:', e);
+            }}
+            
+            modalTitle.innerHTML = `➕ Add MCP Server to ${{clientName}}`;
+            modalContent.innerHTML = `
+                <form id="add-server-form" class="space-y-4">
+                    ${{availableServers.length > 0 ? `
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Select from Scanned Repos</label>
+                        <select id="server-template" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm" onchange="fillServerFromTemplate()">
+                            <option value="">-- Choose a server from repos --</option>
+                            ${{availableServers.map(s => {{
+                                let methodIcon = '🐍';
+                                let methodLabel = 'Python';
+                                if (s.has_mcpb) {{
+                                    methodIcon = '📦';
+                                    methodLabel = 'MCPB';
+                                }} else if (s.has_npm) {{
+                                    methodIcon = '📦';
+                                    methodLabel = 'npm/npx';
+                                }}
+                                const sourceIcon = s.source && s.source.includes('MCPB') ? '📦' : s.source && s.source.includes('npm') ? '📦' : s.source === 'README.md' ? '📖' : s.source === 'pyproject.toml' ? '📦' : '🔍';
+                                const sourceLabel = s.source || 'inferred';
+                                return `
+                                <option value="${{s.id}}" 
+                                    data-command="${{s.command}}" 
+                                    data-args="${{JSON.stringify(s.args)}}" 
+                                    data-cwd="${{s.cwd || ''}}" 
+                                    data-env="${{JSON.stringify(s.env || {})}}" 
+                                    data-name="${{s.name}}" 
+                                    data-type="${{s.type || 'stdio'}}" 
+                                    data-url="${{s.url || ''}}"
+                                    data-has-mcpb="${{s.has_mcpb || false}}"
+                                    data-has-npm="${{s.has_npm || false}}"
+                                    data-repo="${{s.repo}}">
+                                    ${{methodIcon}} ${{s.name}} (${{s.repo}}) - ${{s.tools}} tools [${{methodLabel}}]
+                                </option>
+                            `}}).join('')}}
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Select a server. MCPB 📦 is preferred, then npm/npx 📦, then Python 🐍. README configs may be outdated.</p>
+                        <div id="installation-hints" class="mt-2 text-xs text-gray-400 hidden"></div>
+                    </div>
+                    <div class="border-t border-white/10 pt-4">
+                        <p class="text-sm text-gray-400 mb-3">Or enter manually:</p>
+                    </div>
+                    ` : `
+                    <div class="bg-yellow-600/20 border border-yellow-600/50 rounded-lg p-3 mb-4">
+                        <p class="text-sm text-yellow-300 mb-2">⚠️ No servers found from repos</p>
+                        <p class="text-xs text-yellow-400/80">Scan your repositories first to auto-fill server configurations. Go to the <strong>Repos</strong> tab and click "Scan" to discover available MCP servers.</p>
+                    </div>
+                    `}}
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Server ID</label>
+                        <input type="text" id="server-id" required class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm" placeholder="my-server-name">
+                        <p class="text-xs text-gray-500 mt-1">Unique identifier (lowercase, hyphens)</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Name</label>
+                        <input type="text" id="server-name" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm" placeholder="My Server Name">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Command</label>
+                        <input type="text" id="server-command" required class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono" placeholder="python">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Arguments (one per line)</label>
+                        <textarea id="server-args" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono" rows="3" placeholder="-m&#10;my_module"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Working Directory (optional)</label>
+                        <input type="text" id="server-cwd" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono" placeholder="/path/to/directory">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Type</label>
+                        <select id="server-type" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm">
+                            <option value="stdio">stdio (default)</option>
+                            <option value="http">http</option>
+                        </select>
+                    </div>
+                    <div id="server-url-container" class="hidden">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">URL (for http type)</label>
+                        <input type="text" id="server-url" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono" placeholder="http://localhost:8000">
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">
+                            Add Server
+                        </button>
+                        <button type="button" onclick="closeModal(); setTimeout(() => showClientInfo('${{clientName}}'), 100)" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            `;
+            
+            // Function to fill form from template
+            window.fillServerFromTemplate = function() {{
+                const select = document.getElementById('server-template');
+                const option = select.options[select.selectedIndex];
+                if (!option || !option.value) {{
+                    document.getElementById('installation-hints').classList.add('hidden');
+                    return;
+                }}
+                
+                const command = option.dataset.command;
+                const args = JSON.parse(option.dataset.args || '[]');
+                const cwd = option.dataset.cwd;
+                const env = JSON.parse(option.dataset.env || '{{}}');
+                const name = option.dataset.name;
+                const type = option.dataset.type || 'stdio';
+                const url = option.dataset.url || '';
+                const hasMcpb = option.dataset.hasMcpb === 'true';
+                const hasNpm = option.dataset.hasNpm === 'true';
+                const repo = option.dataset.repo;
+                
+                // Show installation hints
+                const hintsDiv = document.getElementById('installation-hints');
+                hintsDiv.classList.remove('hidden');
+                
+                let hintsHtml = '<div class="bg-blue-600/20 border border-blue-600/50 rounded p-2 space-y-1">';
+                hintsHtml += '<p class="font-semibold text-blue-300">Installation Methods (in order):</p>';
+                
+                if (hasMcpb) {{
+                    hintsHtml += '<p class="text-blue-200">1. 📦 <strong>MCPB (Recommended)</strong>: Open Claude Desktop → Settings → Developer → Add MCP Server → Paste path to manifest.json</p>';
+                }}
+                if (hasNpm) {{
+                    hintsHtml += '<p class="text-blue-200">2. 📦 <strong>npm/npx</strong>: Use the auto-filled command below (if repo supports it)</p>';
+                }}
+                hintsHtml += '<p class="text-blue-200">3. 📋 <strong>JSON Snippet</strong>: Add the config below to your client config file</p>';
+                hintsHtml += '<p class="text-blue-200">4. 🐍 <strong>Python</strong>: Clone repo and use Python setup (last resort)</p>';
+                hintsHtml += '</div>';
+                
+                hintsDiv.innerHTML = hintsHtml;
+                
+                document.getElementById('server-id').value = option.value;
+                if (document.getElementById('server-name')) {{
+                    document.getElementById('server-name').value = name;
+                }}
+                document.getElementById('server-command').value = command;
+                document.getElementById('server-args').value = args.join('\\n');
+                if (cwd) {{
+                    document.getElementById('server-cwd').value = cwd;
+                }}
+                if (document.getElementById('server-type')) {{
+                    document.getElementById('server-type').value = type;
+                    // Show/hide URL field
+                    const urlContainer = document.getElementById('server-url-container');
+                    if (type === 'http') {{
+                        urlContainer.classList.remove('hidden');
+                        if (url) {{
+                            document.getElementById('server-url').value = url;
+                        }}
+                    }} else {{
+                        urlContainer.classList.add('hidden');
+                    }}
+                }}
+            }};
+            
+            // Show/hide URL field based on type
+            document.getElementById('server-type').addEventListener('change', (e) => {{
+                const urlContainer = document.getElementById('server-url-container');
+                if (e.target.value === 'http') {{
+                    urlContainer.classList.remove('hidden');
+                }} else {{
+                    urlContainer.classList.add('hidden');
+                }}
+            }});
+            
+            document.getElementById('add-server-form').addEventListener('submit', async (e) => {{
+                e.preventDefault();
+                const formData = {{
+                    id: document.getElementById('server-id').value.trim(),
+                    name: document.getElementById('server-name').value.trim(),
+                    command: document.getElementById('server-command').value.trim(),
+                    args: document.getElementById('server-args').value.split('\\n').filter(a => a.trim()),
+                    cwd: document.getElementById('server-cwd').value.trim() || undefined,
+                    type: document.getElementById('server-type').value,
+                    url: document.getElementById('server-url').value.trim() || undefined
+                }};
+                
+                try {{
+                    const res = await fetch(`/api/clients/${{clientName}}/servers`, {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify(formData)
+                    }});
+                    
+                    if (res.ok) {{
+                        await loadClients();
+                        closeModal();
+                        setTimeout(() => showClientInfo(clientName), 100);
+                    }} else {{
+                        const error = await res.json();
+                        alert(`Error: ${{error.detail || 'Failed to add server'}}`);
+                    }}
+                }} catch (e) {{
+                    alert(`Error: ${{e.message}}`);
+                }}
+            }});
+        }}
+
+        async function editServer(clientName, serverId) {{
+            const clientData = clientsData[clientName];
+            const server = clientData.servers.find(s => s.id === serverId);
+            if (!server) return;
+            
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+            
+            modalTitle.innerHTML = `✏️ Edit Server: ${{server.name}}`;
+            modalContent.innerHTML = `
+                <form id="edit-server-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Server ID</label>
+                        <input type="text" id="server-id" value="${{server.id}}" readonly class="w-full bg-black/50 border border-white/10 rounded px-3 py-2 text-sm" disabled>
+                        <p class="text-xs text-gray-500 mt-1">ID cannot be changed</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Command</label>
+                        <input type="text" id="server-command" value="${{server.command || ''}}" required class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Arguments (one per line)</label>
+                        <textarea id="server-args" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono" rows="3">${{(server.args || []).join('\\n')}}</textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Working Directory (optional)</label>
+                        <input type="text" id="server-cwd" value="${{server.cwd || ''}}" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Type</label>
+                        <select id="server-type" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm">
+                            <option value="stdio" ${{!server.type || server.type === 'stdio' ? 'selected' : ''}}>stdio</option>
+                            <option value="http" ${{server.type === 'http' ? 'selected' : ''}}>http</option>
+                        </select>
+                    </div>
+                    <div id="server-url-container" class="${{server.type === 'http' ? '' : 'hidden'}}">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">URL (for http type)</label>
+                        <input type="text" id="server-url" value="${{server.url || ''}}" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono">
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">
+                            Save Changes
+                        </button>
+                        <button type="button" onclick="closeModal(); setTimeout(() => showClientInfo('${{clientName}}'), 100)" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            `;
+            
+            document.getElementById('server-type').addEventListener('change', (e) => {{
+                const urlContainer = document.getElementById('server-url-container');
+                if (e.target.value === 'http') {{
+                    urlContainer.classList.remove('hidden');
+                }} else {{
+                    urlContainer.classList.add('hidden');
+                }}
+            }});
+            
+            document.getElementById('edit-server-form').addEventListener('submit', async (e) => {{
+                e.preventDefault();
+                const formData = {{
+                    command: document.getElementById('server-command').value.trim(),
+                    args: document.getElementById('server-args').value.split('\\n').filter(a => a.trim()),
+                    cwd: document.getElementById('server-cwd').value.trim() || undefined,
+                    type: document.getElementById('server-type').value,
+                    url: document.getElementById('server-url').value.trim() || undefined
+                }};
+                
+                try {{
+                    const res = await fetch(`/api/clients/${{clientName}}/servers/${{serverId}}`, {{
+                        method: 'PUT',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify(formData)
+                    }});
+                    
+                    if (res.ok) {{
+                        await loadClients();
+                        closeModal();
+                        setTimeout(() => showClientInfo(clientName), 100);
+                    }} else {{
+                        const error = await res.json();
+                        alert(`Error: ${{error.detail || 'Failed to update server'}}`);
+                    }}
+                }} catch (e) {{
+                    alert(`Error: ${{e.message}}`);
+                }}
+            }});
+        }}
+
+        async function deleteServer(clientName, serverId) {{
+            if (!confirm(`Delete server "${{serverId}}" from ${{clientName}}?`)) return;
+            
+            try {{
+                const res = await fetch(`/api/clients/${{clientName}}/servers/${{serverId}}`, {{
+                    method: 'DELETE'
+                }});
+                
+                if (res.ok) {{
+                    await loadClients();
+                    closeModal();
+                    setTimeout(() => showClientInfo(clientName), 100);
+                }} else {{
+                    const error = await res.json();
+                    alert(`Error: ${{error.detail || 'Failed to delete server'}}`);
+                }}
+            }} catch (e) {{
+                alert(`Error: ${{e.message}}`);
+            }}
+        }}
+
+        // Show scanner criteria modal
+        function showScannerCriteria() {{
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+            
+            modalTitle.textContent = '📋 Repository Classification Criteria';
+            modalContent.innerHTML = `
+                <div class="space-y-6">
+                    <div class="text-sm text-gray-300 leading-relaxed">
+                        <p>Repositories are classified into three categories based on code quality, structure, and best practices:</p>
+                    </div>
+                    
+                    <!-- SOTA -->
+                    <div class="border-l-4 border-green-500 pl-4">
+                        <h3 class="text-lg font-semibold text-green-400 mb-2">✅ SOTA (State of the Art)</h3>
+                        <p class="text-sm text-gray-300 mb-3">Repositories with no issues - following all best practices.</p>
+                        <p class="text-xs text-gray-400 italic">No "runt_reasons" found during analysis.</p>
+                    </div>
+                    
+                    <!-- Improvable -->
+                    <div class="border-l-4 border-yellow-500 pl-4">
+                        <h3 class="text-lg font-semibold text-yellow-400 mb-2">⚠️ Improvable</h3>
+                        <p class="text-sm text-gray-300 mb-3">Repositories with minor issues that should be addressed, but not critical.</p>
+                        <p class="text-xs text-gray-400 italic">Has "runt_reasons" but "is_runt" is false.</p>
+                    </div>
+                    
+                    <!-- Runt -->
+                    <div class="border-l-4 border-red-500 pl-4">
+                        <h3 class="text-lg font-semibold text-red-400 mb-2">🐛 Runt</h3>
+                        <p class="text-sm text-gray-300 mb-3">Repositories with critical issues that need immediate attention.</p>
+                        <p class="text-xs text-gray-400 italic mb-4">"is_runt" is true due to critical issues.</p>
+                        
+                        <div class="bg-red-500/10 border border-red-500/30 rounded p-3 mt-3">
+                            <h4 class="text-sm font-semibold text-red-300 mb-2">Critical Issues (Marks as Runt):</h4>
+                            <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside">
+                                <li>FastMCP version &lt; 2.10.0 (ancient version)</li>
+                                <li>No CI/CD workflows (for repos with ≥10 tools)</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- All Criteria -->
+                    <div class="border-t border-white/10 pt-4">
+                        <h3 class="text-lg font-semibold mb-3">📊 All Checked Criteria</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">FastMCP Version</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li><span class="text-red-400">Critical:</span> Version &lt; 2.10.0 → Runt</li>
+                                    <li><span class="text-yellow-400">Warning:</span> Version &lt; 2.12.0 → Recommendation</li>
+                                    <li><span class="text-green-400">Good:</span> Version ≥ 2.13.1 (latest)</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">Tool Organization</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li>≥20 tools without portmanteau pattern → Issue</li>
+                                    <li>Tools split between server.py and tools/ → Issue</li>
+                                    <li>Multiple server files found → Issue</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">CI/CD & Testing</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li><span class="text-red-400">Critical:</span> No CI/CD (≥10 tools) → Runt</li>
+                                    <li>No tests/ directory (≥10 tools) → Issue</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">Project Structure</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li>No src/ directory → Issue</li>
+                                    <li>No tests/ directory (≥10 tools) → Issue</li>
+                                    <li>No scripts/ directory → Recommendation</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">Packaging & Distribution</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li>No manifest.json (≥5 tools) → Issue</li>
+                                    <li>Uses deprecated DXT instead of MCPB → Issue</li>
+                                    <li>Uses setup.py without pyproject.toml → Issue</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">Documentation</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li>No README → Issue</li>
+                                    <li>No LICENSE file → Issue</li>
+                                    <li>No .cursorrules → Issue</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">Version Control</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li>No git repository → Issue</li>
+                                    <li>No git remote configured → Issue</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">Code Quality</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li>&gt;3 print() calls in server (should use logging) → Issue</li>
+                                    <li>Monolithic server.py &gt;1000 lines → Issue</li>
+                                    <li>Missing proper docstrings (Args/Returns) → Issue</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-indigo-500/10 border border-indigo-500/30 rounded p-3 mt-4">
+                        <p class="text-xs text-gray-300">
+                            <strong class="text-indigo-300">Note:</strong> Issues are cumulative. A repository can have multiple issues, 
+                            but only critical issues (FastMCP version, CI/CD) will mark it as a Runt. 
+                            Multiple non-critical issues will mark it as Improvable.
+                        </p>
+                    </div>
+                </div>
+            `;
+            modal.classList.remove('hidden');
+        }}
+        
+        // Load repos with progress tracking
+        async function loadRepos() {{
+            // Show progress UI
+            const progressHtml = `
+                <div class="p-4 space-y-3">
+                    <div class="text-sm font-semibold text-indigo-400 mb-3">🔍 Scanning Repositories...</div>
+                    <div id="scan-progress-display" class="space-y-2">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-gray-400">Current:</span>
+                            <span id="scan-current" class="text-gray-300 font-mono">-</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-gray-400">Progress:</span>
+                            <span id="scan-progress" class="text-gray-300">0 / 0</span>
+                        </div>
+                        <div class="w-full bg-black/30 rounded-full h-2">
+                            <div id="scan-progress-bar" class="bg-indigo-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 mt-3 text-xs">
+                            <div class="bg-green-500/10 p-2 rounded text-center">
+                                <div id="scan-found" class="text-green-400 font-bold">0</div>
+                                <div class="text-gray-500">MCP Repos</div>
+                            </div>
+                            <div class="bg-gray-500/10 p-2 rounded text-center">
+                                <div id="scan-skipped" class="text-gray-400 font-bold">0</div>
+                                <div class="text-gray-500">Skipped</div>
+                            </div>
+                            <div class="bg-red-500/10 p-2 rounded text-center">
+                                <div id="scan-errors" class="text-red-400 font-bold">0</div>
+                                <div class="text-gray-500">Errors</div>
+                            </div>
+                        </div>
+                        <div class="mt-3 max-h-32 overflow-y-auto bg-black/20 rounded p-2">
+                            <div id="scan-activity" class="text-xs text-gray-400 font-mono space-y-1">
+                                <div>Waiting for scan to start...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('repos-health').innerHTML = progressHtml;
+            document.getElementById('repos-detail').innerHTML = progressHtml;
+            
+            // Start polling for progress
+            const progressInterval = setInterval(async () => {{
+                try {{
+                    const progressRes = await fetch('/api/progress');
+                    const progress = await progressRes.json();
+                    
+                    if (progress.status === 'scanning') {{
+                        // Update progress display
+                        document.getElementById('scan-current').textContent = progress.current || '-';
+                        document.getElementById('scan-progress').textContent = `${progress.done || 0} / ${progress.total || 0}`;
+                        
+                        const percent = progress.total > 0 ? ((progress.done || 0) / progress.total) * 100 : 0;
+                        document.getElementById('scan-progress-bar').style.width = percent + '%';
+                        
+                        document.getElementById('scan-found').textContent = progress.mcp_repos_found || 0;
+                        document.getElementById('scan-skipped').textContent = progress.skipped || 0;
+                        document.getElementById('scan-errors').textContent = progress.errors || 0;
+                        
+                        // Update activity log
+                        if (progress.activity_log && progress.activity_log.length > 0) {{
+                            const activityDiv = document.getElementById('scan-activity');
+                            activityDiv.innerHTML = progress.activity_log.slice(-10).map(msg => 
+                                `<div class="text-gray-300">${{msg}}</div>`
+                            ).join('');
+                            activityDiv.scrollTop = activityDiv.scrollHeight;
+                        }}
+                    }} else if (progress.status === 'complete') {{
+                        // Scan finished, clear interval and load results
+                        clearInterval(progressInterval);
+                        document.getElementById('scan-progress-display').innerHTML = 
+                            `<div class="text-green-400 text-sm font-semibold">✅ Scan complete! Loading results...</div>`;
+                        
+                        // Fetch final results
+                        const res = await fetch('/api/repos');
+                        reposData = await res.json();
+                        renderRepos();
+                        populateRepoSelector();
+                        updateStats();
+                        loadLogs();
+                    }}
+                }} catch(e) {{
+                    console.error('Error polling progress:', e);
+                }}
+            }}, 200); // Poll every 200ms
+            
+            // Start the scan (this is async, so we poll for progress)
             try {{
                 const res = await fetch('/api/repos');
                 reposData = await res.json();
+                
+                // Clear interval if scan finished quickly
+                clearInterval(progressInterval);
+                
                 renderRepos();
                 populateRepoSelector();
                 updateStats();
                 loadLogs();
             }} catch(e) {{
+                clearInterval(progressInterval);
                 console.error('Error loading repos:', e);
+                document.getElementById('repos-health').innerHTML = 
+                    '<div class="text-red-400">Error scanning repositories: ' + e.message + '</div>';
+                document.getElementById('repos-detail').innerHTML = 
+                    '<div class="text-red-400">Error scanning repositories: ' + e.message + '</div>';
             }}
         }}
 
@@ -2462,7 +4668,7 @@ async def dashboard():
                     toolsList.innerHTML = data.tools.map(tool => `
                         <div class="p-3 bg-white/5 rounded-lg">
                             <div class="font-medium">${{tool.name}}</div>
-                            <div class="text-sm text-gray-400 mt-1">${{tool.description}}</div>
+                            <div class="text-sm text-gray-400 mt-1 tool-description-compact">${{formatDocstring(tool.description)}}</div>
                         </div>
                     `).join('');
                 }} else {{
@@ -2540,11 +4746,12 @@ async def dashboard():
             consoleSelectedTool = consoleSelectedServer.tools.find(t => t.name === toolName);
             if (!consoleSelectedTool) return;
             
-            // Show tool description and schema
+            // Show tool description and schema with formatted docstring
+            const formattedDescription = formatDocstring(consoleSelectedTool.description);
             schemaDiv.innerHTML = `
                 <div class="p-4 bg-white/5 rounded-lg mb-4">
-                    <div class="font-semibold text-indigo-400 mb-2">${{consoleSelectedTool.name}}</div>
-                    <div class="text-sm text-gray-300">${{consoleSelectedTool.description || 'No description'}}</div>
+                    <div class="font-semibold text-indigo-400 mb-3 text-lg">${{consoleSelectedTool.name}}</div>
+                    <div class="tool-description">${{formattedDescription}}</div>
                 </div>
             `;
             schemaDiv.classList.remove('hidden');
@@ -2622,6 +4829,27 @@ async def dashboard():
         
         let aiConnected = false;
         let aiMessages = [];
+        let currentPreprompt = 'MCP Developer';  // Track current preprompt
+        
+        // Toast notification helper
+        function showToast(message, type = 'success') {{
+            const backgrounds = {{
+                'success': 'linear-gradient(to right, #10b981, #059669)',
+                'error': 'linear-gradient(to right, #ef4444, #dc2626)',
+                'info': 'linear-gradient(to right, #3b82f6, #2563eb)',
+                'warning': 'linear-gradient(to right, #f59e0b, #d97706)'
+            }};
+            
+            Toastify({{
+                text: message,
+                duration: 3000,
+                gravity: "top",
+                position: "right",
+                style: {{
+                    background: backgrounds[type] || backgrounds['info']
+                }}
+            }}).showToast();
+        }}
 
         async function loadOllamaModels() {{
             const select = document.getElementById('ai-model');
@@ -2653,7 +4881,7 @@ async def dashboard():
                 info.innerHTML = `<span class="text-green-400">${{data.count}} models available</span>`;
             }} catch(e) {{
                 select.innerHTML = '<option value="">❌ Connection failed</option>';
-                info.textContent = 'Cannot connect to Ollama at localhost:11434';
+                info.textContent = 'Cannot connect to Ollama. Check OLLAMA_URL configuration.';
             }}
         }}
 
@@ -2682,7 +4910,24 @@ async def dashboard():
                 
                 aiConnected = true;
                 const selectedModel = modelSelect.value || data.models[0].name;
-                statusEl.textContent = 'Ready (' + data.count + ' models)';
+                currentPreprompt = document.getElementById('ai-preprompt').value;
+                
+                showToast(`Connected with ${{currentPreprompt}}`, 'success');
+                
+                // Get personality-specific welcome message
+                const welcomeMessages = {{
+                    'Long John Silver, Pirate': `Ahoy, matey! ☠️ Long John Silver here, connected to Ollama's treasure chest o' ${{data.count}} models! We be sailin' with <strong>${{selectedModel}}</strong> as our trusty vessel. Let me navigate yer MCP seas and chart a course through yer code! What mysteries shall we unravel today, sailor?`,
+                    'Coin Col': `*Jingle jingle* 🪙 Greetings, fellow collector! I've accessed the vault of ${{data.count}} Ollama models, and we're minting solutions with <strong>${{selectedModel}}</strong>. Each query is a precious coin to be examined and valued. What treasures shall we appraise in your MCP collection today?`,
+                    'Butterfly Fancier': `Oh what a lovely garden! 🦋 I've fluttered into Ollama's meadow of ${{data.count}} models, and we're using the beautiful <strong>${{selectedModel}}</strong> butterfly! Your MCP servers are like flowers waiting to bloom. What delicate patterns shall we admire together?`,
+                    'Code Pirate': `Arr! 🏴‍☠️ This scurvy pirate has commandeered Ollama's fleet o' ${{data.count}} models! We be plunderin' code with <strong>${{selectedModel}}</strong> as our flagship. Let's make yer MCP servers seaworthy! What code barnacles need scrapin'?`,
+                    'Zen Master': `*Breathes calmly* 🧘 I have connected to the flow of ${{data.count}} Ollama models. We walk the path with <strong>${{selectedModel}}</strong>. Your MCP servers are like ripples in a pond - let us observe them with mindfulness. What wisdom do you seek?`,
+                    'Aussie Coder': `G'day mate! 🦘 Just connected to Ollama's ripper collection of ${{data.count}} models! We're using <strong>${{selectedModel}}</strong> and she's a beaut! Ready to have a squiz at your MCP servers. What needs sortin' out, mate?`,
+                    'MCP Developer': `Connected to Ollama with ${{data.count}} models! Using <strong>${{selectedModel}}</strong>. I can help you analyze your MCP zoo, suggest improvements, and answer questions about your servers. What would you like to know?`
+                }};
+                
+                const welcomeMsg = welcomeMessages[currentPreprompt] || welcomeMessages['MCP Developer'];
+                
+                statusEl.textContent = `Ready (${{data.count}} models • ${{currentPreprompt}})`;
                 statusEl.className = 'text-xs px-2 py-0.5 rounded bg-green-600 text-green-100';
                 btnEl.textContent = '✓ Connected';
                 btnEl.className = 'px-4 py-2 bg-green-600 rounded text-sm font-medium cursor-default';
@@ -2691,8 +4936,8 @@ async def dashboard():
                     <div class="flex gap-3">
                         <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-sm">🤖</div>
                         <div class="flex-1 bg-white/5 rounded-lg p-4">
-                            <div class="font-medium text-purple-400 mb-1">AI Assistant</div>
-                            <div class="text-gray-300">Connected to Ollama with ${{data.count}} models! Using <strong>${{selectedModel}}</strong>. I can help you analyze your MCP zoo, suggest improvements, and answer questions about your servers. What would you like to know?</div>
+                            <div class="font-medium text-purple-400 mb-1">AI Assistant • ${{currentPreprompt}}</div>
+                            <div class="text-gray-300">${{welcomeMsg}}</div>
                         </div>
                     </div>
                 `;
@@ -2722,6 +4967,433 @@ async def dashboard():
             document.getElementById('ai-input').value = 'Based on the web search results, summarize the key points and how they apply to my MCP projects.';
         }}
 
+        function updatePreprompt() {{
+            currentPreprompt = document.getElementById('ai-preprompt').value;
+            console.log('Preprompt changed to:', currentPreprompt);
+            showToast(`Switched to: ${{currentPreprompt}}`, 'info');
+            
+            // Update chat header if connected
+            if (aiConnected) {{
+                const headerEl = document.querySelector('#ai-chat').previousElementSibling;
+                if (headerEl) {{
+                    const titleEl = headerEl.querySelector('h2');
+                    if (titleEl) {{
+                        titleEl.innerHTML = `
+                            🤖 AI Assistant
+                            <span class="text-xs px-2 py-0.5 rounded bg-green-600 text-green-100">Ready (with ${{currentPreprompt}})</span>
+                        `;
+                    }}
+                }}
+            }}
+        }}
+
+        async function loadPrepromptsFromDB() {{
+            try {{
+                console.log('Loading preprompts from database...');
+                const res = await fetch('/api/ai/preprompts');
+                
+                if (!res.ok) {{
+                    console.error('API returned error:', res.status);
+                    return;
+                }}
+                
+                const data = await res.json();
+                console.log('Preprompts loaded:', data);
+                
+                if (data.preprompts && data.preprompts.length > 0) {{
+                    const dropdown = document.getElementById('ai-preprompt');
+                    if (!dropdown) {{
+                        console.error('Dropdown element not found!');
+                        return;
+                    }}
+                    
+                    dropdown.innerHTML = '';
+                    
+                    // Reverse to show newest first
+                    data.preprompts.reverse().forEach(p => {{
+                        const option = document.createElement('option');
+                        option.value = p.name;  // Use name as value for lookup
+                        option.textContent = `${{p.emoji}} ${{p.name}}`;
+                        dropdown.appendChild(option);
+                    }});
+                    
+                    console.log(`✓ Loaded ${{data.preprompts.length}} preprompts`);
+                }} else {{
+                    console.warn('No preprompts found in database');
+                }}
+            }} catch (e) {{
+                console.error('Failed to load preprompts:', e);
+                alert('⚠️ Failed to load preprompts from database');
+            }}
+        }}
+
+        async function aiRefinePreprompt() {{
+            const text = document.getElementById('ai-refine-text').value.trim();
+            if (!text) {{
+                showToast('Please enter a personality concept (e.g., "coin collector")', 'warning');
+                return;
+            }}
+            
+            const modelId = document.getElementById('ai-model').value;
+            
+            // Show loading
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            btn.className = 'px-3 py-1.5 bg-yellow-600 rounded text-xs font-medium whitespace-nowrap animate-pulse';
+            
+            showToast(`🤖 AI generating "${{text}}" personality... (30-60s)`, 'info');
+            
+            try {{
+                const res = await fetch('/api/preprompts/ai-refine', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        text: text,
+                        model_id: modelId
+                    }})
+                }});
+                
+                const data = await res.json();
+                
+                if (data.success) {{
+                    showToast(`✨ Generated "${{data.emoji}} ${{data.name}}" preprompt!`, 'success');
+                    document.getElementById('ai-refine-text').value = '';
+                    await loadPrepromptsFromDB();
+                    
+                    // Auto-select the new preprompt
+                    const dropdown = document.getElementById('ai-preprompt');
+                    dropdown.value = data.name;
+                    currentPreprompt = data.name;
+                }} else {{
+                    showToast('❌ ' + (data.error || 'Generation failed'), 'error');
+                }}
+            }} catch (e) {{
+                showToast('❌ Error: ' + e.message, 'error');
+            }} finally {{
+                btn.disabled = false;
+                btn.textContent = 'Generate';
+                btn.className = 'px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded text-xs font-medium whitespace-nowrap';
+            }}
+        }}
+
+        async function importPrepromptFile(input) {{
+            const file = input.files[0];
+            if (!file) return;
+            
+            showToast(`📁 Importing ${{file.name}}...`, 'info');
+            
+            const reader = new FileReader();
+            reader.onload = async (e) => {{
+                const content = e.target.result;
+                
+                try {{
+                    const res = await fetch('/api/preprompts/import', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{
+                            content: content,
+                            filename: file.name
+                        }})
+                    }});
+                    
+                    const data = await res.json();
+                    
+                    if (data.success) {{
+                        showToast(`✅ Imported "${{data.emoji}} ${{data.name}}"!`, 'success');
+                        await loadPrepromptsFromDB();
+                        
+                        // Auto-select the imported preprompt
+                        const dropdown = document.getElementById('ai-preprompt');
+                        dropdown.value = data.name;
+                        currentPreprompt = data.name;
+                    }} else {{
+                        showToast('❌ ' + (data.error || 'Import failed'), 'error');
+                    }}
+                }} catch (e) {{
+                    showToast('❌ Error: ' + e.message, 'error');
+                }}
+                
+                input.value = '';
+            }};
+            reader.readAsText(file);
+        }}
+
+        async function togglePrepromptLibrary() {{
+            const modal = document.getElementById('library-modal');
+            modal.classList.remove('hidden');
+            await loadPrepromptLibrary();
+        }}
+        
+        function closePrepromptLibrary() {{
+            document.getElementById('library-modal').classList.add('hidden');
+        }}
+        
+        async function loadPrepromptLibrary() {{
+            const contentEl = document.getElementById('library-content');
+            contentEl.innerHTML = '<div class="text-center text-gray-500 py-8"><div class="text-4xl mb-4">⏳</div><div>Loading...</div></div>';
+            
+            try {{
+                // Load preprompts and usage stats in parallel
+                const [prepsRes, statsRes] = await Promise.all([
+                    fetch('/api/ai/preprompts'),
+                    fetch('/api/preprompts/stats/usage')
+                ]);
+                
+                const prepsData = await prepsRes.json();
+                const statsData = await statsRes.json();
+                
+                if (!prepsData.preprompts || prepsData.preprompts.length === 0) {{
+                    contentEl.innerHTML = '<div class="text-center text-gray-500 py-8"><div class="text-4xl mb-4">📭</div><div>No preprompts found</div></div>';
+                    return;
+                }}
+                
+                // Merge usage stats with preprompts
+                const statsMap = {{}};
+                if (statsData.stats) {{
+                    statsData.stats.forEach(s => {{
+                        statsMap[s.id] = s;
+                    }});
+                }}
+                
+                prepsData.preprompts.forEach(p => {{
+                    p.usage_count = statsMap[p.id]?.usage_count || 0;
+                    p.last_used = statsMap[p.id]?.last_used || null;
+                }});
+                
+                // Store for filtering
+                window.allPreprompts = prepsData.preprompts;
+                document.getElementById('library-count').textContent = prepsData.preprompts.length;
+                
+                displayLibraryPreprompts(prepsData.preprompts);
+            }} catch (e) {{
+                contentEl.innerHTML = `<div class="text-center text-red-500 py-8"><div class="text-4xl mb-4">❌</div><div>Error: ${{e.message}}</div></div>`;
+            }}
+        }}
+        
+        function displayLibraryPreprompts(preprompts) {{
+            const contentEl = document.getElementById('library-content');
+            contentEl.innerHTML = '';
+            
+            preprompts.forEach(p => {{
+                const sourceColors = {{
+                    'builtin': 'bg-blue-600',
+                    'ai_generated': 'bg-purple-600',
+                    'imported': 'bg-green-600',
+                    'user': 'bg-yellow-600'
+                }};
+                
+                const card = document.createElement('div');
+                card.className = 'glass rounded-lg p-4 hover:bg-white/10 transition';
+                card.innerHTML = `
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="text-2xl" title="${{p.prompt_text.substring(0, 200)}}...">${{p.emoji}}</span>
+                                <h3 class="font-semibold text-lg" title="${{p.prompt_text.substring(0, 200)}}...">${{p.name}}</h3>
+                                <span class="text-xs px-2 py-0.5 rounded ${{sourceColors[p.source] || 'bg-gray-600'}}">${{p.source}}</span>
+                                ${{p.usage_count > 0 ? `<span class="text-xs px-2 py-0.5 rounded bg-green-600 text-green-100" title="Times used">📊 ${{p.usage_count}}</span>` : ''}}
+                            </div>
+                            <p class="text-sm text-gray-400 line-clamp-2" title="${{p.prompt_text.substring(0, 200)}}...">${{p.prompt_text.substring(0, 150)}}...</p>
+                            <div class="flex gap-4 mt-2 text-xs text-gray-500">
+                                <span title="Created date">📅 ${{new Date(p.created_at).toLocaleDateString()}}</span>
+                                <span title="Author">✍️ ${{p.author}}</span>
+                                <span title="Character count">📏 ${{p.prompt_text.length}} chars</span>
+                                ${{p.last_used ? `<span title="Last used">⏰ ${{new Date(p.last_used).toLocaleDateString()}}</span>` : ''}}
+                            </div>
+                        </div>
+                        <div class="flex gap-2 ml-4">
+                            <button onclick="viewPrepromptFull('${{p.id}}')" 
+                                    class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-xs" title="View full text">
+                                👁️
+                            </button>
+                            <button onclick="editPreprompt('${{p.id}}')" 
+                                    class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded text-xs" title="Edit">
+                                ✏️
+                            </button>
+                            <button onclick="exportPreprompt('${{p.id}}', '${{p.name}}')" 
+                                    class="px-3 py-1.5 bg-green-600 hover:bg-green-500 rounded text-xs" title="Export">
+                                💾
+                            </button>
+                            ${{p.source !== 'builtin' ? `
+                            <button onclick="deletePreprompt('${{p.id}}', '${{p.name}}')" 
+                                    class="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded text-xs" title="Delete">
+                                🗑️
+                            </button>
+                            ` : ''}}
+                        </div>
+                    </div>
+                `;
+                contentEl.appendChild(card);
+            }});
+        }}
+        
+        function filterLibrary() {{
+            if (!window.allPreprompts) return;
+            
+            const searchText = document.getElementById('library-search').value.toLowerCase();
+            const sourceFilter = document.getElementById('library-filter').value;
+            
+            const filtered = window.allPreprompts.filter(p => {{
+                const matchesSearch = !searchText || 
+                    p.name.toLowerCase().includes(searchText) || 
+                    p.prompt_text.toLowerCase().includes(searchText);
+                const matchesSource = !sourceFilter || p.source === sourceFilter;
+                return matchesSearch && matchesSource;
+            }});
+            
+            displayLibraryPreprompts(filtered);
+        }}
+
+        async function viewPrepromptFull(id) {{
+            try {{
+                const res = await fetch(`/api/preprompts/${{id}}`);
+                const prep = await res.json();
+                
+                if (prep.error) {{
+                    showToast('Error loading preprompt', 'error');
+                    return;
+                }}
+                
+                // Show in modal with full text
+                alert(`${{prep.emoji}} ${{prep.name}}\\n\\n${{prep.prompt_text}}\\n\\nSource: ${{prep.source}}\\nCreated: ${{new Date(prep.created_at).toLocaleString()}}`);
+            }} catch (e) {{
+                showToast('Error: ' + e.message, 'error');
+            }}
+        }}
+        
+        async function editPreprompt(id) {{
+            try {{
+                const res = await fetch(`/api/preprompts/${{id}}`);
+                const prep = await res.json();
+                
+                if (prep.error) {{
+                    showToast('Error loading preprompt', 'error');
+                    return;
+                }}
+                
+                // Open editor modal with data
+                document.getElementById('edit-name').value = prep.name;
+                document.getElementById('edit-emoji').value = prep.emoji;
+                document.getElementById('edit-source').value = prep.source;
+                document.getElementById('edit-prompt').value = prep.prompt_text;
+                document.getElementById('editor-modal').dataset.editId = id;
+                updateCharCount();
+                
+                document.getElementById('editor-modal').classList.remove('hidden');
+                closePrepromptLibrary();
+            }} catch (e) {{
+                showToast('Error: ' + e.message, 'error');
+            }}
+        }}
+        
+        function closeEditor() {{
+            document.getElementById('editor-modal').classList.add('hidden');
+        }}
+        
+        function updateCharCount() {{
+            const text = document.getElementById('edit-prompt').value;
+            const count = text.length;
+            const words = text.split(/\\s+/).filter(w => w.length > 0).length;
+            document.getElementById('edit-char-count').textContent = `(${{count}} chars, ${{words}} words)`;
+        }}
+        
+        async function saveEditedPreprompt() {{
+            const id = document.getElementById('editor-modal').dataset.editId;
+            const name = document.getElementById('edit-name').value.trim();
+            const emoji = document.getElementById('edit-emoji').value.trim();
+            const prompt_text = document.getElementById('edit-prompt').value.trim();
+            
+            if (!name || !prompt_text) {{
+                showToast('Name and prompt text are required', 'warning');
+                return;
+            }}
+            
+            try {{
+                const res = await fetch(`/api/preprompts/${{id}}`, {{
+                    method: 'PUT',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ name, emoji, prompt_text }})
+                }});
+                
+                const data = await res.json();
+                
+                if (data.success) {{
+                    showToast(`✅ Updated "${{emoji}} ${{name}}"`, 'success');
+                    closeEditor();
+                    await loadPrepromptsFromDB();
+                    await togglePrepromptLibrary();
+                }} else {{
+                    showToast('Error: ' + (data.error || 'Update failed'), 'error');
+                }}
+            }} catch (e) {{
+                showToast('Error: ' + e.message, 'error');
+            }}
+        }}
+        
+        async function exportPreprompt(id, name) {{
+            try {{
+                const res = await fetch(`/api/preprompts/${{id}}`);
+                const prep = await res.json();
+                
+                if (prep.error) {{
+                    showToast('Error loading preprompt', 'error');
+                    return;
+                }}
+                
+                // Create markdown file
+                const markdown = `# ${{prep.emoji}} ${{prep.name}}
+
+**Source**: ${{prep.source}}  
+**Created**: ${{new Date(prep.created_at).toLocaleString()}}  
+**Author**: ${{prep.author}}
+
+---
+
+${{prep.prompt_text}}
+`;
+                
+                // Download
+                const blob = new Blob([markdown], {{ type: 'text/markdown' }});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${{prep.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}}.md`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showToast(`📥 Exported "${{prep.name}}.md"`, 'success');
+            }} catch (e) {{
+                showToast('Error: ' + e.message, 'error');
+            }}
+        }}
+        
+        async function deletePreprompt(id, name) {{
+            if (!confirm(`Delete "${{name}}"?\\n\\nThis can be undone via database.`)) {{
+                return;
+            }}
+            
+            try {{
+                const res = await fetch(`/api/preprompts/${{id}}`, {{
+                    method: 'DELETE'
+                }});
+                
+                const data = await res.json();
+                
+                if (data.success) {{
+                    showToast(`🗑️ Deleted "${{name}}"`, 'success');
+                    await loadPrepromptsFromDB();
+                    await loadPrepromptLibrary();
+                }} else {{
+                    showToast('Error: ' + (data.error || 'Delete failed'), 'error');
+                }}
+            }} catch (e) {{
+                showToast('Error: ' + e.message, 'error');
+            }}
+        }}
+        
         function clearAIChat() {{
             const chatEl = document.getElementById('ai-chat');
             chatEl.innerHTML = `
@@ -2785,7 +5457,7 @@ async def dashboard():
             
             addChatMessage('user', userMsg);
             
-            // Add thinking indicator
+            // Add thinking indicator with preprompt info
             const chatEl = document.getElementById('ai-chat');
             const thinkingId = 'thinking-' + Date.now();
             const thinkingText = toolsUsed.length > 0 
@@ -2793,11 +5465,16 @@ async def dashboard():
                 : 'Thinking...';
             chatEl.insertAdjacentHTML('beforeend', `
                 <div id="${{thinkingId}}" class="flex gap-3">
-                    <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-sm">🤖</div>
+                    <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-sm animate-pulse">🤖</div>
                     <div class="flex-1 bg-white/5 rounded-lg p-4">
-                        <div class="font-medium text-purple-400 mb-1">AI Assistant</div>
+                        <div class="font-medium text-purple-400 mb-1">AI Assistant • ${{currentPreprompt}}</div>
                         <div class="text-gray-400 flex items-center gap-2">
                             <span class="animate-pulse">●</span> ${{thinkingText}}
+                        </div>
+                        <div class="mt-2">
+                            <div class="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                                <div class="bg-purple-600 h-full animate-[pulse_1s_ease-in-out_infinite]" style="width: 100%"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2810,6 +5487,7 @@ async def dashboard():
                 const fullPrompt = context + '\\n\\nUser question: ' + message;
                 
                 const modelId = document.getElementById('ai-model').value;
+                const preprompt = document.getElementById('ai-preprompt').value;
                 
                 const res = await fetch('/api/ai/chat', {{
                     method: 'POST',
@@ -2819,25 +5497,37 @@ async def dashboard():
                         message: fullPrompt,
                         include_repo_context: includeRepos,
                         file_path: filePath || null,
-                        web_search: webSearch || null
+                        web_search: webSearch || null,
+                        preprompt: preprompt
                     }})
                 }});
                 
                 const data = await res.json();
+                
+                // Log preprompt usage for debugging
+                if (data.preprompt_used) {{
+                    console.log('✓ Response used preprompt:', data.preprompt_used, '(Found:', data.preprompt_found, ')');
+                }}
                 
                 // Remove thinking indicator
                 document.getElementById(thinkingId)?.remove();
                 
                 if (data.response) {{
                     addChatMessage('assistant', data.response);
+                    // Show subtle confirmation
+                    if (data.preprompt_used && data.preprompt_found) {{
+                        console.log(`✅ Chat successfully used "${{data.preprompt_used}}" personality`);
+                    }}
                 }} else if (data.error) {{
                     addChatMessage('assistant', '❌ Error: ' + data.error);
+                    showToast('Chat error: ' + data.error, 'error');
                 }} else {{
                     addChatMessage('assistant', JSON.stringify(data, null, 2));
                 }}
             }} catch(e) {{
                 document.getElementById(thinkingId)?.remove();
                 addChatMessage('assistant', '❌ Error: ' + e.message);
+                showToast('Error: ' + e.message, 'error');
             }}
         }}
 
@@ -2873,41 +5563,415 @@ Please provide helpful, specific advice about MCP server development, tool desig
         // Initial load
         loadClients();
         loadOllamaModels();  // Load available models
+        loadPrepromptsFromDB();  // Load preprompts from database
         setInterval(loadLogs, 5000);
         setInterval(loadConsoleServers, 3000);
         setInterval(updateAIContext, 5000);  // Keep AI context updated
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {{
+            // Ctrl+Enter: Send message
+            if (e.ctrlKey && e.key === 'Enter' && document.getElementById('ai-input') === document.activeElement) {{
+                sendAIMessage();
+            }}
+            // Ctrl+L: Clear chat
+            if (e.ctrlKey && e.key === 'l') {{
+                e.preventDefault();
+                clearAIChat();
+            }}
+            // Ctrl+K: Focus preprompt dropdown
+            if (e.ctrlKey && e.key === 'k') {{
+                e.preventDefault();
+                document.getElementById('ai-preprompt').focus();
+            }}
+            // Ctrl+G: Focus AI Refine input
+            if (e.ctrlKey && e.key === 'g') {{
+                e.preventDefault();
+                document.getElementById('ai-refine-text').focus();
+            }}
+            // Ctrl+B: Browse library
+            if (e.ctrlKey && e.key === 'b') {{
+                e.preventDefault();
+                togglePrepromptLibrary();
+            }}
+            // Escape: Close modals
+            if (e.key === 'Escape') {{
+                closePrepromptLibrary();
+                closeEditor();
+            }}
+        }});
+        
+        showToast('⌨️ Keyboard shortcuts ready! Ctrl+B=Library, Ctrl+K=Preprompt, Ctrl+L=Clear', 'info');
     </script>
+    
+    <!-- Preprompt Library Browser Modal -->
+    <div id="library-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center z-50" onclick="if(event.target.id==='library-modal'){{closePrepromptLibrary();}}">
+        <div class="glass rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col m-4" onclick="event.stopPropagation()">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-semibold">📚 Preprompt Library</h2>
+                    <p class="text-sm text-gray-400 mt-1"><span id="library-count">0</span> personalities</p>
+                </div>
+                <div class="flex gap-2 items-center">
+                    <input id="library-search" type="text" placeholder="Search..." 
+                           class="bg-midnight-800 border border-white/10 rounded px-3 py-1.5 text-sm w-48"
+                           oninput="filterLibrary()">
+                    <select id="library-filter" class="bg-midnight-800 border border-white/10 rounded px-3 py-1.5 text-sm"
+                            onchange="filterLibrary()">
+                        <option value="">All Sources</option>
+                        <option value="builtin">Built-in</option>
+                        <option value="ai_generated">AI Generated</option>
+                        <option value="imported">Imported</option>
+                        <option value="user">User Created</option>
+                    </select>
+                    <button onclick="closePrepromptLibrary()" 
+                            class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                        ✕
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Modal Content -->
+            <div id="library-content" class="flex-1 overflow-y-auto p-6 space-y-3">
+                <div class="text-center text-gray-500 py-8">
+                    <div class="text-4xl mb-4">⏳</div>
+                    <div>Loading preprompts...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Preprompt Editor Modal -->
+    <div id="editor-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center z-50" onclick="if(event.target.id==='editor-modal'){{closeEditor();}}">
+        <div class="glass rounded-xl w-full max-w-3xl m-4" onclick="event.stopPropagation()">
+            <div class="px-6 py-4 border-b border-white/10">
+                <h2 class="text-xl font-semibold">✏️ Edit Preprompt</h2>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="text-sm text-gray-400 block mb-2">Name</label>
+                    <input id="edit-name" type="text" class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
+                </div>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="text-sm text-gray-400 block mb-2">Emoji</label>
+                        <input id="edit-emoji" type="text" maxlength="2" class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2 text-2xl text-center">
+                    </div>
+                    <div class="flex-1">
+                        <label class="text-sm text-gray-400 block mb-2">Source</label>
+                        <input id="edit-source" type="text" readonly class="w-full bg-midnight-700 border border-white/10 rounded px-3 py-2 text-gray-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-sm text-gray-400 block mb-2">Preprompt Text <span id="edit-char-count" class="text-xs text-gray-500"></span></label>
+                    <textarea id="edit-prompt" rows="10" class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2 font-mono text-sm"
+                              oninput="updateCharCount()"></textarea>
+                </div>
+                <div class="flex gap-2 justify-end">
+                    <button onclick="closeEditor()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">Cancel</button>
+                    <button onclick="saveEditedPreprompt()" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>'''
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PORT CONFLICT HANDLING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def is_port_available(port: int) -> bool:
+    """Check if a port is available for binding."""
+    import socket
+    try:
+        logger.debug(f"Checking if port {port} is available...")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(('0.0.0.0', port))
+            logger.debug(f"Port {port} is available")
+            return True
+    except OSError as e:
+        logger.debug(f"Port {port} is not available: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error checking port {port}: {e}", exc_info=True)
+        return False
+
+def find_available_port(start_port: int, max_attempts: int = 10) -> int:
+    """Find an available port starting from start_port."""
+    logger.info(f"Searching for available port starting from {start_port} (max {max_attempts} attempts)")
+    for i in range(max_attempts):
+        port = start_port + i
+        try:
+            if is_port_available(port):
+                logger.info(f"Found available port: {port}")
+                return port
+        except Exception as e:
+            logger.warning(f"Error checking port {port}: {e}")
+            continue
+    error_msg = f"Could not find available port in range {start_port}-{start_port + max_attempts - 1}"
+    logger.error(error_msg)
+    raise RuntimeError(error_msg)
+
+def get_port_owner_info(port: int) -> Optional[Dict[str, Any]]:
+    """Get information about what process is using a port (Windows)."""
+    if sys.platform != 'win32':
+        logger.debug("get_port_owner_info only works on Windows")
+        return None
+    
+    try:
+        logger.debug(f"Getting port owner info for port {port}...")
+        import subprocess
+        result = subprocess.run(
+            ['netstat', '-ano'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if result.returncode != 0:
+            logger.warning(f"netstat command failed with return code {result.returncode}")
+            return None
+        
+        for line in result.stdout.split('\n'):
+            if f':{port}' in line and 'LISTENING' in line:
+                parts = line.split()
+                if len(parts) >= 5:
+                    pid = parts[-1]
+                    logger.debug(f"Found process using port {port}: PID {pid}")
+                    try:
+                        import psutil  # type: ignore[import-untyped]
+                        proc = psutil.Process(int(pid))
+                        info = {
+                            'pid': pid,
+                            'name': proc.name(),
+                            'path': proc.exe(),
+                            'cmdline': ' '.join(proc.cmdline())
+                        }
+                        logger.debug(f"Port owner info: {info}")
+                        return info
+                    except ImportError:
+                        logger.debug("psutil not available, returning basic info")
+                        return {'pid': pid, 'name': 'Unknown', 'path': 'Unknown'}
+                    except Exception as e:
+                        logger.warning(f"Error getting process info for PID {pid}: {e}")
+                        return {'pid': pid, 'name': 'Unknown', 'path': 'Unknown'}
+    except subprocess.TimeoutExpired:
+        logger.error("netstat command timed out")
+        return None
+    except Exception as e:
+        logger.error(f"Error getting port owner info: {e}", exc_info=True)
+        return None
+    
+    logger.debug(f"No process found using port {port}")
+    return None
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    print(f"""
+    try:
+        logger.info("=" * 80)
+        logger.info("MCP Studio Startup - Beginning initialization")
+        logger.info(f"Python version: {sys.version}")
+        logger.info(f"Platform: {sys.platform}")
+        logger.info(f"Working directory: {os.getcwd()}")
+        logger.info(f"Script path: {__file__}")
+        
+        # Set UTF-8 encoding for Windows console
+        if sys.platform == 'win32':
+            try:
+                import codecs
+                sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+                logger.info("UTF-8 encoding configured for Windows console")
+            except Exception as e:
+                logger.warning(f"Failed to set UTF-8 encoding: {e}")
+        
+        log("🚀 Starting MCP Studio...")
+        logger.info("Starting MCP Studio...")
+        log(f"📂 Repos directory: {REPOS_DIR}")
+        logger.info(f"Repos directory: {REPOS_DIR}")
+        
+        # Verify repos directory exists
+        if not REPOS_DIR.exists():
+            error_msg = f"Repos directory does not exist: {REPOS_DIR}"
+            logger.error(error_msg)
+            log(f"❌ ERROR: {error_msg}")
+            sys.exit(1)
+        
+        # Check FastMCP availability
+        try:
+            if FASTMCP_AVAILABLE:
+                log("✅ FastMCP available - live connections enabled")
+                logger.info("FastMCP is available")
+            else:
+                log("⚠️  FastMCP not available - install with: pip install fastmcp")
+                log("   Live server connections will be disabled")
+                logger.warning("FastMCP not available - live connections disabled")
+        except Exception as e:
+            logger.error(f"Error checking FastMCP availability: {e}", exc_info=True)
+            log(f"⚠️  Error checking FastMCP: {e}")
+        
+        # Discover clients on startup
+        try:
+            logger.info("Discovering MCP clients...")
+            clients = discover_mcp_clients()
+            logger.info(f"Discovered {len(clients)} clients")
+            for client, data in clients.items():
+                log(f"🔌 Found {client}: {len(data['servers'])} servers")
+                logger.info(f"Client '{client}': {len(data['servers'])} servers")
+        except Exception as e:
+            logger.error(f"Error discovering MCP clients: {e}", exc_info=True)
+            log(f"⚠️  Error discovering clients: {e}")
+            clients = {}
+        
+        # Initialize preprompt database and seed with builtins
+        try:
+            logger.info("Initializing preprompt database...")
+            import preprompt_db
+            preprompt_db.init_db()
+            logger.info("Preprompt database initialized")
+            
+            # Check if we need to seed
+            existing = preprompt_db.list_preprompts(active_only=False)
+            if len(existing) == 0:
+                log("🎭 Seeding preprompt database with 5 builtin personalities...")
+                logger.info("Seeding preprompt database...")
+                preprompt_db.seed_builtin_preprompts()
+                log("✅ Preprompt database initialized")
+                logger.info("Preprompt database seeded successfully")
+            else:
+                log(f"🎭 Found {len(existing)} preprompts in database")
+                logger.info(f"Found {len(existing)} existing preprompts")
+        except ImportError as e:
+            logger.warning(f"preprompt_db module not available: {e}")
+            log(f"⚠️  Preprompt database module not available: {e}")
+        except Exception as e:
+            logger.error(f"Preprompt database error: {e}", exc_info=True)
+            log(f"⚠️  Preprompt database error: {e}")
+        
+        # Check port availability before starting
+        logger.info(f"Checking port availability for port {PORT}...")
+        actual_port = PORT
+        try:
+            port_available = is_port_available(PORT)
+            logger.info(f"Port {PORT} available: {port_available}")
+            
+            if not port_available:
+                logger.warning(f"Port {PORT} is not available, checking what's using it...")
+                port_info = get_port_owner_info(PORT)
+                log(f"❌ PORT CONFLICT: Port {PORT} is already in use!")
+                logger.error(f"Port conflict detected on port {PORT}")
+                
+                if port_info:
+                    log(f"   Port {PORT} is being used by:")
+                    log(f"   • Process: {port_info.get('name', 'Unknown')} (PID: {port_info.get('pid', 'Unknown')})")
+                    log(f"   • Path: {port_info.get('path', 'Unknown')}")
+                    logger.error(f"Port {PORT} used by: {port_info.get('name', 'Unknown')} (PID: {port_info.get('pid', 'Unknown')})")
+                
+                log(f"\n💡 Solutions:")
+                log(f"   1. Stop the conflicting process:")
+                if port_info and port_info.get('pid'):
+                    log(f"      Stop-Process -Id {port_info['pid']} -Force")
+                else:
+                    log(f"      Get-NetTCPConnection -LocalPort {PORT} | Select-Object OwningProcess")
+                    log(f"      Then: Stop-Process -Id <PID> -Force")
+                log(f"   2. Use a different port:")
+                log(f"      Set environment variable: $env:PORT=8002")
+                log(f"      Or edit .env file: PORT=8002")
+                log(f"   3. Auto-find available port (attempting now)...")
+                
+                try:
+                    logger.info("Attempting to find available port...")
+                    actual_port = find_available_port(PORT + 1, max_attempts=10)
+                    log(f"✅ Found available port: {actual_port}")
+                    log(f"   Dashboard will start on: http://localhost:{actual_port}")
+                    logger.info(f"Found available port: {actual_port}")
+                except RuntimeError as e:
+                    logger.error(f"Failed to find available port: {e}", exc_info=True)
+                    log(f"❌ {e}")
+                    log(f"   Please manually specify a port or stop conflicting processes.")
+                    sys.exit(1)
+            else:
+                logger.info(f"Port {PORT} is available")
+        except Exception as e:
+            logger.error(f"Error checking port availability: {e}", exc_info=True)
+            log(f"⚠️  Error checking port: {e}")
+            # Continue with default port anyway
+        
+        # Display startup banner with actual port
+        try:
+            banner = f"""
 ╔══════════════════════════════════════════════════════════════════╗
 ║  🦁 MCP Studio v{VERSION}                                          ║
 ║  Mission Control for the MCP Zoo 🐘🦒🐿️                           ║
 ╠══════════════════════════════════════════════════════════════════╣
-║  Dashboard: http://localhost:{PORT}                                ║
-║  API Docs:  http://localhost:{PORT}/docs                           ║
+║  Dashboard: http://localhost:{actual_port}                                ║
+║  API Docs:  http://localhost:{actual_port}/docs                           ║
+║  Log File:  {LOG_FILE}                          ║
 ╚══════════════════════════════════════════════════════════════════╝
-""")
-    
-    log("🚀 Starting MCP Studio...")
-    log(f"📂 Repos directory: {REPOS_DIR}")
-    
-    if FASTMCP_AVAILABLE:
-        log("✅ FastMCP available - live connections enabled")
-    else:
-        log("⚠️  FastMCP not available - install with: pip install fastmcp")
-        log("   Live server connections will be disabled")
-    
-    # Discover clients on startup
-    clients = discover_mcp_clients()
-    for client, data in clients.items():
-        log(f"🔌 Found {client}: {len(data['servers'])} servers")
-    
-    uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="warning")
+"""
+            print(banner)
+            logger.info(f"Startup banner displayed. Port: {actual_port}")
+        except Exception as e:
+            logger.error(f"Error displaying startup banner: {e}", exc_info=True)
+        
+        # Start the server with error handling
+        try:
+            log(f"🌐 Starting server on port {actual_port}...")
+            logger.info(f"Starting uvicorn server on port {actual_port}...")
+            logger.info(f"Server will be accessible at: http://localhost:{actual_port}")
+            logger.info(f"API docs will be at: http://localhost:{actual_port}/docs")
+            
+            uvicorn.run(app, host="0.0.0.0", port=actual_port, log_level="warning")
+            
+        except OSError as e:
+            error_msg = f"OSError starting server: {e}"
+            logger.error(error_msg, exc_info=True)
+            
+            if "address already in use" in str(e).lower() or "10048" in str(e):
+                log(f"❌ PORT CONFLICT: Port {actual_port} is already in use!")
+                log(f"   Another process started using the port after we checked.")
+                logger.error(f"Port {actual_port} conflict detected after initial check")
+                log(f"   Solutions:")
+                log(f"   1. Stop the conflicting process:")
+                log(f"      Get-NetTCPConnection -LocalPort {actual_port} | Select-Object OwningProcess")
+                log(f"      Then: Stop-Process -Id <PID> -Force")
+                log(f"   2. Use a different port:")
+                log(f"      Set environment variable: $env:PORT={actual_port + 1}")
+            else:
+                log(f"❌ Server startup error: {e}")
+            logger.error(f"Server startup failed. Exiting.")
+            sys.exit(1)
+            
+        except KeyboardInterrupt:
+            logger.info("Received KeyboardInterrupt - shutting down gracefully")
+            log("\n👋 Shutting down MCP Studio...")
+            sys.exit(0)
+            
+        except Exception as e:
+            error_msg = f"Unexpected error starting server: {e}"
+            logger.critical(error_msg, exc_info=True)
+            log(f"❌ {error_msg}")
+            import traceback
+            tb = traceback.format_exc()
+            logger.critical(f"Traceback:\n{tb}")
+            log(tb)
+            log(f"\n📋 Full error details logged to: {LOG_FILE}")
+            sys.exit(1)
+            
+    except Exception as e:
+        # Catch-all for any errors during initialization
+        error_msg = f"Fatal error during startup initialization: {e}"
+        logger.critical(error_msg, exc_info=True)
+        import traceback
+        tb = traceback.format_exc()
+        logger.critical(f"Traceback:\n{tb}")
+        print(f"❌ FATAL ERROR: {error_msg}")
+        print(f"📋 Full error details logged to: {LOG_FILE}")
+        print(f"\nTraceback:\n{tb}")
+        sys.exit(1)
 

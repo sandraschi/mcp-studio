@@ -167,12 +167,47 @@ async def readiness_check() -> JSONResponse:
         JSON response with status
     """
     try:
-        # Check if we can import and access critical services
-        # TODO: Add actual readiness checks (database, external services, etc.)
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={"status": "ready"}
-        )
+        checks = {
+            "fastmcp": False,
+            "discovery_service": False,
+            "settings": False,
+        }
+        
+        # Check FastMCP is importable
+        try:
+            from fastmcp import FastMCP
+            checks["fastmcp"] = True
+        except ImportError:
+            logger.warning("FastMCP import failed")
+        
+        # Check discovery service is accessible
+        try:
+            from ..services.discovery_service import discovered_servers
+            checks["discovery_service"] = True
+        except Exception as e:
+            logger.warning("Discovery service check failed", error=str(e))
+        
+        # Check settings are accessible
+        try:
+            from ..core.config import settings
+            if settings:
+                checks["settings"] = True
+        except Exception as e:
+            logger.warning("Settings check failed", error=str(e))
+        
+        # All critical checks must pass
+        all_ready = all(checks.values())
+        
+        if all_ready:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content={"status": "ready", "checks": checks}
+            )
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": "not ready", "checks": checks}
+            )
     except Exception as e:
         logger.warning("Readiness check failed", error=str(e))
         return JSONResponse(

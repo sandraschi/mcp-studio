@@ -24,12 +24,15 @@ dependencies = [
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
     "fastmcp[all]>=2.13.1",
+    "mcp>=1.0.0,<2.0.0",  # CRITICAL: Prevent MCP 1.16.0+ Python 3.13 incompatibility
+    "anyio>=4.0.0,<5.0.0",  # CRITICAL: Prevent incompatible anyio versions
     "structlog>=23.0.0",
     "aiofiles>=23.0.0",
     "watchdog>=3.0.0",
     "python-multipart>=0.0.6",
     "jinja2>=3.0.0",
     "aiohttp>=3.9.0",
+    "httpx>=0.24.0",
 ]
 
 [project.optional-dependencies]
@@ -63,3 +66,10 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 asyncio_mode = "auto"
 addopts = "-v --cov=mcp_studio --cov-report=term-missing"
+
+[tool.pyright]
+include = ["src", "studio_dashboard.py"]
+exclude = ["**/node_modules", "**/__pycache__", "**/.*"]
+reportMissingImports = true
+reportMissingTypeStubs = false
+pythonVersion = "3.10"

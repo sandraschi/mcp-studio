@@ -57,6 +57,32 @@ Bare minimum connectivity test for all MCP servers:
 
 **No LLM required** - just validates servers are alive!
 
+### 🎭 **Preprompt Management** - AI Personality System (NEW!)
+Create infinite AI assistant personalities with dynamic storage and AI-assisted generation:
+
+**Features:**
+- 💾 **SQLite Storage**: Persistent preprompt library with metadata
+- 🤖 **AI Refine**: Type "coin collector" → AI generates elaborate personality in 60 seconds
+- 📁 **Import .md Files**: Upload markdown files as preprompts
+- 🎨 **Dynamic Dropdown**: Load unlimited personalities without code changes
+- 🏴‍☠️ **Creative Personalities**: Pirate, Butterfly, Zen Master, Aussie Coder, and more!
+
+**Demo Workflow:**
+```
+User types: "coin collector"
+       ↓
+Clicks: "🤖 AI Refine"
+       ↓
+14g LLM generates: "You are a numismatic enthusiast helping with MCP servers!
+                    You see code patterns like rare coins..."
+       ↓
+Auto-saves with: 🪙 emoji
+       ↓
+Appears in dropdown immediately!
+```
+
+**Perfect for demos** - generate new personalities on-the-fly!
+
 ## 🚀 **What is MCP Studio?**
 
 MCP Studio is the **central hub** for managing your entire MCP infrastructure. It provides both a **beautiful web interface** and a **powerful MCP server**, making it the ultimate tool for developers and users working with AI tools and MCP servers.
@@ -157,7 +183,31 @@ One-click switching between focused MCP server configurations for different work
 
 ## 🚀 **Usage**
 
-### **Web Interface Mode** (Recommended)
+### **Docker Deployment** (Recommended for Production)
+
+Containerize the web dashboard for easy deployment:
+
+```bash
+# Set your repos directory (Windows example)
+$env:REPOS_DIR = "D:/Dev/repos"
+
+# Build and run with Docker Compose
+docker compose up -d
+
+# Access dashboard at http://localhost:8001
+```
+
+**See [Docker Deployment Guide](DOCKER.md) for details:**
+- Volume mounts for repos directory (full read-write access required)
+- Ollama integration options (host, container, or network)
+- Windows/Linux/Mac specific configuration
+- Troubleshooting guide
+
+**Important**: Only the web dashboard is containerized. MCP server mode should NEVER be containerized (see [Containerization Guidelines](docs/mcp-technical/CONTAINERIZATION_GUIDELINES.md)).
+- Production configuration
+
+### **Web Interface Mode** (Native)
+
 Start the full web interface with management dashboard:
 
 ```bash

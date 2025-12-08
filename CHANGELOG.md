@@ -1,5 +1,47 @@
 # Changelog
 
+## [2.0.0] - 2025-12-04 - Preprompt Management System
+
+### Added
+- **🎭 Preprompt Management** - Dynamic AI personality system with SQLite storage
+- **🤖 AI Refine Generator** - Type concept → AI generates elaborate preprompt in 60 seconds
+- **📁 Import from .md** - Upload markdown files as preprompts
+- **💾 SQLite Database** - Persistent storage with full CRUD operations
+- **🎨 Dynamic Dropdown** - Load unlimited personalities without code changes
+- **🏴‍☠️ Creative Personalities** - 7 preprompts including AI-generated "Coin Collector" and "Long John Silver, Pirate"
+
+### Preprompt Features
+- AI-assisted generation using local Ollama LLM (14g model tested)
+- Auto-emoji detection from concept keywords
+- Personality-aware welcome messages on connection
+- Markdown import with auto-title extraction
+- Soft delete (preserves history)
+- Tag system for categorization
+- Source tracking (builtin/imported/ai_generated/user)
+
+### API Endpoints Added
+- `GET /api/ai/preprompts` - List all preprompts
+- `POST /api/preprompts/add` - Add new preprompt
+- `POST /api/preprompts/import` - Import from markdown
+- `POST /api/preprompts/ai-refine` - AI-generate preprompt (🌟 star feature!)
+- `GET /api/preprompts/{id}` - Get specific preprompt
+- `PUT /api/preprompts/{id}` - Update preprompt
+- `DELETE /api/preprompts/{id}` - Delete preprompt
+- `POST /api/preprompts/seed` - Seed builtin preprompts
+
+### Technical Improvements
+- Fixed hardcoded port (now reads from .env)
+- CORS configured for Tailscale access (`allow_origins=["*"]`)
+- Database module with comprehensive error handling
+- Simplified imports (preprompt_db.py in root)
+- Personality-specific AI responses and greetings
+
+### Demo Value
+- **60-second personality generation** - Perfect for live demos
+- **Infinite scalability** - No code changes needed for new personalities
+- **User-generated content** - Community sharing potential
+- **Professional UI** - Clean, integrated design
+
 ## [1.1.0] - 2025-11-29 - AI Assistant with Tools
 
 ### Added

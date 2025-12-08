@@ -26,7 +26,7 @@ echo ⬆️ Upgrading pip...
 python -m pip install --upgrade pip
 
 echo 📚 Installing core dependencies...
-pip install fastapi uvicorn pydantic python-dotenv structlog aiofiles watchdog python-multipart jinja2 aiohttp
+pip install fastapi uvicorn pydantic python-dotenv structlog aiofiles watchdog python-multipart jinja2 aiohttp httpx
 
 echo 🛠️ Installing FastMCP...
 pip install fastmcp
@@ -47,7 +47,7 @@ if not exist ".env" (
 
 echo.
 echo 🧪 Testing installation...
-python -c "import fastapi, structlog, aiohttp; print('✅ All imports successful!')"
+python -c "import fastapi, structlog, aiohttp, httpx; print('✅ All imports successful!')"
 if errorlevel 1 (
     echo ❌ Installation test failed
     pause

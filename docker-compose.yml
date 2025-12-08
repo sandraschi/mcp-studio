@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  mcp-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mcp-studio
+    ports:
+      - "${PORT:-8001}:8001"
+    volumes:
+      # Mount repos directory for FULL access (read-write required for tool execution)
+      # Windows: Use forward slashes, e.g., "D:/Dev/repos:/app/repos:rw"
+      # Linux/Mac: Use standard paths, e.g., "/home/user/repos:/app/repos:rw"
+      # The dashboard needs full access to:
+      # - Scan repository structure
+      # - Read files for analysis
+      # - Execute MCP tools from repos
+      # - Access configuration files
+      - "${REPOS_DIR:-D:/Dev/repos}:/app/repos:rw"
+      # Mount MCP client config directories (read-only for discovery)
+      # Windows: Mount AppData for Claude Desktop, Cursor, Windsurf configs
+      # These will be set by docker-start.ps1 or can be set manually
+      - "${APPDATA}:/host/appdata:ro"
+      # Mount user home for .config and .cursor directories (Linux/Mac/Windows)
+      - "${HOME}:/host/home:ro"
+      # Mount logs directory for persistence
+      - "./logs:/app/logs"
+      # Mount data directory for preprompts DB
+      - "./data:/app/data"
+    environment:
+      - PORT=8001
+      - REPOS_DIR=/app/repos
+      # Ollama connection - adjust based on your setup:
+      # Option 1: Ollama on host machine (Windows/Mac) - uses host.docker.internal
+      - OLLAMA_URL=http://host.docker.internal:11434
+      # Option 2: Ollama in another container (uncomment and use service name)
+      # - OLLAMA_URL=http://ollama:11434
+      # Option 3: Ollama on network (uncomment and use IP/hostname)
+      # - OLLAMA_URL=http://192.168.1.100:11434
+      # Option 4: No Ollama (dashboard works without it, just no AI features)
+      # - OLLAMA_URL=
+    restart: unless-stopped
+    networks:
+      - mcp-studio-network
+    # For Windows/Mac: use host.docker.internal to access host Ollama
+    # For Linux: may need --network=host or extra_hosts
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # Optional: Uncomment if you want to run Ollama in Docker too
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   restart: unless-stopped
+  #   networks:
+  #     - mcp-studio-network
+  #   # Then change OLLAMA_URL in mcp-studio service to: http://ollama:11434
+
+networks:
+  mcp-studio-network:
+    driver: bridge
+
+# volumes:
+#   ollama_data:

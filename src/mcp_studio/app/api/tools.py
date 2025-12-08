@@ -140,6 +140,9 @@ async def execute_tool_endpoint(request: ToolExecutionRequest) -> ToolExecutionR
     Raises:
         HTTPException: If the server, tool, or execution fails
     """
+    import time
+    start_time = time.perf_counter()
+    
     try:
         result = await execute_tool(
             server_id=request.server_id,
@@ -147,10 +150,12 @@ async def execute_tool_endpoint(request: ToolExecutionRequest) -> ToolExecutionR
             parameters=request.parameters,
         )
         
+        execution_time = time.perf_counter() - start_time
+        
         return ToolExecutionResult(
             success=True,
             result=result,
-            execution_time=0.0,  # TODO: Measure actual execution time
+            execution_time=execution_time,
         )
     except HTTPException:
         raise

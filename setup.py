@@ -12,6 +12,8 @@ setup(
         "pydantic>=2.0.0",
         "python-dotenv>=1.0.0",
         "fastmcp>=2.11.0",
+        "mcp>=1.0.0,<2.0.0",  # CRITICAL: Prevent MCP 1.16.0+ Python 3.13 incompatibility
+        "anyio>=4.0.0,<5.0.0",  # CRITICAL: Prevent incompatible anyio versions
         "structlog>=23.0.0",
         "aiofiles>=23.0.0",
         "watchdog>=3.0.0",

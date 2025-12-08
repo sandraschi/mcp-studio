@@ -7,7 +7,9 @@ import inspect
 import json
 import logging
 import os
+import re
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
@@ -132,7 +134,7 @@ async def _discover_python_server(server_path: Path) -> None:
         # Skip if already registered and recently checked
         if server_id in discovered_servers:
             server = discovered_servers[server_id]
-            if (datetime.utcnow() - server.last_seen).total_seconds() < 300:  # 5 minutes
+            if server.last_seen and (datetime.utcnow() - server.last_seen).total_seconds() < 300:  # 5 minutes
                 return
 
         # Launch the server process
@@ -289,6 +291,10 @@ def _extract_tool_info(tool_name: str, tool_func: Any) -> Optional[MCPTool]:
         # Get function signature
         sig = inspect.signature(tool_func)
 
+        # Extract docstring and parse Args section
+        docstring = tool_func.__doc__ or ""
+        param_descriptions = _parse_docstring_args(docstring)
+
         # Extract parameters
         parameters = []
         for param_name, param in sig.parameters.items():
@@ -299,21 +305,24 @@ def _extract_tool_info(tool_name: str, tool_func: Any) -> Optional[MCPTool]:
             if param.annotation != inspect.Parameter.empty:
                 param_type = _get_type_name(param.annotation)
 
+            # Get description from parsed docstring or use default
+            param_description = param_descriptions.get(param_name, "")
+
             param_info = MCPToolParameter(
                 name=param_name,
                 type=param_type,
                 required=param.default == inspect.Parameter.empty,
                 default=param.default if param.default != inspect.Parameter.empty else None,
-                description="",  # TODO: Extract from docstring
+                description=param_description,
             )
             parameters.append(param_info)
 
-        # Extract docstring
-        description = tool_func.__doc__ or ""
+        # Extract docstring (full description)
+        description = docstring.strip()
 
         return MCPTool(
             name=tool_name,
-            description=description.strip(),
+            description=description,
             parameters=parameters,
         )
     except Exception as e:
@@ -325,6 +334,76 @@ def _get_type_name(type_obj: Any) -> str:
     if hasattr(type_obj, "__name__"):
         return type_obj.__name__.lower()
     return str(type_obj).lower()
+
+
+def _parse_docstring_args(docstring: str) -> Dict[str, str]:
+    """Parse docstring to extract parameter descriptions from Args section.
+    
+    Supports Google-style docstrings:
+        Args:
+            param_name: Parameter description
+            param_name (type): Parameter description with type
+            
+    Returns:
+        Dictionary mapping parameter names to their descriptions
+    """
+    if not docstring:
+        return {}
+    
+    param_descriptions = {}
+    
+    # Find Args section (case-insensitive, handles "Args:" or "Parameters:")
+    args_pattern = re.compile(r'^(Args|Parameters):\s*$', re.IGNORECASE | re.MULTILINE)
+    match = args_pattern.search(docstring)
+    
+    if not match:
+        return param_descriptions
+    
+    # Extract everything after Args:
+    args_start = match.end()
+    args_text = docstring[args_start:]
+    
+    # Stop at next section (Returns, Examples, Raises, etc.) or end of docstring
+    next_section_pattern = re.compile(r'^(Returns?|Examples?|Raises?|Yields?|Note|See Also|Usage):\s*$', re.IGNORECASE | re.MULTILINE)
+    next_match = next_section_pattern.search(args_text)
+    if next_match:
+        args_text = args_text[:next_match.start()]
+    
+    # Parse each parameter line
+    # Pattern: param_name: description or param_name (type): description
+    # Handles indented continuation lines
+    lines = args_text.split('\n')
+    current_param = None
+    current_desc = []
+    
+    for line in lines:
+        # Check if this is a parameter line (starts with word, then colon)
+        # Handles: "param:", "param (type):", "param_name:", etc.
+        param_match = re.match(r'^\s*(\w+)(?:\s*\([^)]+\))?:\s*(.+)?$', line)
+        
+        if param_match:
+            # Save previous parameter
+            if current_param and current_desc:
+                param_descriptions[current_param] = ' '.join(current_desc).strip()
+            
+            # Start new parameter
+            current_param = param_match.group(1)
+            current_desc = [param_match.group(2)] if param_match.group(2) else []
+        elif current_param:
+            # Continuation line (indented or empty)
+            stripped = line.strip()
+            if stripped:
+                current_desc.append(stripped)
+            elif current_desc:  # Empty line ends description
+                param_descriptions[current_param] = ' '.join(current_desc).strip()
+                current_param = None
+                current_desc = []
+    
+    # Save last parameter
+    if current_param and current_desc:
+        param_descriptions[current_param] = ' '.join(current_desc).strip()
+    
+    return param_descriptions
 
 async def _cleanup_servers(active_paths: List[Tuple[Path, str]]) -> None:
     """Remove servers that are no longer available."""
