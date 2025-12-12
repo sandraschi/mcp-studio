@@ -270,22 +270,16 @@ def tool(
         func._mcp_tool_name = func_name
         func._mcp_is_tool = True
 
-        # Create wrapper for async functions
-        if asyncio.iscoroutinefunction(func):
-            @functools.wraps(func)
-            async def async_wrapper(*args, **kwargs):
-                return await _execute_tool_with_monitoring(func, metadata, *args, **kwargs)
-            return async_wrapper
-        else:
-            @functools.wraps(func)
-            def sync_wrapper(*args, **kwargs):
-                return _execute_tool_with_monitoring(func, metadata, *args, **kwargs)
-            return sync_wrapper
+        # All tools are async now, so just wrap with monitoring
+        @functools.wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            return await _execute_tool_with_monitoring(func, metadata, *args, **kwargs)
+        return async_wrapper
 
     return decorator
 
 
-def _execute_tool_with_monitoring(func: Callable, metadata: ToolMetadata, *args, **kwargs) -> Any:
+async def _execute_tool_with_monitoring(func: Callable, metadata: ToolMetadata, *args, **kwargs) -> Any:
     """Execute a tool with performance monitoring and error handling.
 
     Args:
@@ -310,11 +304,8 @@ def _execute_tool_with_monitoring(func: Callable, metadata: ToolMetadata, *args,
     )
 
     try:
-        # Execute function
-        if asyncio.iscoroutinefunction(func):
-            result = asyncio.run(func(*args, **kwargs))
-        else:
-            result = func(*args, **kwargs)
+        # Execute function (already async, just await it)
+        result = await func(*args, **kwargs)
 
         execution_time = time.time() - start_time
 

@@ -1,12 +1,13 @@
 """API endpoints for managing MCP tools."""
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import HttpUrl
+from pydantic import BaseModel, Field, HttpUrl
 
-from ...models.mcp import MCPTool, ToolExecutionRequest, ToolExecutionResult
-from ...services.discovery_service import discovered_servers, execute_tool
+from ..utils.docstring_formatter import format_docstring_html, format_docstring_markdown, parse_docstring
+from ..models.mcp import MCPTool, ToolExecutionRequest, ToolExecutionResult
+from ..services.server_service import server_service
 
 router = APIRouter()
 
@@ -41,10 +42,13 @@ async def list_tools(
     tools = []
     
     # Get tools from all servers or a specific server
-    servers = [discovered_servers[server_id]] if server_id else discovered_servers.values()
+    all_servers = server_service.get_servers()
+    servers = [all_servers[server_id]] if server_id and server_id in all_servers else list(all_servers.values())
     
     for server in servers:
-        for tool in server.tools:
+        server_tools = await server_service.get_server_tools(server.id)
+        for tool_dict in server_tools:
+            tool = MCPTool(**tool_dict)
             # Add server info to the tool
             tool_with_server = tool.copy(update={"server_id": server.id, "server_name": server.name})
             tools.append(tool_with_server)
@@ -94,16 +98,17 @@ async def get_tool_by_name(
     results = []
     
     # Get tools from all servers or a specific server
-    servers = [discovered_servers[server_id]] if server_id else discovered_servers.values()
+    all_servers = server_service.get_servers()
+    servers = [all_servers[server_id]] if server_id and server_id in all_servers else list(all_servers.values())
     
     for server in servers:
-        for tool in server.tools:
-            if tool.name == tool_name:
-                tool_dict = tool.dict()
+        server_tools = await server_service.get_server_tools(server.id)
+        for tool_dict in server_tools:
+            if tool_dict.get("name") == tool_name:
                 tool_dict.update({
                     "server_id": server.id,
                     "server_name": server.name,
-                    "server_status": server.status,
+                    "server_status": server.status.value if hasattr(server.status, 'value') else str(server.status),
                 })
                 results.append(tool_dict)
     
@@ -144,7 +149,7 @@ async def execute_tool_endpoint(request: ToolExecutionRequest) -> ToolExecutionR
     start_time = time.perf_counter()
     
     try:
-        result = await execute_tool(
+        result = await server_service.execute_tool(
             server_id=request.server_id,
             tool_name=request.tool_name,
             parameters=request.parameters,
@@ -180,8 +185,52 @@ async def list_categories() -> List[str]:
     """
     categories = set()
     
-    for server in discovered_servers.values():
-        for tool in server.tools:
-            categories.update(tool.categories)
+    all_servers = server_service.get_servers()
+    for server in all_servers.values():
+        server_tools = await server_service.get_server_tools(server.id)
+        for tool_dict in server_tools:
+            if "categories" in tool_dict:
+                categories.update(tool_dict["categories"])
     
     return sorted(categories)
+
+
+class DocstringFormatRequest(BaseModel):
+    """Request model for formatting docstrings."""
+    docstring: str = Field(..., description="The raw docstring text to format")
+    format: str = Field(default="html", description="Output format: 'html' or 'markdown'")
+
+
+class DocstringFormatResponse(BaseModel):
+    """Response model for formatted docstring."""
+    formatted: str = Field(..., description="The formatted docstring")
+    parsed: Dict = Field(..., description="Parsed docstring structure")
+
+
+@router.post(
+    "/format-docstring",
+    response_model=DocstringFormatResponse,
+    summary="Format a docstring",
+    description="Parse and format a docstring for better UI display.",
+)
+async def format_docstring(request: DocstringFormatRequest) -> DocstringFormatResponse:
+    """
+    Format a docstring for display in the UI.
+    
+    Args:
+        request: Docstring formatting request
+        
+    Returns:
+        Formatted docstring and parsed structure
+    """
+    parsed = parse_docstring(request.docstring)
+    
+    if request.format.lower() == "markdown":
+        formatted = format_docstring_markdown(request.docstring)
+    else:
+        formatted = format_docstring_html(request.docstring)
+    
+    return DocstringFormatResponse(
+        formatted=formatted,
+        parsed=parsed
+    )

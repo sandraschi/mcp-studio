@@ -39,4 +39,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Run the dashboard (web mode only, not MCP server mode)
 # The script handles uvicorn startup internally
-CMD ["python", "-u", "studio_dashboard.py"]
+CMD ["python", "-u", "studio_dashboard_fixed.py"]

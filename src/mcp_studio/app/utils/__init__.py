@@ -1,6 +1,13 @@
 """Utilities module for MCP Studio application."""
 
-# This module contains utility functions and classes used throughout the application.
-# Currently empty but can be extended with common utilities as needed.
+from .docstring_formatter import (
+    parse_docstring,
+    format_docstring_html,
+    format_docstring_markdown,
+)
 
-__all__ = []
+__all__ = [
+    "parse_docstring",
+    "format_docstring_html",
+    "format_docstring_markdown",
+]

@@ -78,7 +78,8 @@ class WorkingSetManager:
         working_sets = {}
         for template_file in self.templates_dir.glob("*.json"):
             try:
-                with open(template_file, 'r', encoding='utf-8') as f:
+                # Use utf-8-sig to handle UTF-8 BOM markers
+                with open(template_file, 'r', encoding='utf-8-sig') as f:
                     data = json.load(f)
                     working_set = WorkingSet(data)
                     working_sets[working_set.id] = working_set

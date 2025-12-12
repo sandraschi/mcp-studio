@@ -1,7 +1,7 @@
 """
-Runt Analyzer API Routes for MCP Studio Dashboard.
+Repo Scanner API Routes for MCP Studio Dashboard.
 
-Provides REST endpoints for the runt analyzer feature.
+Provides REST endpoints for the repo scanner feature.
 """
 from typing import Optional
 
@@ -9,35 +9,51 @@ from fastapi import APIRouter, Query
 
 from ..tools.runt_analyzer import analyze_runts, get_repo_status
 
-router = APIRouter(prefix="/api/runts", tags=["runts"])
+router = APIRouter(prefix="/repos", tags=["repos"])
 
 
 @router.get("/")
-async def get_runts(
+async def get_repos(
     scan_path: str = Query(default="D:/Dev/repos", description="Directory to scan"),
     include_sota: bool = Query(default=True, description="Include SOTA repos in response")
 ):
     """
-    Get all MCP repositories with runt analysis.
-    
+    Get all MCP repositories with repo analysis.
+
     Returns categorized list of repos:
-    - runts: Repos needing upgrades
+    - repos: Repos needing upgrades
     - sota_repos: Repos meeting SOTA standards
     """
-    result = await analyze_runts(scan_path=scan_path, include_sota=include_sota)
+    result = await analyze_runts(scan_path=scan_path, include_sota=include_sota, format="json")
+    # Ensure result is a dict (analyze_runts can return str in error cases)
+    if not isinstance(result, dict):
+        return {
+            "success": False,
+            "error": f"Unexpected result type: {type(result)}",
+            "scan_path": scan_path,
+            "timestamp": "2025-12-12"
+        }
     return result
 
 
 @router.get("/summary")
-async def get_runts_summary(
+async def get_repos_summary(
     scan_path: str = Query(default="D:/Dev/repos", description="Directory to scan")
 ):
     """
-    Get summary statistics for runt analysis.
-    
+    Get summary statistics for repo analysis.
+
     Returns quick stats without full repo details.
     """
-    result = await analyze_runts(scan_path=scan_path, include_sota=False)
+    result = await analyze_runts(scan_path=scan_path, include_sota=False, format="json")
+    # Ensure result is a dict (analyze_runts can return str in error cases)
+    if not isinstance(result, dict):
+        return {
+            "success": False,
+            "error": f"Unexpected result type: {type(result)}",
+            "scan_path": scan_path,
+            "timestamp": "2025-12-12"
+        }
     return {
         "success": result.get("success"),
         "summary": result.get("summary"),
@@ -59,10 +75,15 @@ async def get_repo_details(
     return result
 
 
+@router.get("/test")
+async def test_endpoint():
+    """Simple test endpoint to verify routing works."""
+    return {"message": "Repo scanner routes are working!", "timestamp": "2025-12-11"}
+
 @router.get("/thresholds")
 async def get_thresholds():
     """
-    Get current SOTA thresholds and criteria.
+    Get current SOTA thresholds and criteria for repo scanning.
     """
     from ..tools.runt_analyzer import (
         DXT_FILES,
@@ -73,7 +94,7 @@ async def get_thresholds():
         TEST_DIRS,
         TOOL_PORTMANTEAU_THRESHOLD,
     )
-    
+
     return {
         "fastmcp_latest": FASTMCP_LATEST,
         "fastmcp_runt_threshold": FASTMCP_RUNT_THRESHOLD,
@@ -143,7 +164,7 @@ async def get_thresholds():
         },
         "status_emojis": {
             "💀": "Critical (5+ issues)",
-            "🐛": "Bug (3-4 issues)", 
+            "🐛": "Bug (3-4 issues)",
             "🐣": "Minor (1-2 issues)",
             "⚠️": "Warning (non-critical issues)",
             "✅": "SOTA compliant"

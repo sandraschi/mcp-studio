@@ -22,8 +22,9 @@ SECRET_KEY = "your-secret-key-here"  # In production, use a proper secret key
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Password hashing - temporarily disabled due to bcrypt issues
+# pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__truncate_error=True)
+pwd_context = CryptContext(schemes=["plaintext"], deprecated="auto")  # Use plaintext for now
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # User model (in-memory for demo, replace with database in production)

@@ -1,8 +1,16 @@
-# Glama.ai Integration Guide
+# Glama.ai Integration Guide for MCP Studio
 
-## 🏆 Gold Status Achievement
+## 🏗️ Dual-Architecture Platform
 
-Our **notepadpp-mcp** repository has achieved **Gold Status** on the Glama.ai platform with a quality score of **85/100 points**.
+**MCP Studio** is a **dual-architecture platform** containing:
+- **Web Dashboard**: FastAPI + React frontend for visual MCP server management
+- **MCP Server**: FastMCP 2.13.1 server providing 12 tools to MCP clients
+
+This repository serves **both purposes** - it's both a web application AND an MCP server.
+
+## 🎯 Repository Discovery
+
+**Important**: Glama.ai uses `glama.json` for discovery (not naming conventions). Our `glama.json` clearly indicates this is a dual-architecture platform.
 
 ### Quality Metrics
 - **Code Quality**: 9/10
@@ -16,9 +24,10 @@ Our **notepadpp-mcp** repository has achieved **Gold Status** on the Glama.ai pl
 
 ### Repository Discovery
 - **URL**: https://glama.ai
-- **Search Terms**: `notepadpp-mcp`, `sandraschi`, `notepadpp`
-- **Status**: ✅ Indexed and Discoverable
-- **Tier**: 🏆 Gold Status
+- **Search Terms**: `mcp-studio`, `sandraschi`, `mcp-management`, `mcp-dashboard`
+- **Status**: ⏳ Pending discovery (requires `glama.json` file - now added)
+- **Type**: Dual-architecture (Web Dashboard + MCP Server)
+- **Discovery Method**: `glama.json` file in repository root
 
 ### Automatic Updates
 Glama.ai automatically scans our repository for updates through:
@@ -43,15 +52,26 @@ Glama.ai automatically scans our repository for updates through:
 
 ## 🔧 Configuration Files
 
-### glama.yml
-Repository metadata and tool catalog for Glama.ai indexing:
-```yaml
-name: notepadpp-mcp
-quality:
-  status: "gold"
-  score: 85
-  tests_passing: true
+### glama.json
+Repository metadata for Glama.ai indexing (located in repository root):
+```json
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": ["sandraschi"],
+  "name": "mcp-studio",
+  "description": "Dual-architecture MCP platform: Web dashboard + MCP server",
+  "type": "dual",
+  "components": {
+    "mcp_server": { "enabled": true, "framework": "FastMCP 2.13.1", "tools": 12 },
+    "web_frontend": { "enabled": true, "framework": "FastAPI + React" }
+  }
+}
 ```
+
+**Key Points:**
+- `"type": "dual"` indicates this is both a web app and MCP server
+- `components` section clearly lists both architectures
+- Glama.ai will index this as an MCP server (the MCP server component)
 
 ### Webhook Integration
 Automatic notifications for repository updates:
@@ -62,9 +82,10 @@ Automatic notifications for repository updates:
 ## 📈 Optimization for Better Rankings
 
 ### Repository Settings
-1. **Description**: "FastMCP 2.12 compatible MCP server for Notepad++ automation - Gold Status Certified"
-2. **Topics**: `mcp-server`, `notepadpp`, `windows-automation`, `fastmcp`, `gold-status`, `production-ready`
-3. **Badges**: Gold Status badge prominently displayed
+1. **Description**: "Dual-architecture MCP platform: Web dashboard (FastAPI frontend) + MCP server (FastMCP 2.13.1) for MCP ecosystem management"
+2. **Topics**: `mcp-server`, `mcp-client`, `mcp-management`, `web-dashboard`, `fastapi`, `fastmcp`, `dual-architecture`, `mcp-ecosystem`
+3. **README**: Clearly states dual architecture at the top
+4. **glama.json**: Includes `"type": "dual"` and `components` section
 
 ### Quality Signals
 - ✅ Green CI/CD badges

@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-900 text-white">
+    <div class="max-w-4xl mx-auto px-4 py-8">
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-white mb-2">Settings</h1>
+            <p class="text-gray-400">Configure MCP Studio preferences and behavior</p>
+        </div>
+
+        <!-- Settings Form -->
+        <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+            <form id="settingsForm" class="space-y-6">
+                <!-- Repository Scanner Settings -->
+                <div class="border-b border-gray-700 pb-6 mb-6">
+                    <h2 class="text-xl font-semibold text-white mb-4 flex items-center">
+                        <span class="mr-2">🔍</span>
+                        Repository Scanner
+                    </h2>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="repos_path" class="block text-sm font-medium text-gray-300 mb-2">
+                                Repository Root Directory
+                            </label>
+                            <input
+                                type="text"
+                                id="repos_path"
+                                name="repos_path"
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                placeholder="D:/Dev/repos"
+                            >
+                            <p class="text-xs text-gray-500 mt-1">
+                                Directory containing your MCP server repositories
+                            </p>
+                        </div>
+
+                        <div>
+                            <label for="repo_scan_depth" class="block text-sm font-medium text-gray-300 mb-2">
+                                Scan Depth
+                            </label>
+                            <input
+                                type="number"
+                                id="repo_scan_depth"
+                                name="repo_scan_depth"
+                                min="1"
+                                max="5"
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                            <p class="text-xs text-gray-500 mt-1">
+                                How deep to scan subdirectories (1-5)
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <label class="block text-sm font-medium text-gray-300 mb-2">
+                            Exclude Directories
+                        </label>
+                        <div id="excludeDirs" class="flex flex-wrap gap-2">
+                            <!-- Exclude directories will be added here -->
+                        </div>
+                        <input
+                            type="text"
+                            id="new_exclude"
+                            class="mt-2 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Add directory to exclude (e.g., node_modules)"
+                        >
+                        <button
+                            type="button"
+                            onclick="addExcludeDir()"
+                            class="ml-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium"
+                        >
+                            Add
+                        </button>
+                    </div>
+                </div>
+
+                <!-- UI Settings -->
+                <div class="border-b border-gray-700 pb-6 mb-6">
+                    <h2 class="text-xl font-semibold text-white mb-4 flex items-center">
+                        <span class="mr-2">🎨</span>
+                        User Interface
+                    </h2>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="ui_theme" class="block text-sm font-medium text-gray-300 mb-2">
+                                Theme
+                            </label>
+                            <select
+                                id="ui_theme"
+                                name="ui_theme"
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                                <option value="dark">Dark</option>
+                                <option value="light">Light</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="ui_refresh_interval" class="block text-sm font-medium text-gray-300 mb-2">
+                                Auto-refresh Interval (seconds)
+                            </label>
+                            <input
+                                type="number"
+                                id="ui_refresh_interval"
+                                name="ui_refresh_interval"
+                                min="5"
+                                max="300"
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            >
+                            <p class="text-xs text-gray-500 mt-1">
+                                How often to refresh data (5-300 seconds)
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Server Settings (Read-only) -->
+                <div class="border-b border-gray-700 pb-6 mb-6">
+                    <h2 class="text-xl font-semibold text-white mb-4 flex items-center">
+                        <span class="mr-2">⚙️</span>
+                        Server Configuration
+                    </h2>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                                Host
+                            </label>
+                            <input
+                                type="text"
+                                id="host"
+                                readonly
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-400 cursor-not-allowed"
+                            >
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                                Port
+                            </label>
+                            <input
+                                type="number"
+                                id="port"
+                                readonly
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-400 cursor-not-allowed"
+                            >
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                                Debug Mode
+                            </label>
+                            <input
+                                type="text"
+                                id="debug"
+                                readonly
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-400 cursor-not-allowed"
+                            >
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                                Log Level
+                            </label>
+                            <input
+                                type="text"
+                                id="log_level"
+                                readonly
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-400 cursor-not-allowed"
+                            >
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">
+                        Server settings are configured via environment variables and cannot be changed here.
+                    </p>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex justify-end space-x-4">
+                    <button
+                        type="button"
+                        onclick="resetSettings()"
+                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium"
+                    >
+                        Reset to Defaults
+                    </button>
+                    <button
+                        type="submit"
+                        class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium"
+                    >
+                        Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Load current settings
+async function loadSettings() {
+    try {
+        const response = await fetch('/api/v1/settings');
+        const settings = await response.json();
+
+        // Populate form fields
+        document.getElementById('repos_path').value = settings.repos_path || '';
+        document.getElementById('repo_scan_depth').value = settings.repo_scan_depth || 2;
+        document.getElementById('ui_theme').value = settings.ui_theme || 'dark';
+        document.getElementById('ui_refresh_interval').value = settings.ui_refresh_interval || 30;
+        document.getElementById('host').value = settings.host || '';
+        document.getElementById('port').value = settings.port || '';
+        document.getElementById('debug').value = settings.debug ? 'Enabled' : 'Disabled';
+        document.getElementById('log_level').value = settings.log_level || '';
+
+        // Populate exclude directories
+        const excludeDirs = settings.repo_scan_exclude || [];
+        const excludeContainer = document.getElementById('excludeDirs');
+        excludeContainer.innerHTML = '';
+        excludeDirs.forEach(dir => addExcludeTag(dir));
+
+    } catch (error) {
+        console.error('Failed to load settings:', error);
+        showNotification('Failed to load settings', 'error');
+    }
+}
+
+// Add exclude directory tag
+function addExcludeTag(dir) {
+    const container = document.getElementById('excludeDirs');
+    const tag = document.createElement('span');
+    tag.className = 'inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-600 text-gray-300';
+    tag.innerHTML = `
+        ${dir}
+        <button type="button" onclick="removeExcludeDir('${dir}')" class="ml-1 text-gray-400 hover:text-white">×</button>
+    `;
+    container.appendChild(tag);
+}
+
+// Add new exclude directory
+function addExcludeDir() {
+    const input = document.getElementById('new_exclude');
+    const dir = input.value.trim();
+    if (dir) {
+        addExcludeTag(dir);
+        input.value = '';
+    }
+}
+
+// Remove exclude directory
+function removeExcludeDir(dir) {
+    const tags = document.querySelectorAll('#excludeDirs span');
+    tags.forEach(tag => {
+        if (tag.textContent.includes(dir)) {
+            tag.remove();
+        }
+    });
+}
+
+// Save settings
+document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    // Collect exclude directories
+    const excludeTags = document.querySelectorAll('#excludeDirs span');
+    const repoScanExclude = Array.from(excludeTags).map(tag =>
+        tag.textContent.replace('×', '').trim()
+    );
+
+    const settingsData = {
+        repos_path: document.getElementById('repos_path').value,
+        repo_scan_depth: parseInt(document.getElementById('repo_scan_depth').value),
+        repo_scan_exclude: repoScanExclude,
+        ui_theme: document.getElementById('ui_theme').value,
+        ui_refresh_interval: parseInt(document.getElementById('ui_refresh_interval').value)
+    };
+
+    try {
+        const response = await fetch('/api/v1/settings', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(settingsData)
+        });
+
+        if (response.ok) {
+            showNotification('Settings saved successfully!', 'success');
+        } else {
+            throw new Error('Failed to save settings');
+        }
+    } catch (error) {
+        console.error('Failed to save settings:', error);
+        showNotification('Failed to save settings', 'error');
+    }
+});
+
+// Reset settings
+async function resetSettings() {
+    if (!confirm('Are you sure you want to reset all settings to defaults?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/v1/settings/reset', {
+            method: 'POST'
+        });
+
+        if (response.ok) {
+            showNotification('Settings reset to defaults', 'success');
+            loadSettings(); // Reload settings
+        } else {
+            throw new Error('Failed to reset settings');
+        }
+    } catch (error) {
+        console.error('Failed to reset settings:', error);
+        showNotification('Failed to reset settings', 'error');
+    }
+}
+
+// Show notification
+function showNotification(message, type = 'info') {
+    // Simple notification - you could enhance this
+    alert(message);
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', loadSettings);
+
+// Handle Enter key in exclude input
+document.getElementById('new_exclude').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        addExcludeDir();
+    }
+});
+</script>
+{% endblock %}

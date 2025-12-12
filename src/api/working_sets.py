@@ -1,4 +1,4 @@
-﻿"""
+"""
 FastAPI endpoints for Working Set management
 """
 
@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 import logging
 from pathlib import Path
 
-from ..working_sets.manager import WorkingSetManager
+from working_sets.manager import WorkingSetManager
 
 logger = logging.getLogger(__name__)
 

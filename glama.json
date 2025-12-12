@@ -1,0 +1,31 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": ["sandraschi"],
+  "name": "mcp-studio",
+  "description": "Dual-architecture MCP platform: Web-based management dashboard (FastAPI frontend) + FastMCP 2.13.1 server for MCP ecosystem management",
+  "type": "dual",
+  "components": {
+    "mcp_server": {
+      "enabled": true,
+      "framework": "FastMCP 2.13.1",
+      "tools": 12,
+      "transport": "stdio"
+    },
+    "web_frontend": {
+      "enabled": true,
+      "framework": "FastAPI + React",
+      "features": ["dashboard", "server_management", "working_sets", "runt_analyzer"]
+    }
+  },
+  "keywords": [
+    "mcp-server",
+    "mcp-client",
+    "mcp-management",
+    "web-dashboard",
+    "fastapi",
+    "fastmcp",
+    "dual-architecture",
+    "mcp-ecosystem"
+  ]
+}
+

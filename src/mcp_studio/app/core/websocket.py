@@ -6,13 +6,14 @@ Handles WebSocket connections for real-time communication with the frontend.
 import asyncio
 import json
 import logging
-from typing import Dict, List, Optional, Set, Any, Callable, Awaitable, Union
+from datetime import datetime
+from typing import Dict, List, Optional, Set, Any, Callable, Awaitable, Union, Literal
 from uuid import UUID, uuid4
 from enum import Enum
 from dataclasses import dataclass
 
 from fastapi import WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -301,10 +302,7 @@ class WebSocketMessage(BaseModel):
         description="Error information if applicable"
     )
     
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-        }
+    model_config = ConfigDict()
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert message to dictionary."""
@@ -326,7 +324,7 @@ class ToolExecutionStatus(str, Enum):
 
 class ToolExecutionMessage(WebSocketMessage):
     """Tool execution message model."""
-    type: str = Field("tool_execution", const=True)
+    type: Literal["tool_execution"] = "tool_execution"
     execution_id: str = Field(..., description="Unique ID for this execution")
     tool_name: str = Field(..., description="Name of the tool being executed")
     status: ToolExecutionStatus = Field(..., description="Current status of the execution")
@@ -348,7 +346,8 @@ class ToolExecutionMessage(WebSocketMessage):
         description="Additional metadata about the execution"
     )
     
-    @validator('progress')
+    @field_validator('progress')
+    @classmethod
     def validate_progress(cls, v):
         """Ensure progress is between 0 and 1."""
         return max(0.0, min(1.0, v))
@@ -395,7 +394,7 @@ class ToolExecutionMessage(WebSocketMessage):
 
 class SystemMessage(WebSocketMessage):
     """System-level WebSocket messages."""
-    type: str = Field("system", const=True)
+    type: Literal["system"] = "system"
     code: str = Field(..., description="System message code")
     message: str = Field(..., description="Human-readable message")
     
@@ -421,14 +420,15 @@ class SystemMessage(WebSocketMessage):
 
 class ProgressUpdateMessage(WebSocketMessage):
     """Progress update message model."""
-    type: str = Field("progress_update", const=True)
+    type: Literal["progress_update"] = "progress_update"
     progress: float = Field(..., ge=0.0, le=1.0, description="Progress from 0.0 to 1.0")
     message: Optional[str] = Field(None, description="Optional progress message")
     status: str = Field("processing", description="Current status")
     total: Optional[float] = Field(None, description="Total work units")
     current: Optional[float] = Field(None, description="Current work units completed")
     
-    @validator('progress')
+    @field_validator('progress')
+    @classmethod
     def validate_progress(cls, v):
         """Ensure progress is between 0 and 1."""
         return max(0.0, min(1.0, v))

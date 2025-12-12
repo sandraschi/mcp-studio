@@ -10,10 +10,10 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 from ...app.core.config import settings
-from ...app.core.logging import get_logger
+from ...app.core.logging_utils import get_logger
 from ...app.services.server_service import server_service
 from ...app.services.config_service import config_service
-from ...models.server import ServerStatus
+from ...app.core.enums import ServerStatus
 
 # Set up logger
 logger = get_logger(__name__)
@@ -26,50 +26,76 @@ router = APIRouter(
 
 # Set up templates directory
 templates_dir = Path(__file__).parent.parent.parent / "templates"
+templates_dir = templates_dir.resolve()  # Resolve to absolute path
+if not templates_dir.exists():
+    # Fallback: try relative to project root
+    templates_dir = Path(__file__).parent.parent.parent.parent.parent / "src" / "mcp_studio" / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
+logger.info(f"Templates directory: {templates_dir}")
 
-# Add context processor for template variables
-@router.middleware("http")
-async def add_template_context(request: Request, call_next):
-    """Add common template context variables."""
-    # Get the base URL
+# Template context helper function
+def get_template_context(request: Request) -> dict:
+    """Get common template context variables."""
     base_url = str(request.base_url).rstrip("/")
-    
-    # Add common context variables
-    request.state.template_context = {
+    return {
         "request": request,
         "app_name": "MCP Studio",
-        "app_version": "0.1.0",
+        "app_version": "0.2.1-beta",
         "base_url": base_url,
         "debug": settings.DEBUG,
     }
-    
-    response = await call_next(request)
-    return response
 
-# Root route - redirects to dashboard
+# Root route - redirects to dashboard (old version without sidebar)
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def root(request: Request):
     """Root route that redirects to the dashboard."""
-    return templates.TemplateResponse(
-        "dashboard.html",
-        {
-            **request.state.template_context,
-            "title": "Dashboard",
-        },
-    )
+    # Load the old dashboard HTML directly (standalone, not a Jinja2 template)
+    dashboard_path = Path(__file__).parent.parent.parent / "templates" / "dashboard_old.html"
+    if not dashboard_path.exists():
+        # Fallback: try relative to project root
+        dashboard_path = Path(__file__).parent.parent.parent.parent.parent / "src" / "mcp_studio" / "templates" / "dashboard_old.html"
+    
+    if dashboard_path.exists():
+        with open(dashboard_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        # Replace VERSION variable (from studio_dashboard.py f-string)
+        html_content = html_content.replace('{VERSION}', get_template_context(request).get('app_version', '0.2.1-beta'))
+        return HTMLResponse(content=html_content)
+    else:
+        # Fallback to template if old dashboard not found
+        return templates.TemplateResponse(
+            "dashboard.html",
+            {
+                **get_template_context(request),
+                "title": "Dashboard",
+            },
+        )
 
-# Dashboard route
+# Dashboard route - using old dashboard without sidebar
 @router.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
 async def dashboard(request: Request):
-    """Dashboard page."""
-    return templates.TemplateResponse(
-        "dashboard.html",
-        {
-            **request.state.template_context,
-            "title": "Dashboard",
-        },
-    )
+    """Dashboard page - old version without sidebar."""
+    # Load the old dashboard HTML directly (standalone, not a Jinja2 template)
+    dashboard_path = Path(__file__).parent.parent.parent / "templates" / "dashboard_old.html"
+    if not dashboard_path.exists():
+        # Fallback: try relative to project root
+        dashboard_path = Path(__file__).parent.parent.parent.parent.parent / "src" / "mcp_studio" / "templates" / "dashboard_old.html"
+    
+    if dashboard_path.exists():
+        with open(dashboard_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        # Replace VERSION variable (from studio_dashboard.py f-string)
+        html_content = html_content.replace('{VERSION}', get_template_context(request).get('app_version', '0.2.1-beta'))
+        return HTMLResponse(content=html_content)
+    else:
+        # Fallback to template if old dashboard not found
+        return templates.TemplateResponse(
+            "dashboard.html",
+            {
+                **get_template_context(request),
+                "title": "Dashboard",
+            },
+        )
 
 # Servers list route
 @router.get("/servers", response_class=HTMLResponse, include_in_schema=False)
@@ -115,7 +141,7 @@ async def servers_list(
     return templates.TemplateResponse(
         "servers/list.html",
         {
-            **request.state.template_context,
+            **get_template_context(request),
             "title": "Servers",
             "servers": servers,
             "status_filter": status_filter,
@@ -158,7 +184,7 @@ async def server_detail(
     return templates.TemplateResponse(
         "servers/detail.html",
         {
-            **request.state.template_context,
+            **get_template_context(request),
             "title": f"Server: {server.name}",
             "server": server_dict,
             "tools": tools,
@@ -264,7 +290,7 @@ async def tools_list(request: Request):
     return templates.TemplateResponse(
         "tools/list.html",
         {
-            **request.state.template_context,
+            **get_template_context(request),
             "title": "Tools",
             "tools": tools,
         },
@@ -286,7 +312,7 @@ async def tool_detail(request: Request, tool_name: str):
     return templates.TemplateResponse(
         "tools/detail.html",
         {
-            **request.state.template_context,
+            **get_template_context(request),
             "title": f"Tool: {tool_name}",
             "tool": tool,
         },
@@ -302,7 +328,7 @@ async def execute_tool(request: Request):
     return templates.TemplateResponse(
         "tools/execute.html",
         {
-            **request.state.template_context,
+            **get_template_context(request),
             "title": "Execute Tool",
             "servers": servers,
         },
@@ -318,11 +344,43 @@ async def templates_list(request: Request):
     return templates.TemplateResponse(
         "templates/list.html",
         {
-            **request.state.template_context,
+            **get_template_context(request),
             "title": "Templates",
             "templates": templates_list,
         },
     )
+
+# Clients list route
+@router.get("/clients", response_class=HTMLResponse, include_in_schema=False)
+async def clients_list(request: Request):
+    """Clients list page."""
+    return templates.TemplateResponse(
+        "clients/list.html",
+        {
+            **get_template_context(request),
+            "title": "MCP Clients",
+        },
+    )
+
+
+# Client detail route
+@router.get("/clients/{client_id}", response_class=HTMLResponse, include_in_schema=False)
+async def client_detail(
+    request: Request, 
+    client_id: str,
+    tab: str = "overview"
+):
+    """Client detail page with tabbed interface."""
+    return templates.TemplateResponse(
+        "clients/detail.html",
+        {
+            **get_template_context(request),
+            "title": f"Client: {client_id}",
+            "client_id": client_id,
+            "active_tab": tab,
+        },
+    )
+
 
 # Settings route
 @router.get("/settings", response_class=HTMLResponse, include_in_schema=False)
@@ -331,7 +389,7 @@ async def settings_page(request: Request):
     return templates.TemplateResponse(
         "settings/index.html",
         {
-            **request.state.template_context,
+            **get_template_context(request),
             "title": "Settings",
             "settings": {
                 "debug": settings.DEBUG,
@@ -339,53 +397,32 @@ async def settings_page(request: Request):
                 "host": settings.HOST,
                 "port": settings.PORT,
                 "workers": settings.WORKERS,
-                "mcp_paths": settings.MCP_PATHS,
+                "repos_path": settings.REPOS_PATH,
+                "repo_scan_depth": settings.REPO_SCAN_DEPTH,
+                "repo_scan_exclude": settings.REPO_SCAN_EXCLUDE,
+                "ui_theme": settings.UI_THEME,
+                "ui_refresh_interval": settings.UI_REFRESH_INTERVAL,
             },
         },
     )
 
-# 404 handler
+# 404 handler - must be last route
 @router.get("/{full_path:path}", include_in_schema=False)
 async def catch_all(request: Request, full_path: str):
     """Catch-all route for 404 errors."""
+    # Don't catch API routes
+    if full_path.startswith("api/"):
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Not Found")
     return templates.TemplateResponse(
         "errors/404.html",
         {
-            **request.state.template_context,
+            **get_template_context(request),
             "title": "Page Not Found",
             "path": full_path,
         },
         status_code=404,
     )
 
-# Error handler
-@router.middleware("http")
-async def error_middleware(request: Request, call_next):
-    """Global error handler middleware."""
-    try:
-        return await call_next(request)
-    except HTTPException as http_exc:
-        # Pass through HTTP exceptions
-        if http_exc.status_code == 404:
-            return await catch_all(request, request.url.path.lstrip("/"))
-        raise
-    except Exception as exc:
-        # Log the error
-        logger.error(
-            "Unhandled exception",
-            path=request.url.path,
-            method=request.method,
-            error=str(exc),
-            exc_info=True,
-        )
-        
-        # Return a 500 error page
-        return templates.TemplateResponse(
-            "errors/500.html",
-            {
-                **request.state.template_context,
-                "title": "Internal Server Error",
-                "error": str(exc),
-            },
-            status_code=500,
-        )
+# Note: Error middleware should be added to the FastAPI app in main.py, not the router
+# Router-level error handling is done via exception handlers in the app

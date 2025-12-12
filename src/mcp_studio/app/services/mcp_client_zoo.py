@@ -5,6 +5,7 @@ Supports ALL known MCP clients as of 2025:
 - Claude Desktop (Anthropic official)
 - Cursor IDE
 - Windsurf IDE
+- Antigravity IDE (GitKraken)
 - Cline (VSCode extension, formerly Claude Dev)
 - Roo-Cline (Windsurf version of Cline)
 - Continue.dev (VSCode extension)
@@ -70,10 +71,11 @@ class MCPClientZoo:
         paths = [
             Path(os.environ.get("APPDATA", "")) / "Cursor" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json",
             Path(os.environ.get("APPDATA", "")) / "Cursor" / "mcp_settings.json",
+            Path.home() / ".cursor" / "mcp.json",  # Primary Cursor IDE config location
             Path.home() / ".cursor" / "mcp_settings.json",
             Path.home() / ".config" / "Cursor" / "User" / "mcp_settings.json",  # Linux
         ]
-        
+
         return self._parse_standard_format(paths, "cursor-ide")
     
     # ═══════════════════════════════════════════════════════════════
@@ -84,10 +86,13 @@ class MCPClientZoo:
         """Parse Windsurf IDE MCP configuration."""
         paths = [
             Path(os.environ.get("APPDATA", "")) / "Windsurf" / "User" / "globalStorage" / "rooveterinaryinc.roo-cline" / "settings" / "mcp_settings.json",
+            Path(os.environ.get("APPDATA", "")) / "Windsurf" / "mcp.json",  # Alternative location
             Path(os.environ.get("APPDATA", "")) / "Windsurf" / "mcp_settings.json",
+            Path.home() / ".config" / "Windsurf" / "mcp.json",  # Linux
             Path.home() / ".config" / "Windsurf" / "mcp_settings.json",  # Linux
+            Path.home() / "Library" / "Application Support" / "Windsurf" / "mcp.json",  # Mac
         ]
-        
+
         return self._parse_standard_format(paths, "windsurf-ide")
     
     # ═══════════════════════════════════════════════════════════════
@@ -97,11 +102,18 @@ class MCPClientZoo:
     def parse_cline(self) -> List[MCPServerInfo]:
         """Parse Cline (formerly Claude Dev) VSCode extension MCP configuration."""
         paths = [
+            # Current Cline paths
             Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json",
             Path.home() / ".config" / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json",  # Linux
             Path.home() / "Library" / "Application Support" / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json",  # Mac
+            # Alternative locations
+            Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "globalStorage" / "saoudrizwan.cline" / "settings" / "cline_mcp_settings.json",
+            Path.home() / ".config" / "Code" / "User" / "globalStorage" / "saoudrizwan.cline" / "settings" / "cline_mcp_settings.json",
+            # VSCode Insiders
+            Path(os.environ.get("APPDATA", "")) / "Code - Insiders" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json",
+            Path(os.environ.get("APPDATA", "")) / "Code - Insiders" / "User" / "globalStorage" / "saoudrizwan.cline" / "settings" / "cline_mcp_settings.json",
         ]
-        
+
         return self._parse_standard_format(paths, "cline-vscode")
     
     # ═══════════════════════════════════════════════════════════════
@@ -124,13 +136,24 @@ class MCPClientZoo:
     def parse_continue_dev(self) -> List[MCPServerInfo]:
         """Parse Continue.dev VSCode extension MCP configuration."""
         paths = [
+            # Primary Continue config
             Path.home() / ".continue" / "config.json",
+            Path.home() / ".continue" / "config.ts",  # TypeScript config
+            # VSCode extension storage
             Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "globalStorage" / "continue.continue" / "config.json",
             Path.home() / ".config" / "Code" / "User" / "globalStorage" / "continue.continue" / "config.json",  # Linux
+            Path.home() / "Library" / "Application Support" / "Code" / "User" / "globalStorage" / "continue.continue" / "config.json",  # Mac
+            # VSCode Insiders
+            Path(os.environ.get("APPDATA", "")) / "Code - Insiders" / "User" / "globalStorage" / "continue.continue" / "config.json",
+            # Cursor support
+            Path.home() / ".cursor" / ".continue" / "config.json",
         ]
-        
-        # Continue.dev might have different structure
-        return self._parse_continue_format(paths, "continue-dev")
+
+        # Continue.dev uses various structures - try both standard and continue formats
+        result = self._parse_continue_format(paths, "continue-dev")
+        if not result:
+            result = self._parse_standard_format(paths, "continue-dev")
+        return result
     
     # ═══════════════════════════════════════════════════════════════
     # LM STUDIO
@@ -147,17 +170,43 @@ class MCPClientZoo:
         return self._parse_standard_format(paths, "lm-studio")
     
     # ═══════════════════════════════════════════════════════════════
+    # ANTIGRAVITY IDE
+    # ═══════════════════════════════════════════════════════════════
+    
+    def parse_antigravity_ide(self) -> List[MCPServerInfo]:
+        """Parse Antigravity IDE MCP configuration."""
+        paths = [
+            Path(os.environ.get("APPDATA", "")) / "Antigravity" / "mcp_config.json",
+            Path(os.environ.get("APPDATA", "")) / "Antigravity" / "mcp.json",
+            Path(os.environ.get("APPDATA", "")) / "GitKraken" / "Antigravity" / "mcp_config.json",  # GitKraken owns Antigravity
+            Path.home() / ".config" / "antigravity" / "mcp_config.json",
+            Path.home() / ".config" / "antigravity" / "mcp.json",
+            Path.home() / ".antigravity" / "mcp_config.json",
+            Path.home() / ".antigravity" / "mcp.json",
+            Path.home() / "Library" / "Application Support" / "Antigravity" / "mcp_config.json",  # Mac
+        ]
+        
+        return self._parse_standard_format(paths, "antigravity-ide")
+    
+    # ═══════════════════════════════════════════════════════════════
     # ZED EDITOR
     # ═══════════════════════════════════════════════════════════════
     
     def parse_zed_editor(self) -> List[MCPServerInfo]:
         """Parse Zed Editor MCP configuration."""
         paths = [
+            # Primary Zed config locations
             Path.home() / ".config" / "zed" / "mcp.json",
-            Path(os.environ.get("APPDATA", "")) / "Zed" / "mcp.json",
+            Path.home() / ".config" / "zed" / "settings.json",  # Might contain MCP config
+            Path(os.environ.get("APPDATA", "")) / "Zed" / "mcp.json",  # Windows
+            Path(os.environ.get("APPDATA", "")) / "Zed" / "settings.json",  # Windows
             Path.home() / "Library" / "Application Support" / "Zed" / "mcp.json",  # Mac
+            Path.home() / "Library" / "Application Support" / "Zed" / "settings.json",  # Mac
+            # Alternative locations
+            Path.home() / ".zed" / "mcp.json",
+            Path.home() / ".zed" / "settings.json",
         ]
-        
+
         return self._parse_standard_format(paths, "zed-editor")
     
     # ═══════════════════════════════════════════════════════════════
@@ -165,14 +214,27 @@ class MCPClientZoo:
     # ═══════════════════════════════════════════════════════════════
     
     def parse_vscode_generic(self) -> List[MCPServerInfo]:
-        """Parse generic VSCode MCP configuration."""
+        """Parse generic VSCode MCP configuration from various MCP extensions."""
         paths = [
+            # Standard VSCode User settings
+            Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "settings.json",
+            Path.home() / ".config" / "Code" / "User" / "settings.json",  # Linux
+            Path.home() / "Library" / "Application Support" / "Code" / "User" / "settings.json",  # Mac
+            # VSCode Insiders
+            Path(os.environ.get("APPDATA", "")) / "Code - Insiders" / "User" / "settings.json",
+            Path.home() / ".config" / "Code - Insiders" / "User" / "settings.json",
+            # Cursor (VSCode-based)
+            Path.home() / ".cursor" / "User" / "settings.json",
+            # VSCodium
+            Path(os.environ.get("APPDATA", "")) / "VSCodium" / "User" / "settings.json",
+            Path.home() / ".config" / "VSCodium" / "User" / "settings.json",
+            # Dedicated MCP config files (less common)
             Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "mcp_settings.json",
-            Path.home() / ".config" / "Code" / "User" / "mcp_settings.json",  # Linux
-            Path.home() / "Library" / "Application Support" / "Code" / "User" / "mcp_settings.json",  # Mac
+            Path.home() / ".config" / "Code" / "User" / "mcp_settings.json",
         ]
-        
-        return self._parse_standard_format(paths, "vscode")
+
+        # VSCode settings.json might contain MCP config in various formats
+        return self._parse_vscode_settings(paths, "vscode")
     
     # ═══════════════════════════════════════════════════════════════
     # HELPERS
@@ -282,7 +344,67 @@ class MCPClientZoo:
         
         logger.debug(f"No {source} MCP config found")
         return []
-    
+
+    def _parse_vscode_settings(self, paths: List[Path], source: str) -> List[MCPServerInfo]:
+        """
+        Parse VSCode settings.json files which may contain MCP configurations.
+
+        VSCode extensions can store MCP config in various ways within settings.json.
+        """
+        for config_path in paths:
+            if not config_path.exists():
+                continue
+
+            try:
+                logger.debug(f"Checking {source} settings", path=str(config_path))
+
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+
+                servers = []
+
+                # Look for various MCP configuration patterns in VSCode settings
+                # Pattern 1: Direct mcpServers in settings
+                if "mcpServers" in settings and isinstance(settings["mcpServers"], dict):
+                    for server_id, server_config in settings["mcpServers"].items():
+                        server = MCPServerInfo(
+                            id=f"{source}:{server_id}",
+                            name=server_id.replace("-", " ").replace("_", " ").title(),
+                            command=server_config.get("command", ""),
+                            args=server_config.get("args", []),
+                            cwd=server_config.get("cwd"),
+                            env=server_config.get("env"),
+                            source=source
+                        )
+                        servers.append(server)
+
+                # Pattern 2: Extension-specific settings (e.g., "cline.mcpServers")
+                for key, value in settings.items():
+                    if key.endswith(".mcpServers") and isinstance(value, dict):
+                        for server_id, server_config in value.items():
+                            server = MCPServerInfo(
+                                id=f"{source}:{server_id}",
+                                name=server_id.replace("-", " ").replace("_", " ").title(),
+                                command=server_config.get("command", ""),
+                                args=server_config.get("args", []),
+                                cwd=server_config.get("cwd"),
+                                env=server_config.get("env"),
+                                source=source
+                            )
+                            servers.append(server)
+
+                if servers:
+                    logger.info(f"Parsed {len(servers)} MCP servers from {source} settings", path=str(config_path))
+                    return servers
+
+            except json.JSONDecodeError as e:
+                logger.warning(f"Invalid JSON in {source} settings", path=str(config_path), error=str(e))
+            except Exception as e:
+                logger.debug(f"Error parsing {source} settings", path=str(config_path), error=str(e))
+
+        logger.debug(f"No {source} MCP settings found")
+        return []
+
     # ═══════════════════════════════════════════════════════════════
     # SCAN ALL CLIENTS
     # ═══════════════════════════════════════════════════════════════
@@ -307,6 +429,7 @@ class MCPClientZoo:
             ("roo-cline", self.parse_roo_cline),
             ("continue-dev", self.parse_continue_dev),
             ("lm-studio", self.parse_lm_studio),
+            ("antigravity-ide", self.parse_antigravity_ide),
             ("zed-editor", self.parse_zed_editor),
             ("vscode-generic", self.parse_vscode_generic),
         ]
@@ -392,6 +515,85 @@ class MCPClientZoo:
         }
         
         return summary
+    
+    def get_client_config_path(self, client_id: str) -> Optional[Path]:
+        """
+        Get the config file path for a specific client.
+        
+        Args:
+            client_id: Client identifier (e.g., "claude-desktop", "cursor-ide")
+            
+        Returns:
+            Path to config file if found, None otherwise
+        """
+        # Map client IDs to their parser methods
+        parser_map = {
+            "claude-desktop": self.parse_claude_desktop,
+            "cursor-ide": self.parse_cursor_ide,
+            "windsurf-ide": self.parse_windsurf_ide,
+            "antigravity-ide": self.parse_antigravity_ide,
+            "cline-vscode": self.parse_cline,
+            "roo-cline": self.parse_roo_cline,
+            "continue-dev": self.parse_continue_dev,
+            "lm-studio": self.parse_lm_studio,
+            "zed-editor": self.parse_zed_editor,
+            "vscode-generic": self.parse_vscode_generic,
+        }
+        
+        parser = parser_map.get(client_id)
+        if not parser:
+            return None
+        
+        # Get the paths that the parser checks
+        # We need to check which paths each parser uses
+        if client_id == "claude-desktop":
+            paths = [
+                Path(os.environ.get("APPDATA", "")) / "Claude" / "claude_desktop_config.json",
+                Path.home() / ".config" / "Claude" / "claude_desktop_config.json",
+            ]
+        elif client_id == "cursor-ide":
+            paths = [
+                Path(os.environ.get("APPDATA", "")) / "Cursor" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json",
+                Path(os.environ.get("APPDATA", "")) / "Cursor" / "mcp_settings.json",
+                Path.home() / ".cursor" / "mcp_settings.json",
+                Path.home() / ".config" / "Cursor" / "User" / "mcp_settings.json",
+            ]
+        elif client_id == "windsurf-ide":
+            paths = [
+                Path(os.environ.get("APPDATA", "")) / "Windsurf" / "User" / "globalStorage" / "rooveterinaryinc.roo-cline" / "settings" / "mcp_settings.json",
+                Path(os.environ.get("APPDATA", "")) / "Windsurf" / "mcp_settings.json",
+                Path.home() / ".config" / "Windsurf" / "mcp_settings.json",
+            ]
+        elif client_id == "antigravity-ide":
+            paths = [
+                Path(os.environ.get("APPDATA", "")) / "Antigravity" / "mcp_config.json",
+                Path(os.environ.get("APPDATA", "")) / "Antigravity" / "mcp.json",
+                Path(os.environ.get("APPDATA", "")) / "GitKraken" / "Antigravity" / "mcp_config.json",
+                Path.home() / ".config" / "antigravity" / "mcp_config.json",
+                Path.home() / ".config" / "antigravity" / "mcp.json",
+                Path.home() / ".antigravity" / "mcp_config.json",
+                Path.home() / ".antigravity" / "mcp.json",
+                Path.home() / "Library" / "Application Support" / "Antigravity" / "mcp_config.json",
+            ]
+        elif client_id == "zed-editor":
+            paths = [
+                Path.home() / ".config" / "zed" / "mcp.json",
+                Path(os.environ.get("APPDATA", "")) / "Zed" / "mcp.json",
+                Path.home() / "Library" / "Application Support" / "Zed" / "mcp.json",
+            ]
+        else:
+            # For other clients, try to find config by parsing
+            servers = parser()
+            if servers and hasattr(servers[0], 'source'):
+                # Try to find the config file by checking paths
+                return None  # Would need to track which path was used
+        
+        # Check which path exists
+        for path in paths:
+            if path.exists():
+                return path
+        
+        return None
 
 
 # ═══════════════════════════════════════════════════════════════

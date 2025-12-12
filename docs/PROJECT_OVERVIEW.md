@@ -48,6 +48,8 @@ User Action → Raw Data Collection → AI Analysis → Enhanced Display
 - **Live Connection**: Connect to running MCP servers via protocol
 - **Status Monitoring**: Real-time health, performance metrics
 - **Development Context**: Detect local repos vs packaged servers
+- **SOTA Analysis**: Rule-based compliance checking with detailed reports
+- **Repository Scanning**: Comprehensive analysis with caching and markdown output
 
 ### 2. Tool Inventory & Testing
 - **Comprehensive Tool Catalog**: Search/filter across all 280+ tools
@@ -55,19 +57,29 @@ User Action → Raw Data Collection → AI Analysis → Enhanced Display
 - **Schema Visualization**: Parameter types, descriptions, examples
 - **Usage Analytics**: Track tool popularity and performance
 
-### 3. AI-Enhanced Intelligence
+### 3. Enhanced SOTA Analyzer (NEW - v2.1.0)
+- **Rule-Based Analysis**: Declarative rule system for SOTA compliance checking
+- **Comprehensive Details**: 9 categories of repository information (metadata, structure, dependencies, tools, config, quality, docs, testing, CI/CD)
+- **Smart Caching**: File-based persistence with TTL and file modification checking
+- **Multiple Formats**: JSON for programmatic use, Markdown for human-readable reports
+- **AI-Friendly**: Structured JSON enables AI to answer questions without re-analysis
+- **Performance**: < 10ms cache lookups vs 2-10s full scans
+
+### 4. AI-Enhanced Intelligence
 - **Maturity Assessment**: AI analyzes code quality, community health, stability
 - **Missing Functionality**: Gap analysis vs similar servers
 - **Security Review**: Configuration and credential handling assessment
 - **Usage Recommendations**: AI suggests optimal server combinations and workflows
+- **Repository Analysis**: Comprehensive repo details for AI consumption
 
-### 4. Developer Workflow Support
+### 5. Developer Workflow Support
 - **Local Repository Analysis**: Git status, test coverage, build health
 - **Failure Diagnosis**: AI-powered troubleshooting for failed servers
 - **Development Insights**: Code quality, deployment readiness, improvement suggestions
 - **Claude Log Integration**: Parse and analyze MCP server startup errors
+- **SOTA Compliance**: Rule-based checking with detailed recommendations
 
-### 5. Cross-Client Management
+### 6. Cross-Client Management
 - **Unified View**: Manage servers across Claude Desktop, Windsurf, Cursor
 - **Config Synchronization**: Export/import server configurations
 - **Documentation Generation**: Auto-create comprehensive server docs
@@ -75,10 +87,12 @@ User Action → Raw Data Collection → AI Analysis → Enhanced Display
 ## Technical Implementation
 
 ### Stack
-- **Backend**: FastAPI + FastMCP 2.11+ + Pydantic + SQLite
+- **Backend**: FastAPI + FastMCP 2.13.1 + Pydantic + SQLite
 - **Frontend**: Alpine.js + TailwindCSS + Font Awesome
 - **AI Integration**: MCP protocol calls to connected AI clients
 - **Package Management**: Support for npm, pip, uvx, Docker packages
+- **Persistence**: File-based caching + SQLite database
+- **Analysis**: Rule-based SOTA compliance checking
 
 ### Key Components
 

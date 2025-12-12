@@ -4,8 +4,8 @@ from typing import Dict, List
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 
-from ...models.mcp import MCPServer, ServerRegistration
-from ...services import discovery_service
+from ..models.mcp import MCPServer, ServerRegistration
+from ..services.mcp_discovery_service import discovery_service
 
 router = APIRouter()
 
@@ -26,7 +26,7 @@ async def start_discovery_scan(background_tasks: BackgroundTasks) -> Dict[str, s
         Confirmation message
     """
     # Start a new discovery task
-    background_tasks.add_task(discovery_service.discover_mcp_servers)
+    background_tasks.add_task(discovery_service.start_discovery)
     
     return {"message": "Discovery scan started in the background"}
 
@@ -57,37 +57,40 @@ async def register_server(registration: ServerRegistration) -> MCPServer:
         # Generate a unique ID for the server
         server_id = f"{registration.type}:{registration.url or registration.path}"
         
-        if server_id in discovery_service.discovered_servers:
+        # Check if server already exists
+        all_servers = server_service.get_servers()
+        if server_id in all_servers:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Server with ID '{server_id}' already exists",
             )
         
-        # Create the server
+        # Register the server using server_service
+        config = {
+            "name": registration.name,
+            "description": registration.description,
+            "type": registration.type,
+            "command": registration.path.split() if registration.path else [],
+        }
+        if registration.url:
+            config["url"] = registration.url
+        
+        registered_server = await server_service.register_server(server_id, config)
+        
+        # Convert to MCPServer format
         server = MCPServer(
-            id=server_id,
-            name=registration.name,
-            description=registration.description,
-            url=registration.url,
-            path=registration.path,
-            type=registration.type,
-            tags=registration.tags,
+            id=registered_server.id,
+            name=registered_server.name,
+            description=registered_server.description or "",
+            url=None,
+            path=None,
+            type=registered_server.type.value if hasattr(registered_server.type, 'value') else str(registered_server.type),
+            status=registered_server.status,
+            version=None,
+            tags=[],
+            created_at=registered_server.created_at,
+            updated_at=registered_server.updated_at,
         )
-        
-        # Add to discovered servers
-        discovery_service.discovered_servers[server_id] = server
-        
-        # Try to discover tools from the server
-        try:
-            if registration.path:
-                await discovery_service._discover_python_server(Path(registration.path))
-            # TODO: Add support for URL-based discovery
-        except Exception as e:
-            logger.warning(
-                "Failed to discover tools from server",
-                server_id=server_id,
-                error=str(e),
-            )
         
         return server
         
@@ -111,7 +114,8 @@ async def get_discovery_paths() -> List[str]:
     Returns:
         List of paths being scanned for MCP servers
     """
-    return discovery_service.settings.MCP_DISCOVERY_PATHS
+    from ..core.config import settings
+    return settings.MCP_DISCOVERY_PATHS
 
 @router.put(
     "/paths",
@@ -139,10 +143,7 @@ async def update_discovery_paths(paths: List[str]) -> List[str]:
             logger.warning("Invalid discovery path", path=path, error=str(e))
     
     # Update settings
-    discovery_service.settings.MCP_DISCOVERY_PATHS = valid_paths
-    
-    # Save settings to disk (if applicable)
-    if hasattr(discovery_service.settings, "save"):
-        discovery_service.settings.save()
+    from ..core.config import settings, update_settings
+    update_settings(MCP_DISCOVERY_PATHS=valid_paths)
     
     return valid_paths

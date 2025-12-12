@@ -5,8 +5,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import HttpUrl
 
-from ...models.mcp import MCPServer, ServerRegistration, ServerStatus, MCPServerHealth
-from ...services.discovery_service import discovered_servers, get_server, execute_tool
+from ..models.mcp import MCPServer, ServerRegistration, ServerStatus, MCPServerHealth
+from ..services.server_service import server_service
 
 router = APIRouter()
 
@@ -38,7 +38,25 @@ async def list_servers(
     Returns:
         List of MCP servers matching the filters
     """
-    servers = list(discovered_servers.values())
+    all_servers = server_service.get_servers()
+    servers = []
+    
+    # Convert Server objects to MCPServer format
+    for server in all_servers.values():
+        mcp_server = MCPServer(
+            id=server.id,
+            name=server.name,
+            description=server.description or "",
+            url=None,
+            path=None,
+            type=server.type.value if hasattr(server.type, 'value') else str(server.type),
+            status=server.status,
+            version=None,
+            tags=[],
+            created_at=server.created_at,
+            updated_at=server.updated_at,
+        )
+        servers.append(mcp_server)
     
     # Apply filters
     if status is not None:
@@ -73,26 +91,40 @@ async def register_server(registration: ServerRegistration) -> MCPServer:
     # Generate a unique ID for the server
     server_id = f"{registration.type}:{registration.url or registration.path}"
     
-    if server_id in discovered_servers:
+    # Check if server already exists
+    existing_servers = server_service.get_servers()
+    if server_id in existing_servers:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Server with ID '{server_id}' already exists",
         )
     
-    # Create the server
-    server = MCPServer(
-        id=server_id,
-        name=registration.name,
-        description=registration.description,
-        url=registration.url,
-        path=registration.path,
-        type=registration.type,
-        status=ServerStatus.ONLINE,  # Assume it's online since we just registered it
-        tags=registration.tags,
-    )
+    # Register the server using server_service
+    config = {
+        "name": registration.name,
+        "description": registration.description,
+        "type": registration.type,
+        "command": registration.path.split() if registration.path else [],
+    }
+    if registration.url:
+        config["url"] = registration.url
     
-    # Add to discovered servers
-    discovered_servers[server_id] = server
+    registered_server = await server_service.register_server(server_id, config)
+    
+    # Convert to MCPServer format
+    server = MCPServer(
+        id=registered_server.id,
+        name=registered_server.name,
+        description=registered_server.description or "",
+        url=None,
+        path=None,
+        type=registered_server.type.value if hasattr(registered_server.type, 'value') else str(registered_server.type),
+        status=registered_server.status,
+        version=None,
+        tags=[],
+        created_at=registered_server.created_at,
+        updated_at=registered_server.updated_at,
+    )
     
     return server
 
@@ -118,12 +150,27 @@ async def get_server_by_id(server_id: str) -> MCPServer:
     Raises:
         HTTPException: If the server is not found
     """
-    server = await get_server(server_id)
-    if server is None:
+    all_servers = server_service.get_servers()
+    if server_id not in all_servers:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Server with ID '{server_id}' not found",
         )
+    
+    server_obj = all_servers[server_id]
+    server = MCPServer(
+        id=server_obj.id,
+        name=server_obj.name,
+        description=server_obj.description or "",
+        url=None,
+        path=None,
+        type=server_obj.type.value if hasattr(server_obj.type, 'value') else str(server_obj.type),
+        status=server_obj.status,
+        version=None,
+        tags=[],
+        created_at=server_obj.created_at,
+        updated_at=server_obj.updated_at,
+    )
     return server
 
 @router.delete(
@@ -146,13 +193,14 @@ async def unregister_server(server_id: str) -> None:
     Raises:
         HTTPException: If the server is not found
     """
-    if server_id not in discovered_servers:
+    all_servers = server_service.get_servers()
+    if server_id not in all_servers:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Server with ID '{server_id}' not found",
         )
     
-    del discovered_servers[server_id]
+    await server_service.unregister_server(server_id)
     return None
 
 @router.get(
@@ -177,19 +225,20 @@ async def get_server_health(server_id: str) -> MCPServerHealth:
     Raises:
         HTTPException: If the server is not found
     """
-    server = await get_server(server_id)
-    if server is None:
+    all_servers = server_service.get_servers()
+    if server_id not in all_servers:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Server with ID '{server_id}' not found",
         )
     
+    server_obj = all_servers[server_id]
     # TODO: Actually check the server's health
     # For now, return a mock health status
     return MCPServerHealth(
-        status=server.status,
-        version=server.version,
-        timestamp=server.updated_at or server.created_at,
+        status=server_obj.status,
+        version=None,
+        timestamp=server_obj.updated_at or server_obj.created_at,
     )
 
 @router.post(
@@ -223,10 +272,11 @@ async def execute_server_tool(
         HTTPException: If the server, tool, or execution fails
     """
     try:
-        return await execute_tool(server_id, tool_name, parameters)
+        result = await server_service.execute_tool(server_id, tool_name, parameters)
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
-        if isinstance(e, HTTPException):
-            raise
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to execute tool: {str(e)}",

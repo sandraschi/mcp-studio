@@ -181,13 +181,5 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         await websocket.close()
 
-# Register startup and shutdown events
-@router.on_event("startup")
-async def startup_event():
-    """Start the discovery service when the app starts."""
-    await discovery_service.start_discovery()
-
-@router.on_event("shutdown")
-async def shutdown_event():
-    """Stop the discovery service when the app shuts down."""
-    await discovery_service.stop_discovery()
+# Note: Startup/shutdown events moved to main.py lifespan handler
+# Routers should not have their own lifecycle events

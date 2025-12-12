@@ -8,6 +8,10 @@ homepages, GitHub repos, and capabilities.
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
+from ..core.logging_utils import get_logger
+
+logger = get_logger(__name__)
+
 
 @dataclass
 class MCPClientMetadata:
@@ -23,7 +27,9 @@ class MCPClientMetadata:
     client_type: str = "Desktop"  # Desktop, IDE, Extension, Library
     status: str = "Active"  # Active, Deprecated, Beta
     features: List[str] = None
-    
+    installed: bool = False  # Whether this client is detected as installed
+    server_count: int = 0  # Number of MCP servers configured
+
     def __post_init__(self):
         if self.features is None:
             self.features = []
@@ -174,6 +180,26 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
         ]
     ),
     
+    "antigravity-ide": MCPClientMetadata(
+        id="antigravity-ide",
+        name="Antigravity IDE",
+        short_description="GitKraken's AI-powered code editor with MCP support",
+        full_description="Antigravity is GitKraken's AI-powered code editor featuring advanced code completion, chat, and native MCP support for extending with custom tools.",
+        homepage="https://www.gitkraken.com/antigravity",
+        github=None,  # Proprietary
+        documentation="https://www.gitkraken.com/antigravity/docs",
+        platform="Cross-platform",
+        client_type="IDE",
+        status="Active",
+        features=[
+            "GitKraken integration",
+            "AI-powered coding",
+            "MCP support",
+            "Advanced code completion",
+            "Built-in Git tools"
+        ]
+    ),
+    
     "zed-editor": MCPClientMetadata(
         id="zed-editor",
         name="Zed Editor",
@@ -235,12 +261,32 @@ def get_client_metadata(client_id: str) -> Optional[MCPClientMetadata]:
 
 def get_all_clients() -> List[MCPClientMetadata]:
     """
-    Get metadata for all known MCP clients.
-    
+    Get metadata for all known MCP clients with installation status.
+
     Returns:
-        List of all client metadata
+        List of all client metadata with installed/server_count populated
     """
-    return list(MCP_CLIENT_DATABASE.values())
+    from .mcp_client_zoo import MCPClientZoo
+
+    # Get static metadata
+    clients = list(MCP_CLIENT_DATABASE.values())
+
+    # Scan for actual installations
+    try:
+        zoo = MCPClientZoo()
+        installed_clients = zoo.scan_all_clients()
+
+        # Update clients with installation status
+        for client in clients:
+            if client.id in installed_clients:
+                client.installed = True
+                client.server_count = len(installed_clients[client.id])
+
+    except Exception as e:
+        # If scanning fails, just return clients without installation status
+        logger.warning(f"Failed to scan clients for installation status: {e}")
+
+    return clients
 
 
 def get_clients_by_type(client_type: str) -> List[MCPClientMetadata]:

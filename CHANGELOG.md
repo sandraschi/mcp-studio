@@ -1,5 +1,85 @@
 # Changelog
 
+## [2.2.0] - 2025-12-02 - Complete MCP Server Lifecycle Management (CRUD)
+
+### Added
+- **🏗️ CREATE: Server Scaffolding** - Generate new SOTA-compliant MCP servers from scratch
+- **📝 UPDATE: Server Enhancement** - Add missing SOTA components to existing servers
+- **🗑️ DELETE: Server Removal** - Safely delete test/throwaway servers with safety checks
+- **📚 Complete Documentation Templates** - MCP standards, MCPB standards, client rulebooks
+- **🔧 Full Project Scaffold** - Git, CI/CD, tests, scripts, docs folder structure
+
+### Server Scaffolding Features
+- **SOTA-Compliant by Default**: All new servers meet FastMCP 2.13.1 standards
+- **Complete Structure**: src/, tests/, docs/, scripts/, .github/workflows/
+- **Help & Status Tools**: Pre-generated SOTA-required tools
+- **CI/CD Ready**: GitHub Actions workflow with ruff + pytest
+- **DXT Packaging**: manifest.json included
+- **Documentation**: Complete docs folder with standards and client rulebooks
+- **Git Integration**: Optional git initialization with initial commit
+
+### Server Update Features
+- **Auto-Detect Missing Components**: Analyzes server and identifies gaps
+- **Targeted Updates**: Add specific components (help_tool, status_tool, ci_cd, tests, etc.)
+- **Dry-Run Mode**: Preview changes before applying
+- **Non-Destructive**: Only adds missing components, doesn't modify existing code
+
+### Server Deletion Features
+- **Safety Checks**: Git repo detection, uncommitted changes, remote repository checks
+- **Backup Option**: Create backup before deletion
+- **Dry-Run Mode**: Preview deletion without applying
+- **Force Mode**: Skip safety checks when needed
+
+### Documentation Templates
+- **MCP Server Standards**: FastMCP 2.13+ requirements and best practices
+- **MCPB Standards**: Packaging and distribution guidelines
+- **Client Rulebooks**: Integration guides for Claude Desktop, Cursor IDE, Windsurf, Cline
+
+### Technical Improvements
+- **New Modules**: `server_scaffold.py`, `server_updater.py`, `server_deleter.py`
+- **Template System**: Reusable templates for server generation
+- **Integration**: CRUD tools integrated into MCP server
+- **Help Updates**: Help tool now lists all 12 tools including CRUD operations
+
+## [2.1.0] - 2025-12-02 - Enhanced Runt Analyzer & Persistence
+
+### Added
+- **📊 Rule-Based SOTA Analyzer** - Declarative rule system replacing hardcoded criteria
+- **💾 Scan Result Caching** - File-based persistence to avoid re-scanning on every request
+- **📝 Markdown Report Format** - Human-readable markdown output for scan results
+- **🔍 Comprehensive Repo Details** - Structured JSON with full repository information for AI consumption
+- **⚙️ Cache Management** - Configurable TTL, cache clearing, and statistics
+
+### Runt Analyzer Improvements
+- **Rule-Based Architecture**: Declarative rule definitions with categories (VERSION, TOOLS, STRUCTURE, QUALITY, TESTING, CI_CD, DOCUMENTATION)
+- **Severity Levels**: CRITICAL, WARNING, INFO for rule violations
+- **Dynamic Scoring**: Conditional score deductions based on context
+- **Extensible Rules**: Easy to add new rules without touching evaluation logic
+- **Repository Detail Collector**: Comprehensive metadata, structure, dependencies, tools, configuration, code quality, documentation, testing, and CI/CD information
+
+### Persistence & Caching
+- **File-Based Cache**: JSON cache in `~/.mcp-studio/scan-cache/`
+- **TTL-Based Expiration**: Configurable cache time-to-live (default: 1 hour)
+- **Smart Invalidation**: File modification time checking for automatic cache refresh
+- **Cache Statistics**: Track cache size, age, and performance
+
+### Markdown Formatting
+- **Human-Readable Reports**: Formatted markdown with emojis and structure
+- **Scan Summaries**: Complete scan results in markdown format
+- **Repo Status Reports**: Detailed single-repo analysis in markdown
+- **Format Parameter**: `format="json"` or `format="markdown"` for both tools
+
+### Technical Improvements
+- **New Modules**: `runt_analyzer_rules.py`, `repo_detail_collector.py`, `scan_cache.py`, `scan_formatter.py`
+- **Backward Compatible**: All existing functionality preserved
+- **Performance**: Significant speedup for repeated scans via caching
+- **AI-Friendly**: Structured JSON output enables AI to answer questions without re-analysis
+
+### API Enhancements
+- `analyze_runts()`: Added `format`, `use_cache`, `cache_ttl` parameters
+- `get_repo_status()`: Added `format`, `use_cache`, `cache_ttl` parameters
+- Cache management functions: `clear_cache()`, `get_cache_stats()`
+
 ## [2.0.0] - 2025-12-04 - Preprompt Management System
 
 ### Added

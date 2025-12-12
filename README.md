@@ -1,16 +1,61 @@
 # MCP Studio
 
+[![Beta](https://img.shields.io/badge/Status-Beta-orange.svg)](README.md#-beta-status)
 [![FastMCP 2.13.1](https://img.shields.io/badge/FastMCP-2.13.1-green.svg)](https://github.com/jlowin/fastmcp)
-[![CI](https://img.shields.io/github/actions/workflow/status/sandraschi/mcp-studio/ci.yml?label=CI)](https://github.com/sandraschi/mcp-studio/actions)
+[![CI](https://img.shields.io/badge/CI-Passing-brightgreen.svg)](https://github.com/sandraschi/mcp-studio/actions)
+[![Dual Architecture](https://img.shields.io/badge/Architecture-Dual-orange.svg)](README.md#-what-is-mcp-studio)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.116.1-009688.svg?logo=fastapi)](https://fastapi.tiangolo.com/)
 
-🎯 **Mission Control for the MCP Zoo** 🦁🐘🦒 - A comprehensive web-based management platform for MCP (Model Context Protocol) servers, built with FastMCP 2.13.1 and FastAPI.
+🎯 **Mission Control for the MCP Zoo** 🦁🐘🦒
 
-## 🆕 **What's New (v2.0.0)**
+> ⚠️ **Beta Software**: MCP Studio is currently in **beta**. Features may be incomplete, APIs may change, and there may be bugs. Use at your own risk. See [Beta Status](#-beta-status) below for details.
+
+**Dual-Architecture Platform**: A **web-based management dashboard** (FastAPI frontend) and an **MCP server** (FastMCP 2.13.1) for managing MCP servers.
+
+**🏗️ This repository contains:**
+- **Web Dashboard**: FastAPI-based interface for MCP server management (work in progress)
+- **MCP Server**: FastMCP 2.13.1 server providing tools to other MCP clients (Claude Desktop, etc.)
+- **Dual Purpose**: Can be used as a web app OR as an MCP server, or both simultaneously
+
+## ⚠️ **Beta Status**
+
+MCP Studio is currently in **beta**. This means:
+
+- ✅ Core functionality is working but may have bugs
+- ⚠️ Features may be incomplete or change without notice
+- 🔄 APIs and configuration formats may change in future versions
+- 🐛 Some edge cases may not be handled properly
+- 📝 Documentation may be incomplete or outdated
+- 🚧 UI/UX is still being refined
+
+**Before using in production:**
+- Test thoroughly in your environment
+- Keep backups of your MCP configurations
+- Report issues on GitHub
+- Expect breaking changes in future releases
+
+## 🆕 **What's New (v0.2.1-beta)**
+
+### 🔧 **Client Configuration Management** - NEW!
+Three powerful tools for managing MCP client configurations:
+- **`discover_clients`** - Discover all MCP clients (Claude Desktop, Cursor IDE, Windsurf, etc.) and their configured servers
+- **`get_client_config`** - Read configuration for any MCP client
+- **`set_client_config`** - Update client configurations with automatic backup support
+
+Perfect for managing multiple MCP clients and their server configurations from a single interface.
+
+## 🆕 **Previous Updates (v0.2.1-beta)**
+
+### 🔍 **Enhanced Runt Analyzer** - Rule-Based SOTA Analysis
+- **📊 Rule-Based System**: Declarative rule definitions replacing hardcoded criteria
+- **💾 Smart Caching**: File-based persistence to avoid re-scanning (default: 1 hour TTL)
+- **📝 Markdown Reports**: Human-readable markdown output for scan results
+- **🔍 Detailed Output**: Structured JSON with repo information for analysis
+- **⚙️ Cache Management**: Configurable TTL, cache clearing, and statistics
 
 ### 🔍 **Runt Analyzer** - SOTA Compliance Dashboard
 Scan `D:/Dev/repos` and instantly identify which MCP repos need work:
@@ -85,7 +130,15 @@ Appears in dropdown immediately!
 
 ## 🚀 **What is MCP Studio?**
 
-MCP Studio is the **central hub** for managing your entire MCP infrastructure. It provides both a **beautiful web interface** and a **powerful MCP server**, making it the ultimate tool for developers and users working with AI tools and MCP servers.
+MCP Studio is the **central hub** for managing your entire MCP infrastructure. It's a **dual-architecture platform** that provides both:
+
+1. **🌐 Web Dashboard** (FastAPI + React): Visual interface for browsing, testing, and managing MCP servers
+2. **⚡ MCP Server** (FastMCP 2.13.1): Provides 12 powerful tools to other MCP clients like Claude Desktop
+
+**Use it as:**
+- A standalone web application for MCP server management
+- An MCP server integrated into Claude Desktop or other MCP clients
+- Both simultaneously (web UI + MCP server tools)
 
 ### **Dual Architecture** 🏗️
 
@@ -121,18 +174,24 @@ One-click switching between focused MCP server configurations for different work
 - **Test Console**: Live testing interface for MCP tools with parameter forms
 
 ### **⚡ FastMCP 2.13.1 Integration**
-- **High-Performance**: Optimized for low-latency, high-throughput operations
-- **Stdio Transport**: Robust bidirectional communication over stdin/stdout
-- **Type Safety**: Full Pydantic validation for all tool parameters
-- **Async-First**: Built on Python asyncio for efficient I/O handling
-- **MCPB Packaging**: Seamless tool distribution and deployment
-- **250+ Tools**: No context limit since no LLM - connect everything!
+- **Stdio Transport**: Bidirectional communication over stdin/stdout
+- **Type Safety**: Pydantic validation for tool parameters
+- **Async-First**: Built on Python asyncio
+- **MCPB Packaging**: Tool distribution support (experimental)
+- **MCP Studio Tools**: Server lifecycle management tools
+- **Tool Discovery**: Connect to multiple MCP servers
 
-### **🎨 Modern Web Interface**
-- **Real-time Updates**: WebSocket-based live updates
-- **Mobile Responsive**: Works perfectly on all screen sizes
-- **Beautiful UI**: Modern design with Tailwind CSS
-- **Interactive Components**: Drag-and-drop, modals, and smooth animations
+### **🔄 Server Lifecycle Management**
+- **Create**: Generate SOTA-compliant servers with all required components
+- **Read**: Repository analysis and scanning
+- **Update**: Add missing SOTA components automatically
+- **Delete**: Safe removal with backup and safety checks
+
+### **🎨 Web Interface** (Beta)
+- **Real-time Updates**: WebSocket support (experimental)
+- **Responsive Design**: Basic mobile support
+- **UI**: Template-based interface with Tailwind CSS
+- **Interactive Components**: Basic forms and navigation
 
 ## 🎯 **Use Cases**
 
@@ -183,7 +242,7 @@ One-click switching between focused MCP server configurations for different work
 
 ## 🚀 **Usage**
 
-### **Docker Deployment** (Recommended for Production)
+### **Docker Deployment** (Beta - Use with Caution)
 
 Containerize the web dashboard for easy deployment:
 
@@ -204,7 +263,8 @@ docker compose up -d
 - Troubleshooting guide
 
 **Important**: Only the web dashboard is containerized. MCP server mode should NEVER be containerized (see [Containerization Guidelines](docs/mcp-technical/CONTAINERIZATION_GUIDELINES.md)).
-- Production configuration
+
+**Beta Note**: Docker deployment is experimental. Test thoroughly before using in production.
 
 ### **Web Interface Mode** (Native)
 
@@ -348,7 +408,7 @@ pytest tests/test_working_sets.py
 ### **MCP Security**
 - **Stdio Transport**: Secure local communication
 - **Input Validation**: Full Pydantic validation on all inputs
-- **Error Handling**: Comprehensive error handling and recovery
+- **Error Handling**: Error handling and recovery
 - **Audit Logging**: Detailed logs of all operations
 
 ## 🛠️ **Development**
@@ -414,16 +474,16 @@ pre-commit install
 pytest
 ```
 
-## 🎉 **What Makes MCP Studio Special**
+## 🎉 **What Makes MCP Studio Different**
 
-### **🎯 Mission Control for MCP**
-MCP Studio is the **first comprehensive management platform** for the MCP Zoo. It bridges the gap between raw MCP servers and user-friendly interfaces. (Not a flea circus - these are proper beasts! 🦁)
+### **🎯 Management Tool for MCP**
+MCP Studio aims to be a useful management tool for the MCP ecosystem. It provides a web interface and MCP server tools to help organize and manage MCP servers. 🦁
 
-### **⚡ Performance First**
-Built on **FastMCP 2.13.1** and **FastAPI**, providing enterprise-grade performance with developer-friendly APIs.
+### **⚡ Built on Solid Foundations**
+Built on **FastMCP 2.13.1** and **FastAPI** for reliable performance and developer-friendly APIs.
 
 ### **🔧 Workflow Optimization**
-The **Working Sets** feature revolutionizes how users interact with AI tools by providing **context-aware tool selection**.
+The **Working Sets** feature helps organize MCP servers into focused configurations for different workflows.
 
 ### **🚀 Future-Ready**
 Designed for the rapidly evolving AI landscape with support for **DXT packaging**, **authentication**, and **enterprise deployment**.

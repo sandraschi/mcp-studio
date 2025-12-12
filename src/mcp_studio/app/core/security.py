@@ -19,10 +19,13 @@ from ..core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# OAuth2 scheme for token authentication
+# OAuth2 scheme for token authentication - only used where explicitly required
 oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl=f"{settings.API_V1_STR}/auth/token"
+    tokenUrl="/api/v1/auth/token"
 )
+
+# Note: This OAuth2 scheme is only used for routes that explicitly require authentication.
+# Public routes (health checks, repo scanning, etc.) do not use this dependency.
 
 # JWT configuration
 ALGORITHM = "HS256"

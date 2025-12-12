@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test SOTA Logger & Theme Toggle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
+    <div class="container mx-auto p-8">
+        <h1 class="text-3xl font-bold mb-8">🚀 MCP Studio Function Tests</h1>
+
+        <!-- Test Buttons -->
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold mb-4">Test Buttons</h2>
+            <div class="flex items-center gap-4">
+                <button onclick="toggleTheme()" id="theme-toggle" class="p-3 rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors">
+                    <span id="theme-icon-dark" class="text-xl">🌙</span>
+                    <span id="theme-icon-light" class="text-xl hidden">☀️</span>
+                    Toggle Theme
+                </button>
+
+                <button onclick="showLogs()" class="p-3 rounded-lg bg-green-500 hover:bg-green-600 text-white transition-colors">
+                    📋 Show SOTA Logger
+                </button>
+
+                <button onclick="showToast('Test toast message', 'info')" class="p-3 rounded-lg bg-purple-500 hover:bg-purple-600 text-white transition-colors">
+                    🍞 Show Toast
+                </button>
+            </div>
+        </div>
+
+        <!-- Theme Status -->
+        <div class="mb-8">
+            <h2 class="text-xl font-semibold mb-4">Theme Status</h2>
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg">
+                <p>Current theme: <span id="current-theme">light</span></p>
+                <p>localStorage.theme: <span id="storage-theme">not set</span></p>
+            </div>
+        </div>
+
+        <!-- Toast Container -->
+        <div id="toast-container" class="fixed top-4 right-4 z-50"></div>
+
+        <!-- Modal -->
+        <div id="modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4" onclick="if(event.target.id==='modal'){closeModal();}">
+            <div class="bg-white dark:bg-gray-800 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <h2 id="modal-title" class="font-semibold text-lg">Details</h2>
+                    <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+                </div>
+                <div id="modal-content" class="p-6 overflow-y-auto max-h-[70vh]">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Theme toggle function (copied from dashboard)
+        function toggleTheme() {
+            const html = document.documentElement;
+            const darkIcon = document.getElementById('theme-icon-dark');
+            const lightIcon = document.getElementById('theme-icon-light');
+            const currentTheme = document.getElementById('current-theme');
+            const storageTheme = document.getElementById('storage-theme');
+
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                darkIcon.classList.add('hidden');
+                lightIcon.classList.remove('hidden');
+                localStorage.theme = 'light';
+                currentTheme.textContent = 'light';
+            } else {
+                html.classList.add('dark');
+                darkIcon.classList.remove('hidden');
+                lightIcon.classList.add('hidden');
+                localStorage.theme = 'dark';
+                currentTheme.textContent = 'dark';
+            }
+
+            storageTheme.textContent = localStorage.theme || 'not set';
+        }
+
+        // SOTA Logger Modal function (simplified version)
+        function showLogs() {
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+
+            modalTitle.innerHTML = '📋 SOTA Logger - State of the Art Logging';
+            modalContent.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <span class="text-2xl">🚀</span>
+                            <div>
+                                <h3 class="font-semibold text-lg">SOTA Logger</h3>
+                                <p class="text-sm text-gray-600 dark:text-gray-400">State-of-the-art logging with real-time monitoring</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="clearLogs()" class="px-3 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-600 dark:text-red-400 rounded text-sm border border-red-500/30">
+                                🗑️ Clear
+                            </button>
+                            <button onclick="refreshLogs()" class="px-3 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-600 dark:text-blue-400 rounded text-sm border border-blue-500/30">
+                                🔄 Refresh
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-4">
+                        <div class="flex-1">
+                            <input type="text" id="log-search" placeholder="🔍 Search logs..." class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" onkeyup="filterLogs()">
+                        </div>
+                        <select id="log-level-filter" onchange="filterLogs()" class="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-sm">
+                            <option value="all">All Levels</option>
+                            <option value="error">Errors Only</option>
+                            <option value="warning">Warnings+</option>
+                            <option value="info">Info+</option>
+                            <option value="debug">Debug+</option>
+                        </select>
+                    </div>
+
+                    <div class="bg-black/20 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                            <h4 class="font-semibold text-sm">📊 Log Stream</h4>
+                            <div class="flex items-center gap-2 text-xs text-gray-500">
+                                <span id="log-count">0</span> entries
+                                <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Live"></span>
+                            </div>
+                        </div>
+                        <div id="log-container" class="max-h-96 overflow-y-auto p-4 space-y-1 font-mono text-xs">
+                            <div class="text-center text-gray-500 py-8">
+                                <div class="text-lg mb-2">🚀</div>
+                                <div>Loading SOTA logs...</div>
+                                <div class="text-xs mt-2">Real-time logging with advanced filtering</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-red-500/10 border border-red-500/20 rounded p-3 text-center">
+                            <div class="text-red-400 text-lg font-bold" id="error-count">0</div>
+                            <div class="text-red-400/80 text-xs">Errors</div>
+                        </div>
+                        <div class="bg-yellow-500/10 border border-yellow-500/20 rounded p-3 text-center">
+                            <div class="text-yellow-400 text-lg font-bold" id="warning-count">0</div>
+                            <div class="text-yellow-400/80 text-xs">Warnings</div>
+                        </div>
+                        <div class="bg-blue-500/10 border border-blue-500/20 rounded p-3 text-center">
+                            <div class="text-blue-400 text-lg font-bold" id="info-count">0</div>
+                            <div class="text-blue-400/80 text-xs">Info</div>
+                        </div>
+                        <div class="bg-green-500/10 border border-green-500/20 rounded p-3 text-center">
+                            <div class="text-green-400 text-lg font-bold" id="debug-count">0</div>
+                            <div class="text-green-400/80 text-xs">Debug</div>
+                        </div>
+                    </div>
+
+                    <div class="text-xs text-gray-500 text-center">
+                        🚀 SOTA Logger - Advanced logging with real-time monitoring, intelligent filtering, and performance analytics
+                    </div>
+                </div>
+            `;
+
+            modal.classList.remove('hidden');
+
+            // Load initial logs
+            loadLoggerData();
+        }
+
+        async function loadLoggerData() {
+            try {
+                // Mock data for testing
+                const mockLogs = [
+                    { level: 'info', source: 'api', message: 'MCP Studio server started successfully', timestamp: new Date().toISOString() },
+                    { level: 'warning', source: 'scanner', message: 'Repository scan completed with warnings', timestamp: new Date().toISOString() },
+                    { level: 'error', source: 'ui', message: 'Failed to load client configuration', timestamp: new Date().toISOString() },
+                    { level: 'debug', source: 'discovery', message: 'Discovery service initialized', timestamp: new Date().toISOString() },
+                    { level: 'info', source: 'api', message: 'Health check passed', timestamp: new Date().toISOString() }
+                ];
+
+                renderLogs(mockLogs);
+            } catch (e) {
+                console.error('Failed to load logs:', e);
+                document.getElementById('log-container').innerHTML = `
+                    <div class="text-center text-red-400 py-8">
+                        <div class="text-lg mb-2">❌</div>
+                        <div>Failed to load logs</div>
+                        <div class="text-xs mt-2">${e.message}</div>
+                    </div>
+                `;
+            }
+        }
+
+        function renderLogs(logs) {
+            const container = document.getElementById('log-container');
+            const searchTerm = document.getElementById('log-search').value.toLowerCase();
+            const levelFilter = document.getElementById('log-level-filter').value;
+
+            let filteredLogs = logs;
+
+            // Apply filters
+            if (searchTerm) {
+                filteredLogs = filteredLogs.filter(log =>
+                    log.message.toLowerCase().includes(searchTerm) ||
+                    log.source.toLowerCase().includes(searchTerm)
+                );
+            }
+
+            if (levelFilter !== 'all') {
+                filteredLogs = filteredLogs.filter(log => log.level === levelFilter);
+            }
+
+            // Update counts
+            const counts = { error: 0, warning: 0, info: 0, debug: 0 };
+            logs.forEach(log => {
+                if (counts[log.level] !== undefined) counts[log.level]++;
+            });
+
+            document.getElementById('error-count').textContent = counts.error;
+            document.getElementById('warning-count').textContent = counts.warning;
+            document.getElementById('info-count').textContent = counts.info;
+            document.getElementById('debug-count').textContent = counts.debug;
+            document.getElementById('log-count').textContent = filteredLogs.length;
+
+            if (filteredLogs.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-gray-500 py-8">
+                        <div class="text-lg mb-2">🔍</div>
+                        <div>No logs match current filters</div>
+                        <div class="text-xs mt-2">Try adjusting search or filter criteria</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filteredLogs.map(log => {
+                const levelColors = {
+                    error: 'text-red-400 bg-red-500/10',
+                    warning: 'text-yellow-400 bg-yellow-500/10',
+                    info: 'text-blue-400 bg-blue-500/10',
+                    debug: 'text-green-400 bg-green-500/10'
+                };
+
+                const levelIcon = {
+                    error: '❌',
+                    warning: '⚠️',
+                    info: 'ℹ️',
+                    debug: '🐛'
+                };
+
+                return `
+                    <div class="flex items-start gap-3 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 ${levelColors[log.level] || 'text-gray-400'}">
+                        <div class="flex-shrink-0 text-xs mt-0.5">${levelIcon[log.level] || '📝'}</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-xs font-semibold uppercase tracking-wide">${log.level}</span>
+                                <span class="text-xs text-gray-500">${log.source}</span>
+                                <span class="text-xs text-gray-600">${new Date(log.timestamp).toLocaleTimeString()}</span>
+                            </div>
+                            <div class="text-sm break-words">${log.message}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function filterLogs() {
+            // Re-render with current filters - using mock data for testing
+            loadLoggerData();
+        }
+
+        function clearLogs() {
+            if (confirm('🗑️ Clear all logs? This action cannot be undone.')) {
+                document.getElementById('log-container').innerHTML = `
+                    <div class="text-center text-gray-500 py-8">
+                        <div class="text-lg mb-2">🗑️</div>
+                        <div>All logs cleared</div>
+                    </div>
+                `;
+                showToast('🗑️ Logs cleared', 'success');
+            }
+        }
+
+        function refreshLogs() {
+            loadLoggerData();
+            showToast('🔄 Logs refreshed', 'info');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                warning: 'bg-yellow-500',
+                info: 'bg-blue-500'
+            };
+
+            toast.className = `p-4 rounded-lg text-white ${colors[type] || colors.info} shadow-lg mb-2 animate-slide-in`;
+            toast.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <span>${message}</span>
+                </div>
+            `;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        // Initialize theme on load
+        const html = document.documentElement;
+        const darkIcon = document.getElementById('theme-icon-dark');
+        const lightIcon = document.getElementById('theme-icon-light');
+        const currentTheme = document.getElementById('current-theme');
+        const storageTheme = document.getElementById('storage-theme');
+
+        // Check for saved user preference, if any, on load
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            html.classList.add('dark');
+            if (darkIcon) darkIcon.classList.remove('hidden');
+            if (lightIcon) lightIcon.classList.add('hidden');
+            currentTheme.textContent = 'dark';
+        } else {
+            html.classList.remove('dark');
+            if (darkIcon) darkIcon.classList.add('hidden');
+            if (lightIcon) lightIcon.classList.remove('hidden');
+            currentTheme.textContent = 'light';
+        }
+
+        storageTheme.textContent = localStorage.theme || 'not set';
+    </script>
+</body>
+</html>

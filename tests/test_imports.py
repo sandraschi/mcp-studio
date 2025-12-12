@@ -9,12 +9,13 @@ and other import-related issues in the MCP Studio codebase.
 import sys
 import traceback
 from pathlib import Path
+import pytest
 
 # Add src directory to Python path
-src_path = Path(__file__).parent / "src"
+src_path = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(src_path))
 
-def test_import(module_name: str, description: str = "") -> bool:
+def _test_import(module_name: str, description: str = "") -> bool:
     """Test importing a module and report results."""
     try:
         __import__(module_name)
@@ -26,6 +27,130 @@ def test_import(module_name: str, description: str = "") -> bool:
         if "SyntaxError" in str(type(e)):
             print(f"   {traceback.format_exc().splitlines()[-2]}")
         return False
+
+def test_external_dependencies():
+    """Test external dependencies can be imported."""
+    deps = [
+        ("fastapi", "FastAPI web framework"),
+        ("uvicorn", "ASGI server"),
+        ("pydantic", "Data validation"),
+        ("structlog", "Structured logging"),
+        ("aiofiles", "Async file operations"),
+        ("aiohttp", "Async HTTP client"),
+        ("fastmcp", "FastMCP framework"),
+        ("psutil", "System utilities"),
+        ("watchdog", "File system monitoring"),
+    ]
+    
+    failed_deps = []
+    for dep, desc in deps:
+        if not _test_import(dep, desc):
+            failed_deps.append(dep)
+    
+    assert len(failed_deps) == 0, f"Failed to import: {', '.join(failed_deps)}"
+
+def test_core_modules():
+    """Test core application modules can be imported."""
+    core_modules = [
+        ("mcp_studio.app.core.config", "Configuration management"),
+        ("mcp_studio.app.core.logging", "Logging configuration"),
+        ("mcp_studio.app.core.logging_utils", "Logging utilities"),
+        ("mcp_studio.app.core.lifespan", "Application lifespan"),
+        ("mcp_studio.app.core.enums", "Common enums"),
+        ("mcp_studio.app.core.types", "Type definitions"),
+        ("mcp_studio.app.core.security", "Security utilities"),
+        ("mcp_studio.app.core.websocket", "WebSocket handling"),
+    ]
+    
+    failed_core = []
+    for module, desc in core_modules:
+        if not _test_import(module, desc):
+            failed_core.append(module)
+    
+    assert len(failed_core) == 0, f"Failed to import: {', '.join(failed_core)}"
+
+def test_model_modules():
+    """Test data model modules can be imported."""
+    model_modules = [
+        ("mcp_studio.app.models.mcp", "MCP data models"),
+        ("mcp_studio.app.models.server", "Server models"),
+    ]
+    
+    failed_models = []
+    for module, desc in model_modules:
+        if not _test_import(module, desc):
+            failed_models.append(module)
+    
+    assert len(failed_models) == 0, f"Failed to import: {', '.join(failed_models)}"
+
+def test_service_modules():
+    """Test service modules can be imported."""
+    service_modules = [
+        ("mcp_studio.app.services", "Services module"),
+        ("mcp_studio.app.services.config_service", "Configuration service"),
+        ("mcp_studio.app.services.discovery_service", "Discovery service"),
+        ("mcp_studio.app.services.server_service", "Server service"),
+        ("mcp_studio.app.services.tool_service", "Tool service"),
+    ]
+    
+    failed_services = []
+    for module, desc in service_modules:
+        if not _test_import(module, desc):
+            failed_services.append(module)
+    
+    assert len(failed_services) == 0, f"Failed to import: {', '.join(failed_services)}"
+
+def test_api_modules():
+    """Test API modules can be imported."""
+    api_modules = [
+        ("mcp_studio.app.api", "API router"),
+        ("mcp_studio.app.api.health", "Health endpoints"),
+        ("mcp_studio.app.api.servers", "Server endpoints"),
+        ("mcp_studio.app.api.tools", "Tool endpoints"),
+        ("mcp_studio.app.api.discovery", "Discovery endpoints"),
+        ("mcp_studio.app.api.web", "Web interface"),
+    ]
+    
+    failed_api = []
+    for module, desc in api_modules:
+        if not _test_import(module, desc):
+            failed_api.append(module)
+    
+    assert len(failed_api) == 0, f"Failed to import: {', '.join(failed_api)}"
+
+def test_tool_modules():
+    """Test tool modules can be imported."""
+    tool_modules = [
+        ("mcp_studio.tools", "Tools module"),
+        ("mcp_studio.tools.decorators", "Tool decorators"),
+        ("mcp_studio.tools.discovery", "Discovery tools"),
+        ("mcp_studio.tools.server", "Server tools"),
+        ("mcp_studio.tools.utility", "Utility tools"),
+        ("mcp_studio.tools.development", "Development tools"),
+        ("mcp_studio.tools.data", "Data tools"),
+        ("mcp_studio.tools.files", "File tools"),
+    ]
+    
+    failed_tools = []
+    for module, desc in tool_modules:
+        if not _test_import(module, desc):
+            failed_tools.append(module)
+    
+    assert len(failed_tools) == 0, f"Failed to import: {', '.join(failed_tools)}"
+
+def test_main_modules():
+    """Test main application modules can be imported."""
+    main_modules = [
+        ("mcp_studio", "Main package"),
+        ("mcp_studio.main", "Application entry point"),
+    ]
+    
+    failed_main = []
+    for module, desc in main_modules:
+        if not _test_import(module, desc):
+            failed_main.append(module)
+    
+    assert len(failed_main) == 0, f"Failed to import: {', '.join(failed_main)}"
 
 def main():
     """Run all import tests."""

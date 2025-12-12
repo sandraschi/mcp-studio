@@ -20,6 +20,7 @@ from pydantic import AnyHttpUrl, ValidationError
 
 from ..core.config import settings
 from ..core.logging_utils import get_logger
+from ..core.stdio import transport_manager
 from ..models.mcp import MCPServer, MCPTool, MCPToolParameter, ServerStatus
 
 logger = get_logger(__name__)
@@ -422,21 +423,96 @@ async def get_server(server_id: str) -> Optional[MCPServer]:
     """Get a specific MCP server by ID."""
     return discovered_servers.get(server_id)
 
-async def execute_tool(server_id: str, tool_name: str, parameters: Dict[str, Any]) -> Any:
-    """Execute a tool on an MCP server."""
+async def execute_tool(
+    server_id: str, 
+    tool_name: str, 
+    parameters: Dict[str, Any],
+    timeout: float = 30.0
+) -> Dict[str, Any]:
+    """Execute a tool on an MCP server.
+    
+    Args:
+        server_id: ID of the MCP server
+        tool_name: Name of the tool to execute
+        parameters: Parameters to pass to the tool
+        timeout: Maximum time to wait for execution (seconds)
+        
+    Returns:
+        Dictionary containing execution result with keys:
+        - success: bool indicating if execution succeeded
+        - result: The tool execution result (if successful)
+        - error: Error message (if failed)
+        - execution_time: Time taken to execute (seconds)
+        
+    Raises:
+        HTTPException: If server or tool not found, or execution fails
+    """
     server = discovered_servers.get(server_id)
     if not server:
-        raise HTTPException(status_code=404, detail=f"Server {server_id} not found")
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Server {server_id} not found"
+        )
 
     # Find the tool
     tool = next((t for t in server.tools if t.name == tool_name), None)
     if not tool:
-        raise HTTPException(status_code=404, detail=f"Tool {tool_name} not found on server {server_id}")
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Tool {tool_name} not found on server {server_id}"
+        )
 
-    # TODO: Implement tool execution
-    # This will require connecting to the MCP server and sending the tool execution request
+    try:
+        # Get transport for the server
+        transport = await transport_manager.get_transport(server)
+        if not transport:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Failed to connect to server {server_id}. Server may be unavailable."
+            )
 
-    return {"status": "success", "message": "Tool execution not yet implemented"}
+        # Execute the tool
+        logger.info(
+            "Executing tool",
+            server_id=server_id,
+            tool_name=tool_name,
+            parameters=parameters
+        )
+        
+        result = await transport.execute_tool(
+            tool_name=tool_name,
+            parameters=parameters,
+            timeout=timeout
+        )
+
+        if result.success:
+            return {
+                "status": "success",
+                "success": True,
+                "result": result.result,
+                "execution_time": result.execution_time,
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Tool execution failed: {result.error}"
+            )
+
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        logger.error(
+            "Unexpected error executing tool",
+            server_id=server_id,
+            tool_name=tool_name,
+            error=str(e),
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error executing tool: {str(e)}"
+        )
 
 
 # Create a simple discovery service class

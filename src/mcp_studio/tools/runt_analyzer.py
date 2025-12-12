@@ -6,15 +6,34 @@ Scans MCP repositories and identifies "runts" - repos that need SOTA upgrades.
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import structlog
 
 from .decorators import ToolCategory, tool
+from .runt_analyzer_rules import (
+    evaluate_rules,
+    calculate_sota_score,
+    SOTA_RULES,
+    RuleCategory,
+    RuleSeverity,
+    get_rules_by_category,
+    get_rule_by_id,
+)
+from .repo_detail_collector import collect_repo_details
+from .scan_cache import (
+    get_cached_scan,
+    cache_scan_result,
+    get_cached_repo_status,
+    cache_repo_status,
+    clear_cache,
+    get_cache_stats,
+)
+from .scan_formatter import format_scan_result_markdown, format_repo_status_markdown
 
 logger = structlog.get_logger(__name__)
 
-# SOTA thresholds
+# SOTA thresholds (kept for backward compatibility)
 FASTMCP_LATEST = "2.13.1"
 FASTMCP_RUNT_THRESHOLD = "2.12.0"
 TOOL_PORTMANTEAU_THRESHOLD = 15  # Repos with >15 tools should have portmanteau
@@ -148,41 +167,68 @@ ZOO_ANIMALS = {
     - CI workflow count (> 3 = bloated)
     - Missing CI = runt
 
-    Returns categorized list of repos with specific upgrade recommendations.""",
+    Returns categorized list of repos with specific upgrade recommendations.
+    Results are cached to avoid re-scanning on every request.""",
     category=ToolCategory.DISCOVERY,
     tags=["runt", "analyzer", "sota", "upgrade"],
     estimated_runtime="2-10s"
 )
 async def analyze_runts(
-    scan_path: str = "D:/Dev/repos",
+    scan_path: Optional[str] = None,
     max_depth: int = 1,
-    include_sota: bool = True
-) -> Dict[str, Any]:
+    include_sota: bool = True,
+    format: str = "json",
+    use_cache: bool = True,
+    cache_ttl: int = 3600
+) -> Union[Dict[str, Any], str]:
     """
     Analyze MCP repositories to identify runts needing upgrades.
 
     Args:
-        scan_path: Directory containing MCP repositories (default: D:/Dev/repos)
+        scan_path: Directory containing MCP repositories (default: from REPOS_DIR env var or platform default)
         max_depth: How deep to scan for repos (default: 1 = direct children only)
         include_sota: Whether to include SOTA repos in results (default: True)
+        format: Output format - "json" or "markdown" (default: "json")
+        use_cache: Whether to use cached results (default: True)
+        cache_ttl: Cache time-to-live in seconds (default: 3600 = 1 hour)
 
     Returns:
-        Dictionary with runts, sota repos, and summary statistics
+        Dictionary with runts, sota repos, and summary statistics, or markdown string if format="markdown"
     """
+    # Use default scan_path if not provided
+    if scan_path is None:
+        from mcp_studio.app.core.config import DEFAULT_REPOS_PATH
+        scan_path = DEFAULT_REPOS_PATH
+    
+    # Check cache first
+    if use_cache:
+        cached = get_cached_scan(scan_path, max_depth, cache_ttl)
+        if cached:
+            if format == "markdown":
+                return format_scan_result_markdown(cached)
+            return cached
+    
     runts: List[Dict[str, Any]] = []
     sota_repos: List[Dict[str, Any]] = []
 
     path = Path(scan_path).expanduser().resolve()
     if not path.exists():
-        return {
+        error_result = {
             "success": False,
             "error": f"Path does not exist: {scan_path}",
             "timestamp": time.time()
         }
+        if format == "markdown":
+            return f"# Scan Failed\n\n**Error:** {error_result['error']}\n"
+        return error_result
 
+    import asyncio
     for item in path.iterdir():
         if not item.is_dir() or item.name.startswith('.'):
             continue
+
+        # Small delay to reduce terminal spam and CPU usage
+        await asyncio.sleep(0.1)  # 100ms delay between repos
 
         repo_info = _analyze_repo(item)
         if repo_info:
@@ -195,7 +241,7 @@ async def analyze_runts(
     runts.sort(key=lambda x: len(x.get("runt_reasons", [])), reverse=True)
     sota_repos.sort(key=lambda x: x.get("name", ""))
 
-    return {
+    result = {
         "success": True,
         "summary": {
             "total_mcp_repos": len(runts) + len(sota_repos),
@@ -210,6 +256,16 @@ async def analyze_runts(
         "scan_path": scan_path,
         "timestamp": time.time()
     }
+    
+    # Cache the result
+    if use_cache:
+        cache_scan_result(scan_path, max_depth, result)
+    
+    # Return in requested format
+    if format == "markdown":
+        return format_scan_result_markdown(result)
+    
+    return result
 
 
 @tool(
@@ -220,42 +276,83 @@ async def analyze_runts(
     - FastMCP version and upgrade path
     - Tool count and portmanteau status
     - CI/CD quality assessment
-    - Specific upgrade recommendations""",
+    - Specific upgrade recommendations
+    - Detailed repository structure, dependencies, tools, and configuration
+    - All information needed for AI to answer questions about the repo without re-analysis
+    
+    Results are cached to avoid re-scanning on every request.""",
     category=ToolCategory.DISCOVERY,
     tags=["repo", "status", "sota"],
-    estimated_runtime="1-2s"
+    estimated_runtime="2-5s"
 )
-async def get_repo_status(repo_path: str) -> Dict[str, Any]:
+async def get_repo_status(
+    repo_path: str,
+    format: str = "json",
+    use_cache: bool = True,
+    cache_ttl: int = 3600
+) -> Union[Dict[str, Any], str]:
     """
     Get detailed SOTA status for a specific repository.
 
     Args:
         repo_path: Path to the repository
+        format: Output format - "json" or "markdown" (default: "json")
+        use_cache: Whether to use cached results (default: True)
+        cache_ttl: Cache time-to-live in seconds (default: 3600 = 1 hour)
 
     Returns:
-        Detailed repository status and recommendations
+        Detailed repository status and recommendations, or markdown string if format="markdown"
     """
+    # Check cache first
+    if use_cache:
+        cached = get_cached_repo_status(repo_path, cache_ttl)
+        if cached:
+            if format == "markdown":
+                return format_repo_status_markdown(cached)
+            return cached
+    
     path = Path(repo_path).expanduser().resolve()
     if not path.exists():
-        return {
+        error_result = {
             "success": False,
             "error": f"Repository not found: {repo_path}",
             "timestamp": time.time()
         }
+        if format == "markdown":
+            return f"# Repository Status Failed\n\n**Error:** {error_result['error']}\n"
+        return error_result
 
     repo_info = _analyze_repo(path)
     if not repo_info:
-        return {
+        error_result = {
             "success": False,
             "error": f"Not an MCP repository: {repo_path}",
             "timestamp": time.time()
         }
+        if format == "markdown":
+            return f"# Repository Status Failed\n\n**Error:** {error_result['error']}\n"
+        return error_result
 
     # Add more detailed analysis
     repo_info["success"] = True
     repo_info["sota_score"] = _calculate_sota_score(repo_info)
     repo_info["upgrade_priority"] = _determine_priority(repo_info)
     repo_info["timestamp"] = time.time()
+    
+    # Add comprehensive repository details for AI consumption
+    try:
+        repo_info["details"] = collect_repo_details(path)
+    except Exception as e:
+        logger.warning(f"Failed to collect detailed repo info: {e}")
+        repo_info["details"] = None
+    
+    # Cache the result
+    if use_cache:
+        cache_repo_status(repo_path, repo_info)
+    
+    # Return in requested format
+    if format == "markdown":
+        return format_repo_status_markdown(repo_info)
 
     return repo_info
 
@@ -515,140 +612,44 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     if coveragerc.exists() or pyproject_coverage:
         info["has_coverage_config"] = True
 
-    # Determine runt status
+    # Evaluate using rule-based system
     _evaluate_runt_status(info, fastmcp_version)
 
     return info
 
 
 def _evaluate_runt_status(info: Dict[str, Any], fastmcp_version: str) -> None:
-    """Evaluate if repo is a runt and why."""
-    # Check FastMCP version
-    try:
-        version_parts = [int(x) for x in fastmcp_version.split('.')[:2]]
-        threshold_parts = [int(x) for x in FASTMCP_RUNT_THRESHOLD.split('.')[:2]]
-
-        if version_parts < threshold_parts:
-            info["is_runt"] = True
-            info["runt_reasons"].append(f"FastMCP {fastmcp_version} < {FASTMCP_RUNT_THRESHOLD}")
-            info["recommendations"].append(f"Upgrade to FastMCP {FASTMCP_LATEST}")
-    except Exception:
-        pass
-
-    # Check tool count vs portmanteau
-    if info["tool_count"] > TOOL_PORTMANTEAU_THRESHOLD and not info["has_portmanteau"]:
-        info["is_runt"] = True
-        info["runt_reasons"].append(
-            f"{info['tool_count']} tools without portmanteau (threshold: {TOOL_PORTMANTEAU_THRESHOLD})"
-        )
-        info["recommendations"].append("Refactor to portmanteau tools")
-
-    # Check CI
-    if not info["has_ci"]:
-        info["is_runt"] = True
-        info["runt_reasons"].append("No CI/CD workflows")
-        info["recommendations"].append("Add CI workflow with ruff + pytest")
-    elif info["ci_workflows"] > 3:
-        info["runt_reasons"].append(f"{info['ci_workflows']} CI workflows (recommend: 1)")
-        info["recommendations"].append("Consolidate to single CI workflow")
-
-    # Check DXT packaging
-    if not info["has_dxt"]:
-        info["runt_reasons"].append("No DXT packaging (manifest.json)")
-        info["recommendations"].append("Add manifest.json for desktop extension support")
-
-    # Check help tool
-    if not info["has_help_tool"]:
-        info["is_runt"] = True
-        info["runt_reasons"].append("No help tool")
-        info["recommendations"].append("Add help() tool for discoverability")
-
-    # Check status tool
-    if not info["has_status_tool"]:
-        info["is_runt"] = True
-        info["runt_reasons"].append("No status tool")
-        info["recommendations"].append("Add status() tool for diagnostics")
-
-    # Check proper docstrings
-    if not info["has_proper_docstrings"] and info["tool_count"] > 0:
-        info["runt_reasons"].append("Missing proper multiline docstrings (Args/Returns)")
-        info["recommendations"].append("Add comprehensive docstrings with Args, Returns, Examples")
-
-    # Check ruff linting
-    if not info["has_ruff"]:
-        info["is_runt"] = True
-        info["runt_reasons"].append("No ruff linting configured")
-        info["recommendations"].append("Add ruff to pyproject.toml and CI workflow")
-
-    # Check test harness
-    if not info["has_tests"]:
-        info["is_runt"] = True
-        info["runt_reasons"].append("No test directory (tests/)")
-        info["recommendations"].append("Add tests/ directory with unit tests")
-    else:
-        if not info["has_unit_tests"]:
-            info["runt_reasons"].append("No unit tests (tests/unit/)")
-            info["recommendations"].append("Add tests/unit/ with test_*.py files")
-        
-        if not info["has_integration_tests"]:
-            info["runt_reasons"].append("No integration tests (tests/integration/)")
-            info["recommendations"].append("Add tests/integration/ for API/E2E tests")
-        
-        if info["test_file_count"] < 3:
-            info["runt_reasons"].append(f"Only {info['test_file_count']} test files (recommend: 5+)")
-            info["recommendations"].append("Add more test coverage")
-
-    # Check pytest config
-    if not info["has_pytest_config"]:
-        info["runt_reasons"].append("No pytest configuration")
-        info["recommendations"].append("Add [tool.pytest.ini_options] to pyproject.toml")
-
-    # Check coverage config
-    if not info["has_coverage_config"]:
-        info["runt_reasons"].append("No coverage configuration")
-        info["recommendations"].append("Add [tool.coverage] to pyproject.toml")
-
-    # Check logging
-    if not info["has_proper_logging"]:
-        info["is_runt"] = True
-        info["runt_reasons"].append("No proper logging (structlog/logging)")
-        info["recommendations"].append("Add structlog or logging module for observability")
-
-    # Check print statements
-    if info["print_statement_count"] > 0:
-        info["runt_reasons"].append(f"{info['print_statement_count']} print() calls in non-test code")
-        info["recommendations"].append("Replace print() with logger calls")
-        if info["print_statement_count"] > 5:
-            info["is_runt"] = True  # Too many prints = runt
-
-    # Check error handling
-    if info["bare_except_count"] >= 3:
-        info["is_runt"] = True
-        info["runt_reasons"].append(f"{info['bare_except_count']} bare except clauses")
-        info["recommendations"].append("Use specific exception types (ValueError, TypeError, etc.)")
-
-    # Check lazy error messages (warning only, not runt-worthy)
-    if info["lazy_error_msg_count"] > 0:
-        info["runt_reasons"].append(f"{info['lazy_error_msg_count']} non-informative error messages (minor)")
-        info["recommendations"].append("Use descriptive error messages with context (what failed, why, how to fix)")
-        # Note: lazy messages alone don't make a runt - just needs polish
-
+    """Evaluate if repo is a runt using rule-based system."""
+    # Ensure fastmcp_version is in info for rule evaluation
+    if fastmcp_version:
+        info["fastmcp_version"] = fastmcp_version
+    
+    # Evaluate all rules
+    rule_result = evaluate_rules(info)
+    
+    # Update info with rule evaluation results
+    info["is_runt"] = rule_result["is_runt"]
+    info["runt_reasons"] = rule_result["runt_reasons"]
+    info["recommendations"] = rule_result["recommendations"]
+    
     # Set status emoji, color, and label based on severity
-    runt_count = len(info["runt_reasons"])
+    violation_count = rule_result["violation_count"]
+    critical_count = rule_result["critical_count"]
+    
     if info["is_runt"]:
         # RED - Real runts
         info["status_color"] = "red"
-        if runt_count >= 5:
+        if critical_count >= 5:
             info["status_emoji"] = "💀"
             info["status_label"] = "Critical Runt"
-        elif runt_count >= 3:
+        elif critical_count >= 3:
             info["status_emoji"] = "🐛"
             info["status_label"] = "Runt"
         else:
             info["status_emoji"] = "🐣"
             info["status_label"] = "Minor Runt"
     else:
-        if runt_count > 0:
+        if violation_count > 0:
             # ORANGE - Improvable (has warnings but not runt)
             info["status_emoji"] = "⚠️"
             info["status_color"] = "orange"
@@ -658,7 +659,14 @@ def _evaluate_runt_status(info: Dict[str, Any], fastmcp_version: str) -> None:
             info["status_emoji"] = "✅"
             info["status_color"] = "green"
             info["status_label"] = "SOTA"
-
+    
+    # Store rule evaluation details for debugging
+    info["_rule_evaluation"] = {
+        "violations": rule_result["violations"],
+        "critical_violations": rule_result["critical_violations"],
+        "score_deduction": rule_result["score_deduction"],
+    }
+    
     # Add zoo classification
     _classify_zoo_animal(info)
 
@@ -696,92 +704,8 @@ def _classify_zoo_animal(info: Dict[str, Any]) -> None:
 
 
 def _calculate_sota_score(info: Dict[str, Any]) -> int:
-    """Calculate SOTA compliance score (0-100)."""
-    score = 100
-
-    # Deduct for old FastMCP (-20)
-    if info.get("fastmcp_version"):
-        try:
-            version = [int(x) for x in info["fastmcp_version"].split('.')[:2]]
-            latest = [int(x) for x in FASTMCP_LATEST.split('.')[:2]]
-            if version < latest:
-                score -= 20
-        except Exception:
-            pass
-
-    # Deduct for missing portmanteau when needed (-25)
-    if info.get("tool_count", 0) > TOOL_PORTMANTEAU_THRESHOLD and not info.get("has_portmanteau"):
-        score -= 25
-
-    # Deduct for no CI (-20)
-    if not info.get("has_ci"):
-        score -= 20
-
-    # Deduct for too many CI workflows (-5)
-    if info.get("ci_workflows", 0) > 3:
-        score -= 5
-
-    # Deduct for no DXT packaging (-10)
-    if not info.get("has_dxt"):
-        score -= 10
-
-    # Deduct for no help tool (-10)
-    if not info.get("has_help_tool"):
-        score -= 10
-
-    # Deduct for no status tool (-10)
-    if not info.get("has_status_tool"):
-        score -= 10
-
-    # Deduct for poor docstrings (-10)
-    if not info.get("has_proper_docstrings") and info.get("tool_count", 0) > 0:
-        score -= 10
-
-    # Deduct for no ruff (-10)
-    if not info.get("has_ruff"):
-        score -= 10
-
-    # Deduct for no tests (-15)
-    if not info.get("has_tests"):
-        score -= 15
-    else:
-        # Deduct for missing test types (-5 each)
-        if not info.get("has_unit_tests"):
-            score -= 5
-        if not info.get("has_integration_tests"):
-            score -= 5
-
-    # Deduct for no pytest config (-5)
-    if not info.get("has_pytest_config"):
-        score -= 5
-
-    # Deduct for no coverage config (-5)
-    if not info.get("has_coverage_config"):
-        score -= 5
-
-    # Deduct for no proper logging (-10)
-    if not info.get("has_proper_logging"):
-        score -= 10
-
-    # Deduct for print statements (-5, or -10 if many)
-    print_count = info.get("print_statement_count", 0)
-    if print_count > 5:
-        score -= 10
-    elif print_count > 0:
-        score -= 5
-
-    # Deduct for bare except clauses (-10)
-    if info.get("bare_except_count", 0) >= 3:
-        score -= 10
-
-    # Deduct for lazy error messages (-5 or -10)
-    lazy_count = info.get("lazy_error_msg_count", 0)
-    if lazy_count >= 5:
-        score -= 10
-    elif lazy_count > 0:
-        score -= 5
-
-    return max(0, score)
+    """Calculate SOTA compliance score (0-100) using rule-based system."""
+    return calculate_sota_score(info, base_score=100)
 
 
 def _determine_priority(info: Dict[str, Any]) -> str:

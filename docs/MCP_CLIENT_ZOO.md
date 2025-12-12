@@ -6,7 +6,7 @@ MCP Studio now supports **ALL known MCP clients** as of 2025! Drop your config f
 
 ---
 
-## 📊 Supported Clients (9 Total)
+## 📊 Supported Clients (10 Total)
 
 | # | Client | Status | Config Format | Notes |
 |---|--------|--------|---------------|-------|
@@ -19,6 +19,7 @@ MCP Studio now supports **ALL known MCP clients** as of 2025! Drop your config f
 | 7 | **LM Studio** | ✅ | `mcpServers` | Local model runner |
 | 8 | **Zed Editor** | ✅ | `mcpServers` | Modern code editor |
 | 9 | **VSCode Generic** | ✅ | `mcpServers` | Generic VSCode MCP config |
+| 10 | **Antigravity IDE** | ⚠️ | `mcpServers` | 🚨 **DATA DESTRUCTION RISK** - Google's AI-powered IDE |
 
 ---
 
@@ -52,6 +53,8 @@ C:\Users\{user}\AppData\Roaming\Claude\claude_desktop_config.json
 
 ### **2. Cursor IDE** (AI-First IDE)
 
+⚠️ **CRITICAL ISSUES:** Rapid update cadence (up to several releases per day) with **zero transparency** - no changelog, no blog posts, no release notes, no communication about changes. Frequently introduces **showstopper regressions** (e.g., completely broken terminals) that block development workflows. **Not recommended for professional development** due to lack of stability and transparency. [Full analysis](docs/development/CURSOR_UPDATE_QUALITY_CONCERNS.md) | [Transparency assessment](docs/development/IDE_TRANSPARENCY_STANDARDS.md)
+
 **Windows:**
 ```
 C:\Users\{user}\AppData\Roaming\Cursor\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json
@@ -69,6 +72,8 @@ C:\Users\{user}\AppData\Roaming\Cursor\mcp_settings.json
 ---
 
 ### **3. Windsurf IDE** (Codeium IDE)
+
+⚠️ **REPOSITORY DELETION RISK:** Windsurf has been confirmed to automatically delete entire repositories "to simplify" them without user consent. March 2025 incident resulted in complete repo loss (backups prevented permanent damage). Use with extreme caution - AI may decide your entire project needs "simplification."
 
 **Windows:**
 ```
@@ -228,6 +233,68 @@ C:\Users\{user}\AppData\Roaming\Code\User\mcp_settings.json
 
 ---
 
+### **10. Antigravity IDE** (Google's AI-Powered IDE)
+
+**Official MCP Documentation:** [https://antigravity.google/docs/mcp](https://antigravity.google/docs/mcp)
+
+**Configuration Methods:**
+- **Primary:** Built-in MCP Store (UI-based installation of 35+ supported servers)
+- **Advanced:** Raw config editing via `mcp_config.json` (⚠️ extremely well-hidden: "..." → "Manage MCP Servers" → "View raw config")
+- **Alternative:** `settings.json` with `mcpServers` key (reverse-engineered approach - more discoverable for power users)
+
+**Current Custom Configuration (Settings.json):**
+- 16 MCP servers including Bright Data for anti-bot web scraping
+
+**Supported Servers:** 35+ pre-built integrations including databases (BigQuery, Supabase, MongoDB), development tools (GitHub, Heroku, Netlify), and business services (Linear, Notion, Stripe) (JavaScript app with sections on MCP overview, core features, connection setup, custom server config, and supported servers)
+
+🚨 **CRITICAL DATA SAFETY RISK:** Antigravity IDE has **confirmed capability to destroy user data** by completely wiping drives. A user reported their entire D: drive was "nuked" with no recovery possible - deletion was so fast it bypassed Recycle Bin completely. This incident received major media coverage (CNN, NYT, Ars Technica) and went viral on social media.
+
+⚠️ **ADDITIONAL ISSUES:** Rapid update cadence with **zero transparency** - no changelog, no blog posts, no release notes. Latest update adds "idiot proofing" but underlying risks remain.
+
+**BACKUP ALL DATA** before use. **Not recommended for any work involving important data.**
+
+**Windows:**
+```
+C:\Users\{user}\AppData\Roaming\Antigravity\User\settings.json
+```
+
+**Linux:**
+```
+~/.config/Antigravity/User/settings.json
+```
+
+**Mac:**
+```
+~/Library/Application Support/Antigravity/User/settings.json
+```
+
+**Format:** VS Code-style settings with `mcpServers` key
+```json
+{
+  "mcpServers": {
+    "advanced-memory": {
+      "command": "py",
+      "args": ["-3.13", "-m", "advanced_memory.mcp.server", "--transport", "stdio"],
+      "cwd": "D:/Dev/repos/advanced-memory-mcp",
+      "env": {
+        "PYTHONPATH": "D:/Dev/repos/advanced-memory-mcp/src",
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  }
+}
+```
+
+**Key Differences:**
+- Uses VS Code-style `settings.json` (not separate `mcp.json`)
+- User-specific settings (not app-specific like Claude Desktop)
+- Same `"mcpServers"` format as other clients
+- Settings sync with VS Code if enabled
+
+**Discovery:** MCP Studio scans `settings.json` for `"mcpServers"` key automatically
+
+---
+
 ## 🎯 How MCP Studio Handles The Zoo
 
 ### **Automatic Discovery**
@@ -238,14 +305,15 @@ MCP Studio scans **ALL** of these locations automatically:
 # Every 30 seconds, scans:
 clients = [
     "claude-desktop",
-    "cursor-ide", 
+    "cursor-ide",
     "windsurf-ide",
     "cline-vscode",
     "roo-cline",
     "continue-dev",
     "lm-studio",
     "zed-editor",
-    "vscode-generic"
+    "vscode-generic",
+    "antigravity-ide"
 ]
 
 for client in clients:
@@ -321,6 +389,7 @@ def _parse_standard_format(paths, source):
 - LM Studio ✅
 - Zed Editor ✅
 - VSCode Generic ✅
+- Antigravity IDE ✅
 
 ### **Alternative Format Parser**
 
@@ -397,11 +466,12 @@ Finds all servers from all extensions!
 │   Cursor IDE      ──┤               │
 │   Windsurf IDE    ──┤               │
 │   Cline           ──┤               │
-│   Roo-Cline       ──┼──→  MCP       │
-│   Continue.dev    ──┤     STUDIO    │
-│   LM Studio       ──┤     📊        │
-│   Zed Editor      ──┤               │
-│   VSCode Generic  ──┘               │
+│   Roo-Cline       ──┤               │
+│   Continue.dev    ──┼──→  MCP       │
+│   LM Studio       ──┤     STUDIO    │
+│   Zed Editor      ──┤     📊        │
+│   VSCode Generic  ──┤               │
+│   Antigravity IDE ──┘               │
 │                                     │
 │   ONE DASHBOARD TO RULE THEM ALL!  │
 │                                     │
@@ -428,7 +498,7 @@ Finds all servers from all extensions!
 }
 ```
 
-**Used by:** Claude, Cursor, Windsurf, Cline, Roo-Cline, LM Studio, Zed, VSCode
+**Used by:** Claude, Cursor, Windsurf, Cline, Roo-Cline, LM Studio, Zed, VSCode, Antigravity
 
 **Alternative Format (Continue.dev):**
 ```json
@@ -502,7 +572,7 @@ def parse_new_ide_2026(self) -> List[MCPServerInfo]:
 
 **MCP Studio supports:**
 
-- ✅ **9 MCP clients** (and counting!)
+- ✅ **10 MCP clients** (and counting!)
 - ✅ **Standard format** (`mcpServers`)
 - ✅ **Alternative formats** (Continue.dev's `mcp`)
 - ✅ **Cross-platform** (Windows, Linux, Mac)

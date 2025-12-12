@@ -1279,6 +1279,5 @@ async def init_server_service() -> None:
     except Exception as e:
         logger.error("Failed to initialize server service", error=str(e))
 
-# Run the initialization when the module is imported
-if __name__ != "__main__":
-    asyncio.create_task(init_server_service())
+# Initialization will be called from lifespan handler, not at import time
+# This prevents "no running event loop" errors

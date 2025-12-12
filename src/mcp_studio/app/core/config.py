@@ -9,16 +9,47 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 try:
-    from pydantic import BaseSettings, Field, validator
+    from pydantic_settings import BaseSettings
+    from pydantic import ConfigDict, Field, field_validator
 except ImportError:
-    # Fallback for older pydantic versions or if not installed
-    print("Warning: Pydantic not available, using basic configuration")
-    BaseSettings = object
-    Field = lambda **kwargs: None
-    validator = lambda *args, **kwargs: lambda f: f
+    try:
+        # Fallback to pydantic v1
+        from pydantic import BaseSettings, Field, validator as field_validator
+        ConfigDict = dict  # Fallback for v1
+    except ImportError:
+        # Fallback if pydantic not available
+        BaseSettings = object
+        Field = lambda **kwargs: None
+        field_validator = lambda *args, **kwargs: lambda f: f
+        ConfigDict = dict
 
 # Project root directory
 ROOT_DIR = Path(__file__).parent.parent.parent.parent
+
+def get_default_repos_path() -> str:
+    """Get default repos path from environment or use sensible default."""
+    # Check environment variables first
+    repos_dir = os.getenv("REPOS_DIR") or os.getenv("REPOS_PATH") or os.getenv("MCP_REPOS_DIR")
+    if repos_dir:
+        return repos_dir
+    
+    # Platform-specific defaults
+    if os.name == 'nt':  # Windows
+        # Try common Windows dev locations
+        for base in [Path.home() / "Dev" / "repos", Path("D:/Dev/repos"), Path("C:/Dev/repos")]:
+            if base.exists():
+                return str(base)
+        # Fallback to user's home/Dev/repos even if it doesn't exist yet
+        return str(Path.home() / "Dev" / "repos")
+    else:  # Linux/Mac
+        # Try common Unix dev locations
+        for base in [Path.home() / "dev" / "repos", Path.home() / "repos", Path("/opt/repos")]:
+            if base.exists():
+                return str(base)
+        return str(Path.home() / "dev" / "repos")
+
+# Global default repos path
+DEFAULT_REPOS_PATH = get_default_repos_path()
 
 class Settings(BaseSettings if BaseSettings != object else object):
     """Application settings with fallbacks."""
@@ -29,8 +60,8 @@ class Settings(BaseSettings if BaseSettings != object else object):
     DEBUG: bool = True
     
     # Server
-    HOST: str = "127.0.0.1"
-    PORT: int = 8000
+    HOST: str = "0.0.0.0"  # Bind to all interfaces
+    PORT: int = 7787
     RELOAD: bool = True
     WORKERS: int = 1
     
@@ -43,14 +74,19 @@ class Settings(BaseSettings if BaseSettings != object else object):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     
     # CORS
-    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
+    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:7787", "http://127.0.0.1:7787", "http://127.0.0.1:3000"]
     
     # Database
     DATABASE_URL: str = "sqlite:///./mcp-studio.db"
     
     # MCP Discovery
     MCP_DISCOVERY_PATHS: List[str] = []
-    
+
+    # Repo Scanner
+    REPOS_PATH: str = DEFAULT_REPOS_PATH
+    REPO_SCAN_DEPTH: int = 2  # How deep to scan subdirectories
+    REPO_SCAN_EXCLUDE: List[str] = [".git", "node_modules", "__pycache__", ".venv", "venv"]
+
     # UI Settings
     UI_THEME: str = "dark"
     UI_REFRESH_INTERVAL: int = 30  # seconds
@@ -81,6 +117,13 @@ class Settings(BaseSettings if BaseSettings != object else object):
                 str(Path.home() / ".mcp" / "servers"),
             ]
             
+            # Check for environment variable first
+            env_paths = os.getenv("MCP_DISCOVERY_PATHS") or os.getenv("DISCOVERY_PATHS")
+            if env_paths:
+                # Parse comma-separated paths from environment
+                env_path_list = [p.strip() for p in env_paths.split(",") if p.strip()]
+                paths.extend(env_path_list)
+            
             # Add platform-specific paths
             if os.name == 'nt':  # Windows
                 paths.extend([
@@ -88,34 +131,78 @@ class Settings(BaseSettings if BaseSettings != object else object):
                     str(Path(os.environ.get("APPDATA", "")) / "Windsurf"),
                     str(Path(os.environ.get("APPDATA", "")) / "Cursor"),
                 ])
+                # Add default repos path if REPOS_DIR env var is set
+                repos_dir = os.getenv("REPOS_DIR") or os.getenv("REPOS_PATH")
+                if repos_dir:
+                    paths.append(repos_dir)
             else:  # Linux/Mac
                 paths.extend([
                     str(Path.home() / ".config" / "claude"),
                     str(Path.home() / ".config" / "windsurf"),
                     str(Path.home() / ".config" / "cursor"),
                 ])
+                # Add default repos path if REPOS_DIR env var is set
+                repos_dir = os.getenv("REPOS_DIR") or os.getenv("REPOS_PATH")
+                if repos_dir:
+                    paths.append(repos_dir)
             
-            self.MCP_DISCOVERY_PATHS = [p for p in paths if p]
+            # Filter out empty paths and validate existence
+            valid_paths = []
+            for p in paths:
+                if p:
+                    try:
+                        path_obj = Path(p).expanduser()
+                        # Don't require existence - user might create it later
+                        valid_paths.append(str(path_obj))
+                    except Exception:
+                        pass
+            
+            self.MCP_DISCOVERY_PATHS = valid_paths
         except Exception as e:
-            print(f"Warning: Could not set up discovery paths: {e}")
+            # Use logger instead of print to reduce spam
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Could not set up discovery paths: {e}")
             self.MCP_DISCOVERY_PATHS = []
     
     if BaseSettings != object:
-        class Config:
-            case_sensitive = True
-            env_file = ".env"
-            env_file_encoding = "utf-8"
+        try:
+            model_config = ConfigDict(
+                case_sensitive=True,
+                env_file=None,  # Temporarily disable .env loading to avoid parsing errors
+                env_file_encoding="utf-8",
+                env_ignore_empty=True,  # Ignore empty values
+            )
+        except TypeError:
+            # Fallback for older pydantic versions
+            class Config:
+                case_sensitive = True
+                env_file = None
+                env_file_encoding = "utf-8"
+                env_ignore_empty = True
         
-        @validator("BACKEND_CORS_ORIGINS", pre=True)
-        def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
-            if isinstance(v, str) and not v.startswith("["):
-                return [i.strip() for i in v.split(",")]
-            elif isinstance(v, (list, str)):
-                return v if isinstance(v, list) else [v]
+        @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+        @classmethod
+        def assemble_cors_origins(cls, v: Any) -> List[str]:
+            if v is None:
+                return []
+            if isinstance(v, str):
+                if v.startswith("["):
+                    import json
+                    try:
+                        return json.loads(v)
+                    except:
+                        return []
+                return [i.strip() for i in v.split(",") if i.strip()]
+            elif isinstance(v, list):
+                return v
             return []
         
-        @validator("MCP_DISCOVERY_PATHS", pre=True)
-        def assemble_mcp_paths(cls, v: Union[str, List[str]]) -> List[str]:
+        @field_validator("MCP_DISCOVERY_PATHS", mode="before")
+        @classmethod
+        def assemble_mcp_paths(cls, v: Any) -> List[str]:
+            if v is None:
+                return []
             if isinstance(v, str):
                 return [i.strip() for i in v.split(";") if i.strip()]
             return v if isinstance(v, list) else []
@@ -126,8 +213,15 @@ def get_settings() -> Settings:
     try:
         return Settings()
     except Exception as e:
-        print(f"Warning: Error creating settings: {e}")
-        return Settings()
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Error creating settings, using defaults: {e}")
+        # Return settings with defaults, ignoring env file errors
+        try:
+            return Settings(_env_file=None)  # Disable env file loading on error
+        except:
+            # Last resort - create with minimal config
+            return Settings()
 
 # Global settings instance
 settings = get_settings()

@@ -19,7 +19,7 @@ from typing import Any, Callable, Dict, List, Optional, Union, Awaitable, TypeVa
 from uuid import UUID, uuid4
 
 from fastapi import WebSocket, HTTPException
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..core.websocket import (
     manager, 
@@ -243,8 +243,7 @@ class Tool(BaseModel):
     func: Callable
     metadata: ToolMetadata
     
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 class ToolService:
     """Service for managing and executing tools with WebSocket support."""

@@ -4,7 +4,7 @@ Tools API Endpoints for MCP Studio
 This module provides API endpoints for interacting with MCP tools.
 """
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from mcp_studio.tools import (

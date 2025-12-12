@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: mcp-studio
     ports:
-      - "${PORT:-8001}:8001"
+      - "${PORT:-8770}:8001"
     volumes:
       # Mount repos directory for FULL access (read-write required for tool execution)
       # Windows: Use forward slashes, e.g., "D:/Dev/repos:/app/repos:rw"
@@ -23,14 +23,16 @@ services:
       # These will be set by docker-start.ps1 or can be set manually
       - "${APPDATA}:/host/appdata:ro"
       # Mount user home for .config and .cursor directories (Linux/Mac/Windows)
-      - "${HOME}:/host/home:ro"
+      # Use USERPROFILE on Windows, fallback to /tmp if not set
+      - "${USERPROFILE:-/tmp}:/host/home:ro"
       # Mount logs directory for persistence
       - "./logs:/app/logs"
       # Mount data directory for preprompts DB
       - "./data:/app/data"
     environment:
-      - PORT=8001
-      - REPOS_DIR=/app/repos
+      - PORT=${PORT:-8770}
+      - REPOS_DIR=${REPOS_DIR:-/app/repos}
+      - USERPROFILE=${USERPROFILE:-/tmp}
       # Ollama connection - adjust based on your setup:
       # Option 1: Ollama on host machine (Windows/Mac) - uses host.docker.internal
       - OLLAMA_URL=http://host.docker.internal:11434

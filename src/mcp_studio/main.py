@@ -21,28 +21,67 @@ from fastapi.templating import Jinja2Templates
 
 from .app.core.config import settings
 from .app.core.logging_utils import get_logger, configure_uvicorn_logging
-from .app.core.lifespan import lifespan
 from .app.api import router as api_router
 from .app.api.endpoints import mcp_servers as mcp_servers_router
 from .app.services.mcp_discovery_service import discovery_service, start_discovery, stop_discovery
-
-# Import working sets API
-sys.path.append(str(Path(__file__).parent.parent))
-from api.working_sets import router as working_sets_router
 
 # Configure logging
 configure_uvicorn_logging()
 logger = get_logger(__name__)
 
+# Import working sets API
+try:
+    from api.working_sets import router as working_sets_router
+except ImportError:
+    # Fallback if working_sets is not available
+    working_sets_router = None
+    logger.warning("Working sets router not available")
+
+# Lifespan event handler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle application startup and shutdown."""
+    # Startup
+    logger.info("Starting MCP Studio...")
+    try:
+        # Start the MCP discovery service
+        await start_discovery()
+        logger.info("MCP Discovery Service started")
+        logger.info("MCP Studio started successfully")
+    except Exception as e:
+        logger.error(f"Failed to start MCP Studio: {e}", exc_info=True)
+        raise
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down MCP Studio...")
+    try:
+        # Stop discovery service
+        await stop_discovery()
+        logger.info("MCP Studio shutdown complete")
+    except Exception as e:
+        logger.error("Error during shutdown", error=str(e), exc_info=True)
+
+# Import web router after logger is configured
+try:
+    from .app.api.web import router as web_router
+    logger.info("Web router loaded successfully")
+except Exception as e:
+    # Web router might not be available in all configurations
+    web_router = None
+    logger.warning(f"Web router not available: {e}", exc_info=True)
+
 # Create the FastAPI application
 app = FastAPI(
     title="MCP Studio",
-    description="A comprehensive UI for managing MCP servers",
-    version="0.1.0",
+    description="A management tool for MCP servers (beta)",
+    version="0.2.1-beta",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
     lifespan=lifespan,
+    root_path="",  # Ensure root path is handled correctly
 )
 
 # Add CORS middleware
@@ -52,6 +91,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Add request logging middleware
@@ -136,10 +176,18 @@ async def global_exception_handler(request: Request, exc: Exception):
         },
     )
 
-# Include API routers
-app.include_router(api_router.router, prefix="/api")
+# Include API routers FIRST so they're matched before the web router catch-all
+app.include_router(api_router, prefix="/api")
 app.include_router(mcp_servers_router.router, prefix="/api")
-app.include_router(working_sets_router, tags=["working-sets"])  # Add working sets router
+
+# Include web router AFTER API routers so catch-all doesn't intercept API routes
+if web_router:
+    app.include_router(web_router)  # Include web UI routes (handles /, /dashboard, etc.)
+    logger.info(f"Web router included with {len(web_router.routes)} routes")
+else:
+    logger.warning("Web router is None - not including web routes!")
+if working_sets_router:
+    app.include_router(working_sets_router, tags=["working-sets"])  # Add working sets router
 
 # Mount static files
 static_dir = Path(__file__).parent / "static"
@@ -151,43 +199,7 @@ templates_dir = Path(__file__).parent / "templates"
 templates_dir.mkdir(exist_ok=True, parents=True)
 templates = Jinja2Templates(directory=templates_dir)
 
-# Root endpoint
-@app.get("/", include_in_schema=False)
-async def root():
-    """Root endpoint that redirects to the API docs."""
-    return fastapi.responses.RedirectResponse(url="/api/docs")
-
-# Add startup and shutdown event handlers
-@app.on_event("startup")
-async def startup_event():
-    """Handle application startup."""
-    logger.info("Starting MCP Studio...")
-    
-    try:
-        # Start the MCP discovery service
-        await start_discovery()
-        logger.info("MCP Discovery Service started")
-        
-        logger.info("MCP Studio started successfully")
-    except Exception as e:
-        logger.error(f"Failed to start MCP Studio: {e}", exc_info=True)
-        raise
-
-async def shutdown(signal: signal.Signals):
-    """Handle application shutdown."""
-    logger.info(f"Received shutdown signal: {signal.name}")
-    
-    try:
-        # Close discovery service
-        if hasattr(discovery_service, 'close'):
-            await discovery_service.close()
-        
-        logger.info("MCP Studio shutdown complete")
-    except Exception as e:
-        logger.error("Error during shutdown", error=str(e), exc_info=True)
-    finally:
-        # Exit the application
-        sys.exit(0)
+# Root endpoint removed - web router handles this now
 
 # This allows running the application directly with: python -m mcp_studio
 if __name__ == "__main__":

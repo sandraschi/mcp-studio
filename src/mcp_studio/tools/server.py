@@ -111,6 +111,9 @@ async def discover_mcp_servers(
 
             for server in servers_in_path:
                 scan_stats["files_checked"] += 1
+                
+                # Small delay to reduce terminal spam and CPU usage
+                await asyncio.sleep(0.05)  # 50ms delay between servers
 
                 # Check if server is active (if requested)
                 if not include_inactive:

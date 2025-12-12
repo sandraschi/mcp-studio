@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 from ..core.enums import ParameterType, ServerStatus
 
@@ -26,9 +26,10 @@ class MCPToolParameter(BaseModel):
     items: Optional[Dict[str, Any]] = Field(None, description="Schema for array items")
     properties: Optional[Dict[str, Any]] = Field(None, description="Properties for object parameters")
 
-    class Config:
-        allow_population_by_field_name = True
-        use_enum_values = True
+    model_config = ConfigDict(
+        populate_by_name=True,
+        use_enum_values=True
+    )
 
 class MCPTool(BaseModel):
     """Definition of an MCP tool."""
@@ -43,10 +44,7 @@ class MCPTool(BaseModel):
     last_used: Optional[datetime] = Field(None, description="When the tool was last used")
     usage_count: int = Field(0, description="Number of times the tool has been used")
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+    model_config = ConfigDict()
 
 class MCPServerHealth(BaseModel):
     """Health status of an MCP server."""
@@ -55,10 +53,7 @@ class MCPServerHealth(BaseModel):
     version: Optional[str] = Field(None, description="Server version")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="When the health was checked")
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+    model_config = ConfigDict()
 
 class MCPServer(BaseModel):
     """Information about an MCP server."""
@@ -85,10 +80,7 @@ class MCPServer(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow, description="When the server was discovered")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="When the server was last updated")
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+    model_config = ConfigDict()
 
     def update_health(self, health: 'MCPServerHealth') -> None:
         """Update the health status of the server."""
@@ -146,10 +138,7 @@ class ToolExecutionResult(BaseModel):
     execution_time: float = Field(..., description="Execution time in seconds")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="When the execution completed")
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat() if v else None
-        }
+    model_config = ConfigDict()
 
 class ServerRegistration(BaseModel):
     """Request to register a new MCP server."""
