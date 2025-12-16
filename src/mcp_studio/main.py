@@ -23,6 +23,7 @@ from .app.core.config import settings
 from .app.core.logging_utils import get_logger, configure_uvicorn_logging
 from .app.api import router as api_router
 from .app.api.endpoints import mcp_servers as mcp_servers_router
+from .app.api.endpoints import repos as repos_router
 from .app.services.mcp_discovery_service import discovery_service, start_discovery, stop_discovery
 
 # Configure logging
@@ -36,6 +37,7 @@ except ImportError:
     # Fallback if working_sets is not available
     working_sets_router = None
     logger.warning("Working sets router not available")
+
 
 # Lifespan event handler
 @asynccontextmanager
@@ -63,9 +65,11 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("Error during shutdown", error=str(e), exc_info=True)
 
+
 # Import web router after logger is configured
 try:
     from .app.api.web import router as web_router
+
     logger.info("Web router loaded successfully")
 except Exception as e:
     # Web router might not be available in all configurations
@@ -94,6 +98,7 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+
 # Add request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -101,7 +106,7 @@ async def log_requests(request: Request, call_next):
     # Skip logging for health checks and static files
     if request.url.path in ["/api/health", "/api/health/", "/static/", "/favicon.ico"]:
         return await call_next(request)
-    
+
     # Log request
     logger.info(
         "Request started",
@@ -109,14 +114,14 @@ async def log_requests(request: Request, call_next):
         url=str(request.url),
         client=request.client.host if request.client else None,
     )
-    
+
     # Process request
     start_time = asyncio.get_event_loop().time()
-    
+
     try:
         response = await call_next(request)
         process_time = asyncio.get_event_loop().time() - start_time
-        
+
         # Log response
         logger.info(
             "Request completed",
@@ -125,7 +130,7 @@ async def log_requests(request: Request, call_next):
             status_code=response.status_code,
             process_time=f"{process_time:.4f}s",
         )
-        
+
         return response
     except Exception as e:
         process_time = asyncio.get_event_loop().time() - start_time
@@ -139,6 +144,7 @@ async def log_requests(request: Request, call_next):
         )
         raise
 
+
 # Add exception handlers
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -149,7 +155,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         errors=exc.errors(),
         body=exc.body,
     )
-    
+
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
@@ -157,6 +163,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "errors": exc.errors(),
         },
     )
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -167,7 +174,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         error=str(exc),
         exc_info=True,
     )
-    
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
@@ -176,9 +183,12 @@ async def global_exception_handler(request: Request, exc: Exception):
         },
     )
 
+
 # Include API routers FIRST so they're matched before the web router catch-all
 app.include_router(api_router, prefix="/api")
-app.include_router(mcp_servers_router.router, prefix="/api")
+# MCP servers and repos are now included in the v1 API router
+# app.include_router(mcp_servers_router.router, prefix="/api")
+# app.include_router(repos_router.router, prefix="/api")
 
 # Include web router AFTER API routers so catch-all doesn't intercept API routes
 if web_router:
@@ -204,7 +214,7 @@ templates = Jinja2Templates(directory=templates_dir)
 # This allows running the application directly with: python -m mcp_studio
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(
         "mcp_studio.main:app",
         host=settings.HOST,

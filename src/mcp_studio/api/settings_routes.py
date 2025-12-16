@@ -101,3 +101,6 @@ async def reset_settings():
     # about what gets reset and handle persistence properly
     logger.warning("Settings reset requested - this is not fully implemented yet")
     return {"message": "Settings reset not fully implemented yet"}
+
+
+

@@ -22,12 +22,9 @@ from mcp_studio.tools import (
     get_server_info,
     execute_remote_tool,
     list_server_tools,
-    test_server_connection
+    test_server_connection,
 )
-from mcp_studio.tools.runt_analyzer import (
-    analyze_runts,
-    get_repo_status
-)
+from mcp_studio.tools.runt_analyzer import analyze_runts, get_repo_status
 from mcp_studio.tools.server_scaffold import create_mcp_server as scaffold_mcp_server
 from mcp_studio.tools.server_updater import update_mcp_server as update_server
 from mcp_studio.tools.server_deleter import delete_mcp_server as delete_server
@@ -47,13 +44,12 @@ except ImportError:
     json = None
 
 # Initialize FastMCP server
-app = FastMCP(
-    name="mcp-studio"
-)
+app = FastMCP(name="mcp-studio")
 
 # Get user configuration from environment
 DISCOVERY_PATHS = os.getenv("DISCOVERY_PATHS", "./servers,./mcp-servers").split(",")
 AUTO_DISCOVERY = os.getenv("AUTO_DISCOVERY", "true").lower() == "true"
+
 
 @app.tool()
 async def discover_mcp_servers(paths: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -79,21 +75,14 @@ async def discover_mcp_servers(paths: Optional[List[str]] = None) -> Dict[str, A
     try:
         scan_paths = paths or DISCOVERY_PATHS
         result = await discover_servers(scan_paths)
-        return {
-            "success": True,
-            "servers": result,
-            "scanned_paths": scan_paths
-        }
+        return {"success": True, "servers": result, "scanned_paths": scan_paths}
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "scanned_paths": scan_paths
-        }
+        return {"success": False, "error": str(e), "scanned_paths": scan_paths}
+
 
 @app.tool()
 async def discover_clients(include_servers: bool = True) -> Dict[str, Any]:
-    '''Discover all MCP clients and their configured servers.
+    """Discover all MCP clients and their configured servers.
 
     Scans all known MCP client configurations to find:
     - Claude Desktop
@@ -134,36 +123,36 @@ async def discover_clients(include_servers: bool = True) -> Dict[str, Any]:
     Examples:
         # Discover all clients with server details
         result = await discover_clients()
-        
+
         # Discover clients without server details (faster)
         result = await discover_clients(include_servers=False)
-    '''
+    """
     try:
         if not MCPClientZoo:
             return {
                 "success": False,
                 "error": "Client discovery services not available",
                 "clients": [],
-                "total_clients": 0
+                "total_clients": 0,
             }
-        
+
         # Initialize client zoo
         zoo = MCPClientZoo()
-        
+
         # Scan all clients
         client_results = zoo.scan_all_clients()
-        
+
         # Get client metadata
         all_client_metadata = get_all_clients() if get_all_clients else []
         metadata_map = {client.id: client for client in all_client_metadata}
-        
+
         # Build client information
         clients_info = []
         total_servers = 0
-        
+
         for client_id, servers in client_results.items():
             client_meta = metadata_map.get(client_id)
-            
+
             # Get config path if available
             config_path = None
             if zoo:
@@ -173,7 +162,7 @@ async def discover_clients(include_servers: bool = True) -> Dict[str, Any]:
                         config_path = str(config_path_obj)
                 except Exception:
                     pass
-            
+
             client_info = {
                 "id": client_id,
                 "name": client_meta.name if client_meta else client_id,
@@ -183,7 +172,7 @@ async def discover_clients(include_servers: bool = True) -> Dict[str, Any]:
                 "config_path": config_path,
                 "server_count": len(servers),
             }
-            
+
             # Add server details if requested
             if include_servers:
                 client_info["servers"] = [
@@ -196,27 +185,29 @@ async def discover_clients(include_servers: bool = True) -> Dict[str, Any]:
                     }
                     for s in servers
                 ]
-            
+
             clients_info.append(client_info)
             total_servers += len(servers)
-        
+
         # Also include clients that have metadata but weren't found in scan
         for client_meta in all_client_metadata:
             if client_meta.id not in client_results:
-                clients_info.append({
-                    "id": client_meta.id,
-                    "name": client_meta.name,
-                    "type": client_meta.client_type,
-                    "platform": client_meta.platform,
-                    "status": client_meta.status,
-                    "config_path": None,
-                    "server_count": 0,
-                    "servers": [] if include_servers else None,
-                })
-        
+                clients_info.append(
+                    {
+                        "id": client_meta.id,
+                        "name": client_meta.name,
+                        "type": client_meta.client_type,
+                        "platform": client_meta.platform,
+                        "status": client_meta.status,
+                        "config_path": None,
+                        "server_count": 0,
+                        "servers": [] if include_servers else None,
+                    }
+                )
+
         # Sort by name
         clients_info.sort(key=lambda x: x["name"])
-        
+
         return {
             "success": True,
             "total_clients": len(clients_info),
@@ -234,16 +225,12 @@ async def discover_clients(include_servers: bool = True) -> Dict[str, Any]:
                     status: len([c for c in clients_info if c["status"] == status])
                     for status in set(c["status"] for c in clients_info)
                 },
-            }
+            },
         }
-        
+
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "clients": [],
-            "total_clients": 0
-        }
+        return {"success": False, "error": str(e), "clients": [], "total_clients": 0}
+
 
 @app.tool()
 async def get_server_info(server_id: str) -> Dict[str, Any]:
@@ -264,16 +251,10 @@ async def get_server_info(server_id: str) -> Dict[str, Any]:
     """
     try:
         info = await get_server_info(server_id)
-        return {
-            "success": True,
-            "server": info
-        }
+        return {"success": True, "server": info}
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "server_id": server_id
-        }
+        return {"success": False, "error": str(e), "server_id": server_id}
+
 
 @app.tool()
 async def list_server_tools(server_id: str) -> Dict[str, Any]:
@@ -291,21 +272,14 @@ async def list_server_tools(server_id: str) -> Dict[str, Any]:
     """
     try:
         tools = await list_server_tools(server_id)
-        return {
-            "success": True,
-            "server_id": server_id,
-            "tools": tools
-        }
+        return {"success": True, "server_id": server_id, "tools": tools}
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "server_id": server_id
-        }
+        return {"success": False, "error": str(e), "server_id": server_id}
+
 
 @app.tool()
 async def get_client_config(client_id: str) -> Dict[str, Any]:
-    '''Get the current configuration for a specific MCP client.
+    """Get the current configuration for a specific MCP client.
 
     Retrieves the full configuration file content for an MCP client including:
     - All configured MCP servers
@@ -328,46 +302,46 @@ async def get_client_config(client_id: str) -> Dict[str, Any]:
     Examples:
         # Get Claude Desktop config
         result = await get_client_config("claude-desktop")
-        
+
         # Get Cursor IDE config
         result = await get_client_config("cursor-ide")
-    '''
+    """
     try:
         if not ClientWorkingSetManager or not MCPClientZoo:
             return {
                 "success": False,
                 "error": "Client config services not available",
-                "client_id": client_id
+                "client_id": client_id,
             }
-        
+
         # Initialize managers
         client_manager = ClientWorkingSetManager()
         client_zoo = MCPClientZoo()
-        
+
         # Get config path
         config_path = client_zoo.get_client_config_path(client_id)
         if not config_path:
             return {
                 "success": False,
                 "error": f"Client '{client_id}' not found or config path unknown",
-                "client_id": client_id
+                "client_id": client_id,
             }
-        
+
         # Get config info
         config_info = client_manager.get_client_config_info(client_id)
         if not config_info:
             return {
                 "success": False,
                 "error": f"Could not get config info for client '{client_id}'",
-                "client_id": client_id
+                "client_id": client_id,
             }
-        
+
         # Read config file if it exists
         config_data = None
         servers = []
         if config_path.exists():
             try:
-                with open(config_path, 'r', encoding='utf-8-sig') as f:
+                with open(config_path, "r", encoding="utf-8-sig") as f:
                     config_data = json.load(f)
                     # Extract server IDs
                     servers = list(config_data.get("mcpServers", {}).keys())
@@ -376,9 +350,9 @@ async def get_client_config(client_id: str) -> Dict[str, Any]:
                     "success": False,
                     "error": f"Failed to read config file: {str(e)}",
                     "client_id": client_id,
-                    "config_path": str(config_path)
+                    "config_path": str(config_path),
                 }
-        
+
         return {
             "success": True,
             "client_id": client_id,
@@ -387,23 +361,18 @@ async def get_client_config(client_id: str) -> Dict[str, Any]:
             "config": config_data,
             "server_count": len(servers),
             "servers": servers,
-            "backup_dir": config_info.get("backup_dir")
+            "backup_dir": config_info.get("backup_dir"),
         }
-        
+
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "client_id": client_id
-        }
+        return {"success": False, "error": str(e), "client_id": client_id}
+
 
 @app.tool()
 async def set_client_config(
-    client_id: str,
-    config: Dict[str, Any],
-    create_backup: bool = True
+    client_id: str, config: Dict[str, Any], create_backup: bool = True
 ) -> Dict[str, Any]:
-    '''Set or update the configuration for a specific MCP client.
+    """Set or update the configuration for a specific MCP client.
 
     Writes configuration data to the client's config file. Can create a backup
     of the existing config before making changes.
@@ -429,60 +398,68 @@ async def set_client_config(
             "claude-desktop",
             {"mcpServers": {"server1": {...}, "server2": {...}}}
         )
-        
+
         # Update config without backup
         result = await set_client_config(
             "cursor-ide",
             {"mcpServers": {...}},
             create_backup=False
         )
-    '''
+    """
     try:
         if not ClientWorkingSetManager or not MCPClientZoo or not json:
             return {
                 "success": False,
                 "error": "Client config services not available",
-                "client_id": client_id
+                "client_id": client_id,
             }
-        
+
         # Initialize managers
         client_manager = ClientWorkingSetManager()
         client_zoo = MCPClientZoo()
-        
+
         # Get config path
         config_path = client_zoo.get_client_config_path(client_id)
         if not config_path:
             return {
                 "success": False,
                 "error": f"Client '{client_id}' not found or config path unknown",
-                "client_id": client_id
+                "client_id": client_id,
             }
-        
+
         # Ensure parent directory exists
         config_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Create backup if requested and config exists
         backup_path = None
         backup_created = False
         if create_backup and config_path.exists():
             try:
                 from datetime import datetime
+
                 backup_dir = config_path.parent / "backup"
-                backup_dir.mkdir(exist_ok=True)
+                try:
+                    backup_dir.mkdir(exist_ok=True)
+                except Exception as e:
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Could not create backup directory: {e}")
+                    # If we can't create backup dir, we can't create backup
+                    raise e
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 backup_path = backup_dir / f"{config_path.stem}_{timestamp}.json"
-                
+
                 # Copy existing config to backup
                 import shutil
+
                 shutil.copy2(config_path, backup_path)
                 backup_created = True
             except Exception as e:
                 return {
                     "success": False,
                     "error": f"Failed to create backup: {str(e)}",
-                    "client_id": client_id
+                    "client_id": client_id,
                 }
-        
+
         # Ensure config has proper structure
         if "mcpServers" not in config:
             # If config is just servers, wrap it
@@ -492,24 +469,24 @@ async def set_client_config(
                 return {
                     "success": False,
                     "error": "Config must contain 'mcpServers' key or be a dictionary of servers",
-                    "client_id": client_id
+                    "client_id": client_id,
                 }
-        
+
         # Write config file
         try:
-            with open(config_path, 'w', encoding='utf-8') as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
         except Exception as e:
             return {
                 "success": False,
                 "error": f"Failed to write config file: {str(e)}",
                 "client_id": client_id,
-                "config_path": str(config_path)
+                "config_path": str(config_path),
             }
-        
+
         # Get server count
         server_count = len(config.get("mcpServers", {}))
-        
+
         return {
             "success": True,
             "client_id": client_id,
@@ -517,18 +494,17 @@ async def set_client_config(
             "backup_created": backup_created,
             "backup_path": str(backup_path) if backup_path else None,
             "server_count": server_count,
-            "message": f"Configuration updated successfully. {server_count} server(s) configured."
-        }
-        
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "client_id": client_id
+            "message": f"Configuration updated successfully. {server_count} server(s) configured.",
         }
 
+    except Exception as e:
+        return {"success": False, "error": str(e), "client_id": client_id}
+
+
 @app.tool()
-async def execute_remote_tool(server_id: str, tool_name: str, parameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+async def execute_remote_tool(
+    server_id: str, tool_name: str, parameters: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
     Execute a tool on a remote MCP server.
 
@@ -545,19 +521,10 @@ async def execute_remote_tool(server_id: str, tool_name: str, parameters: Option
     """
     try:
         result = await execute_remote_tool(server_id, tool_name, parameters or {})
-        return {
-            "success": True,
-            "server_id": server_id,
-            "tool_name": tool_name,
-            "result": result
-        }
+        return {"success": True, "server_id": server_id, "tool_name": tool_name, "result": result}
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "server_id": server_id,
-            "tool_name": tool_name
-        }
+        return {"success": False, "error": str(e), "server_id": server_id, "tool_name": tool_name}
+
 
 @app.tool()
 async def test_server_connection(server_id: str) -> Dict[str, Any]:
@@ -575,21 +542,14 @@ async def test_server_connection(server_id: str) -> Dict[str, Any]:
     """
     try:
         result = await test_server_connection(server_id)
-        return {
-            "success": True,
-            "server_id": server_id,
-            "connection_status": result
-        }
+        return {"success": True, "server_id": server_id, "connection_status": result}
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "server_id": server_id
-        }
+        return {"success": False, "error": str(e), "server_id": server_id}
+
 
 @app.tool()
 async def help(level: str = "basic", topic: Optional[str] = None) -> str:
-    '''Get help information about MCP Studio tools and capabilities.
+    """Get help information about MCP Studio tools and capabilities.
 
     Provides comprehensive documentation about available tools, usage patterns,
     and best practices for working with MCP servers through MCP Studio.
@@ -617,10 +577,10 @@ async def help(level: str = "basic", topic: Optional[str] = None) -> str:
         help("intermediate") - Detailed tool descriptions
         help("advanced", "execution") - Advanced execution patterns
         help("basic", "tools") - Quick tool reference
-    '''
+    """
     if topic:
         return _get_topic_help(topic, level)
-    
+
     if level == "basic":
         return _get_basic_help()
     elif level == "intermediate":
@@ -643,43 +603,43 @@ Try: `help("basic")`'''
 @app.tool()
 async def set_discovery_path(path: str) -> Dict[str, Any]:
     """Set the MCP server discovery path.
-    
+
     Updates the discovery path used for finding MCP servers. This path
     will be scanned recursively to discover available MCP servers.
-    
+
     Args:
         path: The new discovery path to set (can be absolute or relative)
-    
+
     Returns:
         Dictionary containing:
         - success: bool indicating if the path was set successfully
         - path: The resolved absolute path that was set
         - previous_paths: List of previous discovery paths
         - message: Human-readable status message
-    
+
     Examples:
         # Set to a specific directory
         result = await set_discovery_path("D:/Dev/repos")
-        
+
         # Set to a relative path (resolved to absolute)
         result = await set_discovery_path("./mcp-servers")
     """
     try:
         from mcp_studio.app.core.config import settings, update_settings
-        
+
         # Resolve the path
         path_obj = Path(path).expanduser().resolve()
-        
+
         if not path_obj.exists():
             return {
                 "success": False,
                 "error": f"Path does not exist: {path_obj}",
-                "path": str(path_obj)
+                "path": str(path_obj),
             }
-        
+
         # Get previous paths
         previous_paths = list(settings.MCP_DISCOVERY_PATHS) if settings.MCP_DISCOVERY_PATHS else []
-        
+
         # Update settings - add to list if not already present
         new_path = str(path_obj)
         if settings.MCP_DISCOVERY_PATHS:
@@ -689,31 +649,27 @@ async def set_discovery_path(path: str) -> Dict[str, Any]:
                 updated_paths = list(settings.MCP_DISCOVERY_PATHS)
         else:
             updated_paths = [new_path]
-        
+
         update_settings(MCP_DISCOVERY_PATHS=updated_paths)
-        
+
         # Update global DISCOVERY_PATHS for this session
         global DISCOVERY_PATHS
         DISCOVERY_PATHS = updated_paths
-        
+
         return {
             "success": True,
             "path": new_path,
             "previous_paths": previous_paths,
             "current_paths": updated_paths,
-            "message": f"Discovery path set to: {new_path}"
+            "message": f"Discovery path set to: {new_path}",
         }
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "path": path
-        }
+        return {"success": False, "error": str(e), "path": path}
 
 
 @app.tool()
 async def status(level: str = "basic", focus: Optional[str] = None) -> str:
-    '''Get comprehensive status information about MCP Studio.
+    """Get comprehensive status information about MCP Studio.
 
     Provides system status, server connectivity, and operational metrics
     at different detail levels for monitoring and troubleshooting.
@@ -741,10 +697,10 @@ async def status(level: str = "basic", focus: Optional[str] = None) -> str:
         status("intermediate") - Detailed server information
         status("advanced", "servers") - Advanced server metrics
         status("basic", "tools") - Quick tool status
-    '''
+    """
     if focus:
         return _get_focused_status(focus, level)
-    
+
     if level == "basic":
         return _get_basic_status()
     elif level == "intermediate":
@@ -766,7 +722,7 @@ Try: `status("basic")`'''
 
 def _get_basic_help() -> str:
     """Basic help - quick overview."""
-    return '''# MCP Studio Help - Basic Overview
+    return """# MCP Studio Help - Basic Overview
 
 ## What is MCP Studio?
 
@@ -803,12 +759,12 @@ It provides tools for discovering, managing, and interacting with MCP servers.
 - `help("intermediate")` - Detailed tool descriptions
 - `help("advanced")` - Complete API reference
 - `help("basic", "tools")` - Tool-specific help
-'''
+"""
 
 
 def _get_intermediate_help() -> str:
     """Intermediate help - detailed descriptions."""
-    return '''# MCP Studio Help - Intermediate
+    return """# MCP Studio Help - Intermediate
 
 ## Tool Descriptions
 
@@ -893,12 +849,12 @@ status = await test_server_connection("my-server-id")
 MCP Studio uses environment variables for configuration:
 - `DISCOVERY_PATHS`: Comma-separated paths to scan (default: "./servers,./mcp-servers")
 - `AUTO_DISCOVERY`: Enable auto-discovery on startup (default: "true")
-'''
+"""
 
 
 def _get_advanced_help() -> str:
     """Advanced help - complete API reference."""
-    return '''# MCP Studio Help - Advanced
+    return """# MCP Studio Help - Advanced
 
 ## Complete API Reference
 
@@ -972,15 +928,15 @@ Tool execution uses stdio transport:
 - Increase timeout value
 - Check server startup time
 - Verify no blocking operations
-'''
+"""
 
 
 def _get_topic_help(topic: str, level: str) -> str:
     """Get help for a specific topic."""
     topic = topic.lower()
-    
+
     if topic == "tools":
-        return '''# Tools Help
+        return """# Tools Help
 
 ## Available Tools
 
@@ -1010,9 +966,9 @@ MCP Studio provides 15 tools for managing MCP servers:
 12. **status** - Get system status
 
 For detailed information, use: `help("intermediate")`
-'''
+"""
     elif topic == "discovery":
-        return '''# Discovery Help
+        return """# Discovery Help
 
 ## How Server Discovery Works
 
@@ -1033,9 +989,9 @@ MCP Studio scans configured paths recursively to find MCP servers.
 
 **Configuration:**
 Set `DISCOVERY_PATHS` environment variable with comma-separated paths.
-'''
+"""
     elif topic == "execution":
-        return '''# Tool Execution Help
+        return """# Tool Execution Help
 
 ## Executing Tools on Remote Servers
 
@@ -1059,9 +1015,9 @@ Default timeout is 30 seconds. Long-running tools may need adjustment.
 - Validate parameters match tool schema
 - Handle errors gracefully
 - Log execution results
-'''
+"""
     elif topic == "configuration":
-        return '''# Configuration Help
+        return """# Configuration Help
 
 ## MCP Studio Configuration
 
@@ -1079,7 +1035,7 @@ Each discovered server maintains its own configuration including:
 - Environment variables
 - Working directory
 - Connection settings
-'''
+"""
     else:
         return f'''# Help - Unknown Topic
 
@@ -1099,11 +1055,11 @@ def _get_basic_status() -> str:
     """Basic status - core information."""
     try:
         from mcp_studio.app.services.discovery_service import discovered_servers
-        
+
         server_count = len(discovered_servers)
         tool_count = sum(len(server.tools) for server in discovered_servers.values())
-        
-        return f'''# MCP Studio Status - Basic
+
+        return f"""# MCP Studio Status - Basic
 
 ## System Overview
 
@@ -1113,7 +1069,7 @@ def _get_basic_status() -> str:
 
 ## Quick Stats
 
-- **Discovery Paths**: {', '.join(DISCOVERY_PATHS)}
+- **Discovery Paths**: {", ".join(DISCOVERY_PATHS)}
 - **Auto-Discovery**: {"Enabled" if AUTO_DISCOVERY else "Disabled"}
 
 ## Available Tools
@@ -1121,14 +1077,14 @@ def _get_basic_status() -> str:
 MCP Studio provides 15 tools for server management.
 
 For detailed status, use: `status("intermediate")`
-'''
+"""
     except Exception as e:
-        return f'''# MCP Studio Status - Basic
+        return f"""# MCP Studio Status - Basic
 
 **Error retrieving status**: {str(e)}
 
 Use `status("intermediate")` for more details.
-'''
+"""
 
 
 def _get_intermediate_status() -> str:
@@ -1136,10 +1092,10 @@ def _get_intermediate_status() -> str:
     try:
         from mcp_studio.app.services.discovery_service import discovered_servers
         import platform
-        
+
         server_count = len(discovered_servers)
         tool_count = sum(len(server.tools) for server in discovered_servers.values())
-        
+
         status_lines = [
             "# MCP Studio Status - Intermediate",
             "",
@@ -1149,31 +1105,33 @@ def _get_intermediate_status() -> str:
             "",
             "## Discovered Servers",
         ]
-        
+
         for server_id, server in list(discovered_servers.items())[:10]:
             status_lines.append(f"- **{server.name}** ({server_id}): {len(server.tools)} tools")
-        
+
         if server_count > 10:
             status_lines.append(f"- ... and {server_count - 10} more servers")
-        
-        status_lines.extend([
-            "",
-            "## System Information",
-            f"- **Platform**: {platform.system()} {platform.release()}",
-            f"- **Python**: {platform.python_version()}",
-            f"- **Architecture**: {platform.machine()}",
-            "",
-            "## Configuration",
-            f"- **Discovery Paths**: {', '.join(DISCOVERY_PATHS)}",
-            f"- **Auto-Discovery**: {'Enabled' if AUTO_DISCOVERY else 'Disabled'}",
-        ])
-        
+
+        status_lines.extend(
+            [
+                "",
+                "## System Information",
+                f"- **Platform**: {platform.system()} {platform.release()}",
+                f"- **Python**: {platform.python_version()}",
+                f"- **Architecture**: {platform.machine()}",
+                "",
+                "## Configuration",
+                f"- **Discovery Paths**: {', '.join(DISCOVERY_PATHS)}",
+                f"- **Auto-Discovery**: {'Enabled' if AUTO_DISCOVERY else 'Disabled'}",
+            ]
+        )
+
         return "\n".join(status_lines)
     except Exception as e:
-        return f'''# MCP Studio Status - Intermediate
+        return f"""# MCP Studio Status - Intermediate
 
 **Error retrieving status**: {str(e)}
-'''
+"""
 
 
 def _get_advanced_status() -> str:
@@ -1182,10 +1140,10 @@ def _get_advanced_status() -> str:
         from mcp_studio.app.services.discovery_service import discovered_servers
         import platform
         import os
-        
+
         server_count = len(discovered_servers)
         tool_count = sum(len(server.tools) for server in discovered_servers.values())
-        
+
         status_lines = [
             "# MCP Studio Status - Advanced",
             "",
@@ -1201,52 +1159,56 @@ def _get_advanced_status() -> str:
             f"- **Processor**: {platform.processor() or 'Unknown'}",
             f"- **Process ID**: {os.getpid()}",
         ]
-        
+
         # Try to get memory usage if psutil available
         try:
             import psutil
+
             process = psutil.Process(os.getpid())
             memory_mb = process.memory_info().rss / 1024 / 1024
             cpu_percent = process.cpu_percent(interval=0.1)
-            status_lines.extend([
-                f"- **Memory Usage**: {memory_mb:.1f} MB",
-                f"- **CPU Usage**: {cpu_percent:.1f}%",
-            ])
+            status_lines.extend(
+                [
+                    f"- **Memory Usage**: {memory_mb:.1f} MB",
+                    f"- **CPU Usage**: {cpu_percent:.1f}%",
+                ]
+            )
         except ImportError:
             status_lines.append("- **Performance Metrics**: psutil not available")
-        
-        status_lines.extend([
-            "",
-            "## Configuration Details",
-            f"- **Discovery Paths**: {', '.join(DISCOVERY_PATHS)}",
-            f"- **Auto-Discovery**: {'Enabled' if AUTO_DISCOVERY else 'Disabled'}",
-            "",
-            "## Server Breakdown",
-        ])
-        
+
+        status_lines.extend(
+            [
+                "",
+                "## Configuration Details",
+                f"- **Discovery Paths**: {', '.join(DISCOVERY_PATHS)}",
+                f"- **Auto-Discovery**: {'Enabled' if AUTO_DISCOVERY else 'Disabled'}",
+                "",
+                "## Server Breakdown",
+            ]
+        )
+
         for server_id, server in list(discovered_servers.items())[:20]:
             status_lines.append(
                 f"- **{server.name}** ({server_id}): "
                 f"{len(server.tools)} tools, status: {server.status.value}"
             )
-        
+
         if server_count > 20:
             status_lines.append(f"- ... and {server_count - 20} more servers")
-        
+
         return "\n".join(status_lines)
     except Exception as e:
-        return f'''# MCP Studio Status - Advanced
+        return f"""# MCP Studio Status - Advanced
 
 **Error retrieving status**: {str(e)}
-'''
+"""
 
 
 @app.tool()
 async def analyze_repo_sota_status(
-    repo_path: str,
-    scan_path: Optional[str] = None
+    repo_path: str, scan_path: Optional[str] = None
 ) -> Dict[str, Any]:
-    '''Analyze a single MCP repository for SOTA compliance.
+    """Analyze a single MCP repository for SOTA compliance.
 
     Evaluates a repository against FastMCP 2.13 SOTA standards and returns
     detailed status including compliance level, issues, and recommendations.
@@ -1287,31 +1249,27 @@ async def analyze_repo_sota_status(
         # Analyze specific repo
         from mcp_studio.app.core.config import DEFAULT_REPOS_PATH
         result = await analyze_repo_sota_status(f"{DEFAULT_REPOS_PATH}/mcp-studio")
-        
+
         # Analyze relative to scan path
         result = await analyze_repo_sota_status("mcp-studio", DEFAULT_REPOS_PATH)
-    '''
+    """
     try:
         from mcp_studio.app.core.config import DEFAULT_REPOS_PATH
-        
+
         # Use default scan_path if not provided
         if scan_path is None:
             scan_path = DEFAULT_REPOS_PATH
-        
+
         # If repo_path is relative and scan_path provided, combine them
         if scan_path and not Path(repo_path).is_absolute():
             full_path = Path(scan_path) / repo_path
         else:
             full_path = Path(repo_path).expanduser().resolve()
-        
+
         result = await get_repo_status(str(full_path))
         return result
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "repo_path": repo_path
-        }
+        return {"success": False, "error": str(e), "repo_path": repo_path}
 
 
 # Expose CRUD tools for MCP server lifecycle management
@@ -1325,17 +1283,17 @@ async def create_mcp_server(
     include_examples: bool = True,
     init_git: bool = True,
     include_frontend: bool = False,
-    frontend_type: str = "fullstack"
+    frontend_type: str = "fullstack",
 ) -> Dict[str, Any]:
     """Create a new SOTA-compliant MCP server from scratch.
-    
+
     Scaffolds a complete MCP server with all SOTA requirements including
     FastMCP 2.13.1 setup, help/status tools, CI/CD, tests, documentation,
     and DXT packaging.
-    
+
     With include_frontend=True, generates a complete fullstack app with
     React frontend, MCP client dashboard, and Docker deployment.
-    
+
     Args:
         server_name: Name of the server to create (hyphen-case recommended)
         description: Description of what the server does
@@ -1346,7 +1304,7 @@ async def create_mcp_server(
         init_git: Initialize git repository (default: True)
         include_frontend: Generate frontend dashboard (default: False)
         frontend_type: Frontend type if include_frontend=True (default: "fullstack")
-    
+
     Args:
         server_name: Kebab-case server name (e.g., "my-awesome-server")
         description: Server description
@@ -1357,11 +1315,12 @@ async def create_mcp_server(
         init_git: Initialize git repository (default: True)
         include_frontend: Generate React frontend (default: False)
         frontend_type: "fullstack" for complete app, "minimal" for basic UI (default: "fullstack")
-    
+
     Returns:
         Dictionary with creation status and server path
     """
     from mcp_studio.tools.server_scaffold import create_mcp_server as scaffold_server
+
     return await scaffold_server(
         server_name=server_name,
         description=description,
@@ -1371,72 +1330,56 @@ async def create_mcp_server(
         include_examples=include_examples,
         init_git=init_git,
         include_frontend=include_frontend,
-        frontend_type=frontend_type
+        frontend_type=frontend_type,
     )
 
 
 @app.tool()
 async def update_mcp_server(
-    repo_path: str,
-    components: Optional[List[str]] = None,
-    dry_run: bool = True
+    repo_path: str, components: Optional[List[str]] = None, dry_run: bool = True
 ) -> Dict[str, Any]:
     """Update an MCP server to add missing SOTA components.
-    
+
     Analyzes a server and adds missing components to bring it to SOTA compliance.
     Can update specific components or auto-detect and add all missing ones.
-    
+
     Args:
         repo_path: Path to the repository
         components: List of components to add (or None for auto-detect)
         dry_run: Preview changes without applying (default: True)
-    
+
     Returns:
         Dictionary with update status and changes made
     """
-    return await update_server(
-        repo_path=repo_path,
-        components=components,
-        dry_run=dry_run
-    )
+    return await update_server(repo_path=repo_path, components=components, dry_run=dry_run)
 
 
 @app.tool()
 async def delete_mcp_server(
-    repo_path: str,
-    force: bool = False,
-    backup: bool = True,
-    dry_run: bool = True
+    repo_path: str, force: bool = False, backup: bool = True, dry_run: bool = True
 ) -> Dict[str, Any]:
     """Safely delete an MCP server repository.
-    
+
     Performs safety checks before deletion including git repository detection,
     uncommitted changes check, and remote repository check.
-    
+
     Args:
         repo_path: Path to the repository to delete
         force: Skip safety checks (default: False)
         backup: Create backup before deletion (default: True)
         dry_run: Preview deletion without applying (default: True)
-    
+
     Returns:
         Dictionary with deletion status and warnings
     """
-    return await delete_server(
-        repo_path=repo_path,
-        force=force,
-        backup=backup,
-        dry_run=dry_run
-    )
+    return await delete_server(repo_path=repo_path, force=force, backup=backup, dry_run=dry_run)
 
 
 @app.tool()
 async def scan_repos_for_sota_compliance(
-    scan_path: Optional[str] = None,
-    max_depth: int = 1,
-    include_sota: bool = True
+    scan_path: Optional[str] = None, max_depth: int = 1, include_sota: bool = True
 ) -> Dict[str, Any]:
-    '''Scan a directory for MCP repositories and analyze SOTA compliance.
+    """Scan a directory for MCP repositories and analyze SOTA compliance.
 
     Scans a directory for MCP repositories and evaluates each against FastMCP 2.13
     SOTA standards. Returns categorized results showing which repos are SOTA compliant,
@@ -1471,49 +1414,43 @@ async def scan_repos_for_sota_compliance(
     Examples:
         # Scan default path
         result = await scan_repos_for_sota_compliance()
-        
+
         # Scan specific path, exclude SOTA repos
         from mcp_studio.app.core.config import DEFAULT_REPOS_PATH
         result = await scan_repos_for_sota_compliance(
             scan_path=f"{DEFAULT_REPOS_PATH}/mcp-servers",
             include_sota=False
         )
-        
+
         # Deep scan (2 levels deep)
         result = await scan_repos_for_sota_compliance(
             scan_path=DEFAULT_REPOS_PATH,
             max_depth=2
         )
-    '''
+    """
     try:
         from mcp_studio.app.core.config import DEFAULT_REPOS_PATH
-        
+
         # Use default scan_path if not provided
         if scan_path is None:
             scan_path = DEFAULT_REPOS_PATH
-        
+
         result = await analyze_runts(
-            scan_path=scan_path,
-            max_depth=max_depth,
-            include_sota=include_sota
+            scan_path=scan_path, max_depth=max_depth, include_sota=include_sota
         )
         return result
     except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "scan_path": scan_path
-        }
+        return {"success": False, "error": str(e), "scan_path": scan_path}
 
 
 def _get_focused_status(focus: str, level: str) -> str:
     """Get status focused on a specific area."""
     focus = focus.lower()
-    
+
     if focus == "servers":
         try:
             from mcp_studio.app.services.discovery_service import discovered_servers
-            
+
             status_lines = ["# Server Status"]
             for server_id, server in discovered_servers.items():
                 status_lines.append(
@@ -1523,36 +1460,36 @@ def _get_focused_status(focus: str, level: str) -> str:
             return "\n".join(status_lines)
         except Exception as e:
             return f"# Server Status\n\n**Error**: {e}"
-    
+
     elif focus == "tools":
         try:
             from mcp_studio.app.services.discovery_service import discovered_servers
-            
+
             tool_count = sum(len(server.tools) for server in discovered_servers.values())
-            return f'''# Tool Status
+            return f"""# Tool Status
 
 - **Total Tools**: {tool_count}
 - **MCP Studio Tools**: 15
 - **Remote Server Tools**: {tool_count - 15 if tool_count >= 15 else 0}
-'''
+"""
         except Exception as e:
             return f"# Tool Status\n\n**Error**: {e}"
-    
+
     elif focus == "system":
         return _get_advanced_status()
-    
+
     elif focus == "discovery":
         auto_status = "Enabled" if AUTO_DISCOVERY else "Disabled"
-        return f'''# Discovery Status
+        return f"""# Discovery Status
 
-- **Discovery Paths**: {', '.join(DISCOVERY_PATHS)}
+- **Discovery Paths**: {", ".join(DISCOVERY_PATHS)}
 - **Auto-Discovery**: {auto_status}
 - **Status**: Active
 
 Use `discover_mcp_servers()` to scan for servers.
 Use `discover_clients()` to find all MCP clients and their servers.
-'''
-    
+"""
+
     else:
         return f'''# Status - Unknown Focus
 
@@ -1566,6 +1503,7 @@ Available focus areas:
 
 Try: `status("basic", "servers")`
 '''
+
 
 if __name__ == "__main__":
     # Run the MCP server

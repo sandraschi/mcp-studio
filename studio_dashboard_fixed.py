@@ -32,17 +32,14 @@ import tomli
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('mcp_studio.log')
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(), logging.FileHandler("mcp_studio.log")],
 )
 logger = logging.getLogger(__name__)
 
 # Constants
 VERSION = "1.0.0"
-PORT = 8000
+PORT = int(os.environ.get("PORT", 8000))
 LOG_FILE = "mcp_studio.log"
 
 # Initialize FastAPI app
@@ -51,34 +48,24 @@ app = FastAPI(
     description="A unified dashboard for managing MCP servers and tools",
     version=VERSION,
     docs_url="/docs",
-    redoc_url=None
+    redoc_url=None,
 )
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="src/mcp_studio/static"), name="static")
 
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="src/mcp_studio/templates")
 
 # Global state
 connected_servers = {}
-scan_progress = {
-    "current": 0,
-    "total": 0,
-    "status": "idle",
-    "current_repo": ""
-}
+scan_progress = {"current": 0, "total": 0, "status": "idle", "current_repo": ""}
 
 # MCP client configurations
 MCP_CLIENT_CONFIGS = {
-    "cursor": [
-        Path.home() / ".cursor" / "mcp.json",
-        Path.home() / ".cursor" / "config.json"
-    ],
-    "vscode": [
-        Path.home() / ".vscode" / "mcp.json",
-        Path.home() / ".vscode" / "settings.json"
-    ]
+    "cursor": [Path.home() / ".cursor" / "mcp.json", Path.home() / ".cursor" / "config.json"],
+    "vscode": [Path.home() / ".vscode" / "mcp.json", Path.home() / ".vscode" / "settings.json"],
 }
+
 
 # Helper functions
 def log(message: str):
@@ -87,14 +74,16 @@ def log(message: str):
     print(f"[{timestamp}] {message}")
     logger.info(message)
 
+
 def is_port_available(port: int) -> bool:
     """Check if a port is available for binding."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
-            s.bind(('0.0.0.0', port))
+            s.bind(("0.0.0.0", port))
             return True
         except OSError:
             return False
+
 
 def find_available_port(start_port: int, max_attempts: int = 10) -> int:
     """Find an available port starting from the given port."""
@@ -107,45 +96,45 @@ def find_available_port(start_port: int, max_attempts: int = 10) -> int:
         attempts += 1
     raise RuntimeError(f"Could not find an available port after {max_attempts} attempts")
 
+
 # API Endpoints
 @app.get("/", response_class=HTMLResponse)
 async def get_dashboard(request: Request):
     """Serve the main dashboard."""
     return templates.TemplateResponse("dashboard.html", {"request": request, "version": VERSION})
 
+
 @app.get("/api/servers")
 async def get_servers():
     """Get list of available MCP servers."""
     return {"servers": list(connected_servers.keys())}
 
+
 @app.get("/api/scan")
 async def scan_repositories():
     """Trigger a repository scan."""
     global scan_progress
-    
+
     # Simulate scanning
     repos = ["repo1", "repo2", "repo3"]  # Replace with actual repo detection
-    scan_progress = {
-        "current": 0,
-        "total": len(repos),
-        "status": "scanning",
-        "current_repo": ""
-    }
-    
+    scan_progress = {"current": 0, "total": len(repos), "status": "scanning", "current_repo": ""}
+
     # Simulate progress
     for i, repo in enumerate(repos):
         scan_progress["current"] = i + 1
         scan_progress["current_repo"] = repo
         log(f"Scanning {repo}...")
         await asyncio.sleep(1)  # Simulate work
-    
+
     scan_progress["status"] = "completed"
     return {"status": "completed", "scanned": len(repos)}
+
 
 @app.get("/api/scan/progress")
 async def get_scan_progress():
     """Get current scan progress."""
     return scan_progress
+
 
 # Main function
 def main():
@@ -157,7 +146,7 @@ def main():
             log(f"Port {port} is already in use. Trying to find an available port...")
             port = find_available_port(port)
             log(f"Using alternative port: {port}")
-        
+
         # Display startup banner
         banner = f"""
 ╔══════════════════════════════════════════════════════════════════╗
@@ -170,20 +159,17 @@ def main():
 ╚══════════════════════════════════════════════════════════════════╝
 """
         print(banner)
-        
+
         # Start the server
         log(f"Starting MCP Studio on port {port}...")
         uvicorn.run(
-            "studio_dashboard_fixed:app",
-            host="0.0.0.0",
-            port=port,
-            reload=True,
-            log_level="info"
+            "studio_dashboard_fixed:app", host="0.0.0.0", port=port, reload=True, log_level="info"
         )
-        
+
     except Exception as e:
         log(f"Error: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

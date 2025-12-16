@@ -10,7 +10,7 @@ Combines:
 
 Usage:
     python studio_dashboard.py
-    
+
 Dashboard: http://localhost:8888
 """
 
@@ -32,6 +32,7 @@ import httpx  # type: ignore[import-untyped]
 # Load environment variables from .env
 try:
     from dotenv import load_dotenv  # type: ignore[import-untyped]
+
     load_dotenv()
 except ImportError:
     pass  # dotenv not available, will use system env vars only
@@ -43,11 +44,8 @@ LOG_FILE = LOG_DIR / f"mcp-studio-{datetime.now().strftime('%Y%m%d-%H%M%S')}.log
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stderr),
-        logging.FileHandler(LOG_FILE, encoding='utf-8')
-    ]
+    format="%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
+    handlers=[logging.StreamHandler(sys.stderr), logging.FileHandler(LOG_FILE, encoding="utf-8")],
 )
 logger = logging.getLogger(__name__)
 logger.info(f"Logging initialized. Log file: {LOG_FILE}")
@@ -61,6 +59,7 @@ import uvicorn  # type: ignore[import-untyped]
 try:
     from fastmcp import Client  # type: ignore[import-untyped]
     from fastmcp.client.transports import StdioTransport  # type: ignore[import-untyped]
+
     FASTMCP_AVAILABLE = True
 except ImportError:
     FASTMCP_AVAILABLE = False
@@ -71,7 +70,9 @@ except ImportError:
 
 REPOS_DIR = Path(os.getenv("REPOS_DIR", r"D:\Dev\repos"))  # Configurable via env var
 PORT = int(os.getenv("PORT", "8001"))  # Read from .env, default 8001 (no trailing 00!)
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")  # Configurable for Docker
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+LM_STUDIO_URL = os.getenv("LM_STUDIO_URL", "http://host.docker.internal:1234")
+VLLM_URL = os.getenv("VLLM_URL", "http://host.docker.internal:8000")
 VERSION = "1.0.0"
 
 # MCP Client config locations
@@ -84,50 +85,136 @@ MCP_CLIENT_CONFIGS = {
     "claude-desktop": [
         Path(os.environ.get("APPDATA", "")) / "Claude" / "claude_desktop_config.json",
         Path.home() / ".config" / "Claude" / "claude_desktop_config.json",
+        # Docker Host Mounts
+        Path("/host/appdata") / "Claude" / "claude_desktop_config.json",
+        Path("/host/home") / ".config" / "Claude" / "claude_desktop_config.json",
     ],
     "cursor": [
-        Path(os.environ.get("APPDATA", "")) / "Cursor" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json",
+        Path(os.environ.get("APPDATA", ""))
+        / "Cursor"
+        / "User"
+        / "globalStorage"
+        / "saoudrizwan.claude-dev"
+        / "settings"
+        / "cline_mcp_settings.json",
         Path.home() / ".cursor" / "mcp.json",
+        # Docker Host Mounts
+        Path("/host/appdata")
+        / "Cursor"
+        / "User"
+        / "globalStorage"
+        / "saoudrizwan.claude-dev"
+        / "settings"
+        / "cline_mcp_settings.json",
+        Path("/host/home") / ".cursor" / "mcp.json",
     ],
     "windsurf-ide": [
         # Windsurf IDE (Codeium) - multiple possible locations
-        Path(os.environ.get("APPDATA", "")) / "Codeium" / "Windsurf" / "mcp_config.json",  # Primary location
-        Path(os.environ.get("APPDATA", "")) / "Windsurf" / "User" / "globalStorage" / "rooveterinaryinc.roo-cline" / "settings" / "mcp_settings.json",
+        Path(os.environ.get("APPDATA", ""))
+        / "Codeium"
+        / "Windsurf"
+        / "mcp_config.json",  # Primary location
+        Path(os.environ.get("APPDATA", ""))
+        / "Windsurf"
+        / "User"
+        / "globalStorage"
+        / "rooveterinaryinc.roo-cline"
+        / "settings"
+        / "mcp_settings.json",
         Path(os.environ.get("APPDATA", "")) / "Windsurf" / "mcp_settings.json",
         Path(os.environ.get("APPDATA", "")) / "Windsurf" / "mcp_servers.json",
         Path(os.environ.get("APPDATA", "")) / "Windsurf" / "mcp_config.json",
         Path.home() / ".config" / "Windsurf" / "mcp_settings.json",
         Path.home() / ".config" / "Codeium" / "Windsurf" / "mcp_config.json",  # Linux
         Path.home() / ".windsurf" / "mcp_settings.json",
+        # Docker Host Mounts
+        Path("/host/appdata") / "Codeium" / "Windsurf" / "mcp_config.json",
+        Path("/host/appdata") / "Windsurf" / "mcp_config.json",
+        Path("/host/home") / ".config" / "Windsurf" / "mcp_settings.json",
     ],
     "zed-ide": [
         Path(os.environ.get("APPDATA", "")) / "Zed" / "settings.json",
         Path.home() / ".config" / "zed" / "settings.json",
         Path.home() / "Library" / "Application Support" / "Zed" / "settings.json",  # Mac
+        # Docker Host Mounts
+        Path("/host/appdata") / "Zed" / "settings.json",
+        Path("/host/home") / ".config" / "zed" / "settings.json",
     ],
     "antigravity-ide": [
         # Antigravity IDE - config managed through UI, check common locations
         Path(os.environ.get("APPDATA", "")) / "Antigravity" / "mcp_config.json",
         Path(os.environ.get("APPDATA", "")) / "Antigravity" / "mcp.json",
-        Path(os.environ.get("APPDATA", "")) / "GitKraken" / "Antigravity" / "mcp_config.json",  # GitKraken owns Antigravity
+        Path(os.environ.get("APPDATA", ""))
+        / "GitKraken"
+        / "Antigravity"
+        / "mcp_config.json",  # GitKraken owns Antigravity
         Path.home() / ".config" / "antigravity" / "mcp_config.json",
         Path.home() / ".config" / "antigravity" / "mcp.json",
         Path.home() / ".antigravity" / "mcp_config.json",
         Path.home() / ".antigravity" / "mcp.json",
         Path.home() / "Library" / "Application Support" / "Antigravity" / "mcp_config.json",  # Mac
+        # Docker Host Mounts
+        Path("/host/appdata") / "Antigravity" / "mcp_config.json",
+        Path("/host/appdata") / "GitKraken" / "Antigravity" / "mcp_config.json",
+        Path("/host/home") / ".antigravity" / "mcp_config.json",
+        Path("/host/home") / ".config" / "antigravity" / "mcp_config.json",
     ],
     "cline": [
-        Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json",
+        Path(os.environ.get("APPDATA", ""))
+        / "Code"
+        / "User"
+        / "globalStorage"
+        / "saoudrizwan.claude-dev"
+        / "settings"
+        / "cline_mcp_settings.json",
+        # Docker Host Mounts
+        Path("/host/appdata")
+        / "Code"
+        / "User"
+        / "globalStorage"
+        / "saoudrizwan.claude-dev"
+        / "settings"
+        / "cline_mcp_settings.json",
+    ],
+    "lm-studio": [
+        Path(os.environ.get("APPDATA", "")) / "LM Studio" / "mcp_config.json",
+        Path.home() / ".lmstudio" / "mcp_config.json",
+        # Docker Host Mounts
+        Path("/host/appdata") / "LM Studio" / "mcp_config.json",
+        Path("/host/home") / ".lmstudio" / "mcp_config.json",
     ],
 }
 
 # Skip these directories when scanning - MUST include all venv patterns
 SKIP_DIRS = {
-    'node_modules', '__pycache__', '.git', 'venv', '.venv', 'dist', 'build', 
-    'env', '.env', 'eggs', '.eggs', '.tox', '.mypy_cache', '.pytest_cache',
-    'site-packages', '.ruff_cache', 'coverage', 'htmlcov', '.idea', '.vscode',
-    '_legacy', 'deprecated', 'Lib', 'Scripts', 'Include',  # Windows venv
-    'lib', 'bin', 'lib64',  # Linux venv
+    "node_modules",
+    "__pycache__",
+    ".git",
+    "venv",
+    ".venv",
+    "dist",
+    "build",
+    "env",
+    ".env",
+    "eggs",
+    ".eggs",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+    "site-packages",
+    ".ruff_cache",
+    "coverage",
+    "htmlcov",
+    ".idea",
+    ".vscode",
+    "_legacy",
+    "deprecated",
+    "Lib",
+    "Scripts",
+    "Include",  # Windows venv
+    "lib",
+    "bin",
+    "lib64",  # Linux venv
 }
 
 # FastMCP version thresholds
@@ -150,7 +237,7 @@ When helping with code:
 - Suggest concrete improvements
 - Follow FastMCP best practices
 
-When the user asks about their repos, you can see the provided context."""
+When the user asks about their repos, you can see the provided context.""",
     },
     "butterfly": {
         "name": "🦋 Butterfly Fancier",
@@ -166,7 +253,7 @@ When helping with code:
 - Celebrate elegant solutions like spotting a rare butterfly
 - Still be technical and accurate, just with flair!
 
-Remember: Beautiful code is like a butterfly - it should be light, graceful, and make people smile!"""
+Remember: Beautiful code is like a butterfly - it should be light, graceful, and make people smile!""",
     },
     "pirate": {
         "name": "🏴‍☠️ Code Pirate",
@@ -182,7 +269,7 @@ When helpin' with code:
 - Follow FastMCP best practices (the Pirate's Code!)
 - Still be technically accurate, just with pirate spirit!
 
-Arr! Let's make yer code seaworthy!"""
+Arr! Let's make yer code seaworthy!""",
     },
     "zen": {
         "name": "🧘 Zen Master",
@@ -198,7 +285,7 @@ When helping with code:
 - Follow the path of clean code
 - Be present in each response
 
-Remember: The best code is like water - simple, clear, and flowing naturally."""
+Remember: The best code is like water - simple, clear, and flowing naturally.""",
     },
     "aussie": {
         "name": "🦘 Aussie Coder",
@@ -214,8 +301,8 @@ When helpin' with code:
 - Follow FastMCP best practices (she'll be right!)
 - Keep it friendly and no worries!
 
-No worries mate, we'll sort your code out!"""
-    }
+No worries mate, we'll sort your code out!""",
+    },
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -227,18 +314,18 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 # Global state
 state = {
-    "discovered_servers": {},      # From MCP client configs
-    "repo_analysis": {},           # Static analysis results
-    "connected_servers": {},       # Live connections (client instances)
+    "discovered_servers": {},  # From MCP client configs
+    "repo_analysis": {},  # Static analysis results
+    "connected_servers": {},  # Live connections (client instances)
     "scan_progress": {
-        "current": "", 
-        "total": 0, 
-        "done": 0, 
+        "current": "",
+        "total": 0,
+        "done": 0,
         "status": "idle",
         "mcp_repos_found": 0,
         "errors": 0,
         "skipped": 0,
-        "activity_log": []
+        "activity_log": [],
     },
     "logs": [],
 }
@@ -247,25 +334,26 @@ state = {
 # CLIENT DISCOVERY - Find servers from all MCP clients
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def discover_mcp_clients() -> Dict[str, List[Dict]]:
     """
     Discover MCP servers from all known client configurations.
-    
+
     Discovery mechanism:
     1. Iterates through MCP_CLIENT_CONFIGS dictionary (hardcoded list of known paths)
     2. For each client, checks multiple possible config file locations
     3. If running in Docker, maps paths to mounted host directories
     4. Reads and parses JSON config files to extract MCP server definitions
     5. Supports multiple config formats (mcpServers, mcp.servers, servers)
-    
+
     Returns:
         Dictionary mapping client names to their discovered MCP servers
     """
     results = {}
-    
+
     # Check if running in Docker - if so, map paths to mounted locations
     in_docker = Path("/.dockerenv").exists() or os.path.exists("/.dockerenv")
-    
+
     for client_name, config_paths in MCP_CLIENT_CONFIGS.items():
         for config_path in config_paths:
             # If in Docker, try to map paths to mounted locations
@@ -280,7 +368,7 @@ def discover_mcp_clients() -> Dict[str, List[Dict]]:
                         parts = Path(path_str).parts
                         if "Roaming" in parts:
                             roaming_idx = [i for i, p in enumerate(parts) if p == "Roaming"][0]
-                            rel_path = Path(*parts[roaming_idx + 1:])
+                            rel_path = Path(*parts[roaming_idx + 1 :])
                             mapped_path = Path("/host/appdata") / rel_path
                             if mapped_path.exists():
                                 check_path = mapped_path
@@ -295,17 +383,17 @@ def discover_mcp_clients() -> Dict[str, List[Dict]]:
                             check_path = mapped_path
                     except ValueError:
                         pass
-            
+
             if not check_path.exists():
                 continue
-            
+
             try:
-                with open(check_path, 'r', encoding='utf-8') as f:
+                with open(check_path, "r", encoding="utf-8") as f:
                     config = json.load(f)
-                
+
                 # Different clients use different JSON structures
                 servers = {}
-                
+
                 # Standard format: { "mcpServers": {...} }
                 if "mcpServers" in config:
                     servers = config.get("mcpServers", {})
@@ -315,55 +403,58 @@ def discover_mcp_clients() -> Dict[str, List[Dict]]:
                 # Antigravity format: { "servers": {...} }
                 elif "servers" in config:
                     servers = config.get("servers", {})
-                
+
                 if servers:
-                    results[client_name] = {
-                        "path": str(check_path),
-                        "servers": []
-                    }
+                    results[client_name] = {"path": str(check_path), "servers": []}
                     for server_id, server_config in servers.items():
                         # Handle different config formats
                         if isinstance(server_config, dict):
                             # Standard MCP format
-                            results[client_name]["servers"].append({
-                                "id": server_id,
-                                "name": server_id.replace("-", " ").replace("_", " ").title(),
-                                "command": server_config.get("command", ""),
-                                "args": server_config.get("args", []),
-                                "cwd": server_config.get("cwd"),
-                                "env": server_config.get("env", {}),
-                                "type": server_config.get("type", "stdio"),  # stdio or http
-                                "url": server_config.get("url", ""),  # For http type
-                                "status": "discovered",
-                            })
+                            results[client_name]["servers"].append(
+                                {
+                                    "id": server_id,
+                                    "name": server_id.replace("-", " ").replace("_", " ").title(),
+                                    "command": server_config.get("command", ""),
+                                    "args": server_config.get("args", []),
+                                    "cwd": server_config.get("cwd"),
+                                    "env": server_config.get("env", {}),
+                                    "type": server_config.get("type", "stdio"),  # stdio or http
+                                    "url": server_config.get("url", ""),  # For http type
+                                    "status": "discovered",
+                                }
+                            )
                         elif isinstance(server_config, str):
                             # Simple string format (less common)
-                            results[client_name]["servers"].append({
-                                "id": server_id,
-                                "name": server_id.replace("-", " ").replace("_", " ").title(),
-                                "command": server_config,
-                                "args": [],
-                                "status": "discovered",
-                            })
+                            results[client_name]["servers"].append(
+                                {
+                                    "id": server_id,
+                                    "name": server_id.replace("-", " ").replace("_", " ").title(),
+                                    "command": server_config,
+                                    "args": [],
+                                    "status": "discovered",
+                                }
+                            )
                     break  # Found config for this client
             except Exception as e:
                 log(f"Error reading {client_name} config: {e}")
-    
+
     return results
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # STATIC ANALYSIS - Runt checker
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def fast_py_glob(directory: Path, max_depth: int = 3) -> List[Path]:
     """Fast python file glob with depth limit and skip dirs."""
     results = []
-    
+
     # Pre-check: don't scan if directory itself is in a venv
     dir_str = str(directory).lower()
-    if '.venv' in dir_str or 'site-packages' in dir_str or '\\lib\\' in dir_str:
+    if ".venv" in dir_str or "site-packages" in dir_str or "\\lib\\" in dir_str:
         return results
-    
+
     def _walk(path: Path, depth: int):
         if depth > max_depth:
             return
@@ -372,18 +463,28 @@ def fast_py_glob(directory: Path, max_depth: int = 3) -> List[Path]:
                 name_lower = item.name.lower()
                 if item.is_dir():
                     # Skip venv, cache, and hidden dirs
-                    if name_lower in SKIP_DIRS or item.name.startswith('.') or item.name.endswith('.egg-info'):
+                    if (
+                        name_lower in SKIP_DIRS
+                        or item.name.startswith(".")
+                        or item.name.endswith(".egg-info")
+                    ):
                         continue
                     _walk(item, depth + 1)
-                elif item.suffix == '.py' and 'test' not in name_lower and name_lower != '__init__.py':
+                elif (
+                    item.suffix == ".py"
+                    and "test" not in name_lower
+                    and name_lower != "__init__.py"
+                ):
                     # Skip backup/development files
-                    if any(x in name_lower for x in ['_fixed', '_backup', '_old', '_dev', '_wip']):
+                    if any(x in name_lower for x in ["_fixed", "_backup", "_old", "_dev", "_wip"]):
                         continue
                     results.append(item)
         except (PermissionError, OSError):
             pass
+
     _walk(directory, 0)
     return results
+
 
 def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     """Analyze a single MCP repository - COPIED FROM WORKING runt_api.py."""
@@ -428,6 +529,14 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         "features": [],
     }
 
+    # Detect Fullstack Features
+    try:
+        fs_features = detect_fullstack_features(repo_path)
+        info.update(fs_features)
+    except Exception as e:
+        log_scan(f"Error detecting stack features for {repo_path.name}: {e}", is_error=True)
+        # Continue with defaults
+
     # Check for requirements.txt or pyproject.toml
     req_file = repo_path / "requirements.txt"
     pyproject_file = repo_path / "pyproject.toml"
@@ -437,35 +546,47 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     for config_file in [pyproject_file, req_file]:
         if config_file.exists():
             try:
-                content = config_file.read_text(encoding='utf-8', errors='ignore')
-                # Prefer version specifiers (>=, ==, ~=) over plain text mentions
-                match = re.search(r'fastmcp[>=<~]+(\d+\.\d+\.?\d*)', content, re.IGNORECASE)
-                if not match:
-                    match = re.search(r'fastmcp.*?(\d+\.\d+\.?\d*)', content, re.IGNORECASE)
-                if match:
-                    fastmcp_version = match.group(1)
+                content = config_file.read_text(encoding="utf-8", errors="ignore")
+                # Relaxed detection: if fastmcp is present, it's an MCP repo
+                if "fastmcp" in content.lower():
+                    # Try to extract version if possible
+                    match = re.search(r"fastmcp[>=<~]+(\d+\.\d+\.?\d*)", content, re.IGNORECASE)
+                    if not match:
+                        match = re.search(r"fastmcp.*?(\d+\.\d+\.?\d*)", content, re.IGNORECASE)
+
+                    fastmcp_version = match.group(1) if match else "unknown"
                     break
             except Exception:
                 pass
 
-    if not fastmcp_version:
-        return None  # Not an MCP repo
+    # Accepts if it's either an MCP repo OR a Fullstack repo
+    if not fastmcp_version and not fs_features["is_fullstack"]:
+        return None  # Not an MCP or Fullstack repo
 
     info["fastmcp_version"] = fastmcp_version
 
     # Count tools - SMART APPROACH from runt_api.py
     # Match various tool decorator patterns:
     # @app.tool(), @mcp.tool(), @self.mcp.tool(), @server.tool(), @tool(), @self.tool()
-    tool_pattern = re.compile(r'@(?:(?:app|mcp|self(?:\.(?:app|mcp))?(?:_server\.mcp)?|server)\.)?tool(?:\s*\(|(?=\s*(?:\r?\n|def\s)))', re.MULTILINE)
-    nonconforming_pattern = re.compile(r'def register_\w+_tool\s*\(|\.add_tool\s*\(|register_tool\s*\(')
+    tool_pattern = re.compile(
+        r"@(?:(?:app|mcp|self(?:\.(?:app|mcp))?(?:_server\.mcp)?|server)\.)?tool(?:\s*\(|(?=\s*(?:\r?\n|def\s)))",
+        re.MULTILINE,
+    )
+    nonconforming_pattern = re.compile(
+        r"def register_\w+_tool\s*\(|\.add_tool\s*\(|register_tool\s*\("
+    )
     tool_count = 0
-    
-    pkg_name = repo_path.name.replace('-', '_')
+
+    pkg_name = repo_path.name.replace("-", "_")
     # Try multiple package name variations
-    pkg_name_short = pkg_name.replace('_mcp', '').replace('mcp_', '')
+    pkg_name_short = pkg_name.replace("_mcp", "").replace("mcp_", "")
     # Also try inserting underscore before mcp (calibremcp -> calibre_mcp)
-    pkg_name_underscore = pkg_name.replace('mcp', '_mcp') if 'mcp' in pkg_name and '_mcp' not in pkg_name else pkg_name
-    
+    pkg_name_underscore = (
+        pkg_name.replace("mcp", "_mcp")
+        if "mcp" in pkg_name and "_mcp" not in pkg_name
+        else pkg_name
+    )
+
     # Find the tools directory and its __init__.py
     tools_init_paths = [
         # Try underscore variant first (calibre_mcp)
@@ -483,43 +604,45 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         repo_path / pkg_name / "tools" / "__init__.py",
         repo_path / "tools" / "__init__.py",
     ]
-    
+
     imported_modules = set()
     tools_dir = None
+
+    # log_scan(f"    Checking for tools in {repo_path.name}...")
+    log_scan(f"    Checking for tools in {repo_path.name}...")
+
     for init_path in tools_init_paths:
         if init_path.exists():
             tools_dir = init_path.parent
             try:
-                init_content = init_path.read_text(encoding='utf-8', errors='ignore')
+                init_content = init_path.read_text(encoding="utf-8", errors="ignore")
                 # Only count else block (portmanteau mode) if exists
-                if 'else:' in init_content:
-                    else_block = init_content.split('else:')[-1]
-                    imports = re.findall(r'from\s+\.(\w+)\s+import', else_block)
+                if "else:" in init_content:
+                    else_block = init_content.split("else:")[-1]
+                    imports = re.findall(r"from\s+\.(\w+)\s+import", else_block)
                 else:
-                    imports = re.findall(r'from\s+\.(\w+)\s+import', init_content)
+                    imports = re.findall(r"from\s+\.(\w+)\s+import", init_content)
                 imported_modules.update(imports)
             except Exception:
                 pass
             break
-    
+
     # Search directories - ALWAYS include the package root for tools in server.py
     search_dirs = []
-    
+
     # Always check main package directories for tools in server.py
     for pkg_dir_name in [pkg_name, pkg_name_short, pkg_name_underscore]:
         for base in [repo_path / "src", repo_path]:
             pkg_dir = base / pkg_dir_name
             if pkg_dir.exists() and pkg_dir.is_dir() and pkg_dir not in search_dirs:
                 search_dirs.append(pkg_dir)
-    
+
     # Only add tools/ subdirectory if NOT already covered by a parent search_dir
     if tools_dir and tools_dir.exists():
-        is_child_of_existing = any(
-            tools_dir.is_relative_to(d) for d in search_dirs
-        )
+        is_child_of_existing = any(tools_dir.is_relative_to(d) for d in search_dirs)
         if not is_child_of_existing:
             search_dirs.append(tools_dir)
-    
+
     # Fallback to src or repo root
     if not search_dirs:
         src_dir = repo_path / "src"
@@ -527,7 +650,10 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             search_dirs.append(src_dir)
         else:
             search_dirs.append(repo_path)
-    
+
+    # log_scan(f"    Scanning {len(search_dirs)} directories...")
+    log_scan(f"    Scanning {len(search_dirs)} directories...")
+
     # Also check package __init__.py for tools (system-admin-mcp pattern)
     pkg_init_files = []
     for pkg_base in [repo_path / "src" / pkg_name_underscore, repo_path / "src" / pkg_name]:
@@ -535,57 +661,67 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         if init_file.exists():
             pkg_init_files.append(init_file)
             break
-    
+
     # Also check plugins/ directory if it exists (virtualization-mcp pattern)
     plugins_dir = None
-    for base in [repo_path / "src" / pkg_name_underscore, repo_path / "src" / pkg_name, repo_path / pkg_name]:
+    for base in [
+        repo_path / "src" / pkg_name_underscore,
+        repo_path / "src" / pkg_name,
+        repo_path / pkg_name,
+    ]:
         candidate = base / "plugins"
         if candidate.exists() and candidate.is_dir():
             plugins_dir = candidate
             break
-    
+
     has_nonconforming = False
     nonconforming_count = 0
     portmanteau_tools = 0
     portmanteau_ops = 0
     individual_tools = 0
-    
-    literal_pattern = re.compile(r'Literal\[([^\]]+)\]')
-    
+
+    literal_pattern = re.compile(r"Literal\[([^\]]+)\]")
+
     # Check if repo uses portmanteau pattern (has register_tools function OR portmanteau/ subdir)
     uses_portmanteau_pattern = False
     portmanteau_dir = None
     portmanteau_modules = set()  # For PORTMANTEAU_MODULES list pattern
     if tools_dir:
-        init_file = tools_dir / '__init__.py'
+        init_file = tools_dir / "__init__.py"
         if init_file.exists():
-            init_text = init_file.read_text(encoding='utf-8', errors='ignore')
+            init_text = init_file.read_text(encoding="utf-8", errors="ignore")
             # Portmanteau pattern requires BOTH register_tools AND from .manage_ or .query_ imports
             # This distinguishes it from general register_tools functions (like blender-mcp)
-            has_register_tools = 'def register_tools' in init_text
+            has_register_tools = "def register_tools" in init_text
             has_portmanteau_imports = (
-                'from .manage_' in init_text or 
-                'from .query_' in init_text or
-                'from .analyze_' in init_text
+                "from .manage_" in init_text
+                or "from .query_" in init_text
+                or "from .analyze_" in init_text
             )
             uses_portmanteau_pattern = has_register_tools and has_portmanteau_imports
             # Check for PORTMANTEAU_MODULES list pattern (pywinauto-mcp style)
-            if 'PORTMANTEAU_MODULES' in init_text:
+            if "PORTMANTEAU_MODULES" in init_text:
                 # Extract module names from list
                 import_match = re.findall(r"'(portmanteau_\w+|desktop_state)'", init_text)
                 portmanteau_modules = set(import_match)
         # Also check for tools/portmanteau/ subdirectory
-        candidate_portmanteau = tools_dir / 'portmanteau'
+        candidate_portmanteau = tools_dir / "portmanteau"
         if candidate_portmanteau.exists() and candidate_portmanteau.is_dir():
             portmanteau_dir = candidate_portmanteau
-    
+
     # Check if repo uses monolithic server pattern (all tools in server.py)
     monolithic_server = None
     # Check for monolithic if no portmanteau pattern detected AND no portmanteau_dir
     if not uses_portmanteau_pattern and not portmanteau_modules and not portmanteau_dir:
         # Check fastmcp_server.py first as it's often the entry point
         # Also check repo root for server.py (notion-mcp pattern)
-        for server_file in ['fastmcp_server.py', 'mcp_server.py', 'server.py', 'main.py', '__main__.py']:
+        for server_file in [
+            "fastmcp_server.py",
+            "mcp_server.py",
+            "server.py",
+            "main.py",
+            "__main__.py",
+        ]:
             # Check in package dirs first
             for base_path in [
                 repo_path / "src" / pkg_name_underscore,
@@ -596,7 +732,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                 candidate = base_path / server_file
                 if candidate.exists():
                     try:
-                        server_content = candidate.read_text(encoding='utf-8', errors='ignore')
+                        server_content = candidate.read_text(encoding="utf-8", errors="ignore")
                         # Check for actual tool decorators (not just mentions in comments)
                         actual_tools = tool_pattern.findall(server_content)
                         if actual_tools:
@@ -606,22 +742,26 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                         logger.debug(f"Error reading {candidate}: {e}")
             if monolithic_server:
                 break
-    
+
     # Check for modular entry point pattern (mcp_main.py -> mcp_server_clean.py -> tools/)
     imported_tool_modules = set()
-    for entry_file in ['mcp_main.py', 'mcp_server_clean.py', 'mcp_server.py']:
-        for base in [repo_path / "src" / pkg_name_underscore, repo_path / "src" / pkg_name, repo_path / pkg_name]:
+    for entry_file in ["mcp_main.py", "mcp_server_clean.py", "mcp_server.py"]:
+        for base in [
+            repo_path / "src" / pkg_name_underscore,
+            repo_path / "src" / pkg_name,
+            repo_path / pkg_name,
+        ]:
             candidate = base / entry_file
             if candidate.exists():
                 try:
-                    content = candidate.read_text(encoding='utf-8', errors='ignore')
+                    content = candidate.read_text(encoding="utf-8", errors="ignore")
                     # Look for imports like: import avatarmcp.tools.core.core_tools
-                    tool_imports = re.findall(r'import\s+\w+\.tools\.(\w+)\.(\w+)', content)
+                    tool_imports = re.findall(r"import\s+\w+\.tools\.(\w+)\.(\w+)", content)
                     for pkg, mod in tool_imports:
                         imported_tool_modules.add(f"{pkg}/{mod}.py")
                 except Exception as e:
                     logger.debug(f"Error parsing imports in {candidate}: {e}")
-    
+
     # If monolithic server, ONLY count from that file
     if monolithic_server:
         search_dirs = []
@@ -631,16 +771,20 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         py_files_to_scan = None  # Will filter by imported_tool_modules
     # If PORTMANTEAU_MODULES list found, only count those files
     elif portmanteau_modules:
-        py_files_to_scan = [tools_dir / f"{m}.py" for m in portmanteau_modules if (tools_dir / f"{m}.py").exists()]
+        py_files_to_scan = [
+            tools_dir / f"{m}.py" for m in portmanteau_modules if (tools_dir / f"{m}.py").exists()
+        ]
         search_dirs = []
     # If has portmanteau/ subdir with actual tools, ONLY count from there
     elif portmanteau_dir:
         # Check if portmanteau dir has any @tool decorators
         has_tools = False
-        for pf in portmanteau_dir.glob('*.py'):
-            if pf.name != '__init__.py':
+        for pf in portmanteau_dir.glob("*.py"):
+            if pf.name != "__init__.py":
                 try:
-                    if '@mcp.tool' in pf.read_text(encoding='utf-8', errors='ignore') or '@app.tool' in pf.read_text(encoding='utf-8', errors='ignore'):
+                    if "@mcp.tool" in pf.read_text(
+                        encoding="utf-8", errors="ignore"
+                    ) or "@app.tool" in pf.read_text(encoding="utf-8", errors="ignore"):
                         has_tools = True
                         break
                 except Exception:
@@ -649,7 +793,10 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             search_dirs = [portmanteau_dir]
             # Also include plugins/ subdirs that DON'T have a corresponding portmanteau
             if plugins_dir:
-                portmanteau_names = {p.stem.replace('_management', '') for p in portmanteau_dir.glob('*_management.py')}
+                portmanteau_names = {
+                    p.stem.replace("_management", "")
+                    for p in portmanteau_dir.glob("*_management.py")
+                }
                 for plugin_subdir in plugins_dir.iterdir():
                     if plugin_subdir.is_dir() and plugin_subdir.name not in portmanteau_names:
                         search_dirs.append(plugin_subdir)
@@ -658,24 +805,25 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             py_files_to_scan = None
     else:
         py_files_to_scan = None  # Will be computed per search_dir
-    
+
     for search_dir in search_dirs if py_files_to_scan is None else [None]:
         if py_files_to_scan is None:
             py_files = fast_py_glob(search_dir, max_depth=4)
         else:
             py_files = py_files_to_scan
-            
+
         for py_file in py_files:
             filename = py_file.stem.lower()
-            
+
             # For portmanteau repos, ONLY count portmanteau-style files
             if uses_portmanteau_pattern:
                 is_portmanteau_entry = (
-                    filename.startswith('manage_') or
-                    filename.startswith('query_') or
-                    filename.startswith('analyze_') or
-                    filename.endswith('_portmanteau') or
-                    filename in {'test_calibre_connection', 'calibre_ocr_tool'}  # Known entry points
+                    filename.startswith("manage_")
+                    or filename.startswith("query_")
+                    or filename.startswith("analyze_")
+                    or filename.endswith("_portmanteau")
+                    or filename
+                    in {"test_calibre_connection", "calibre_ocr_tool"}  # Known entry points
                 )
                 if not is_portmanteau_entry:
                     continue
@@ -693,17 +841,17 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                 if not file_matches and not parent_matches:
                     continue
             try:
-                content = py_file.read_text(encoding='utf-8', errors='ignore')
+                content = py_file.read_text(encoding="utf-8", errors="ignore")
                 matches = tool_pattern.findall(content)
                 file_tools = len(matches)
-                
+
                 path_str = str(py_file).lower()
                 is_portmanteau_file = (
-                    "portmanteau" in path_str or 
-                    path_str.endswith("_tool.py") or
-                    path_str.endswith("_tools.py")
+                    "portmanteau" in path_str
+                    or path_str.endswith("_tool.py")
+                    or path_str.endswith("_tools.py")
                 )
-                
+
                 if is_portmanteau_file:
                     portmanteau_tools += file_tools
                     for lit_match in literal_pattern.findall(content):
@@ -712,26 +860,26 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                             portmanteau_ops += ops
                 else:
                     individual_tools += file_tools
-                
+
                 tool_count += file_tools
-                
+
                 nc_matches = nonconforming_pattern.findall(content)
                 if nc_matches:
                     has_nonconforming = True
                     nonconforming_count += len(nc_matches)
             except Exception:
                 pass
-    
+
     # Also scan package __init__.py for tools (some repos define tools there)
     for init_file in pkg_init_files:
         try:
-            content = init_file.read_text(encoding='utf-8', errors='ignore')
+            content = init_file.read_text(encoding="utf-8", errors="ignore")
             matches = tool_pattern.findall(content)
             tool_count += len(matches)
             individual_tools += len(matches)
         except Exception:
             pass
-    
+
     info["tool_count"] = tool_count
     info["tools"] = tool_count  # Alias
     info["portmanteau_tools"] = portmanteau_tools
@@ -740,17 +888,21 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     info["has_portmanteau"] = portmanteau_tools > 0
     info["has_nonconforming_registration"] = has_nonconforming
     info["nonconforming_count"] = nonconforming_count
-    
+
     # Check for split tools antipattern: tools in BOTH server.py AND tools/ directory
     # This indicates incomplete refactoring
     has_server_tools = False
     has_tools_dir_tools = False
-    for base in [repo_path / "src" / pkg_name_underscore, repo_path / "src" / pkg_name, repo_path / pkg_name]:
-        for server_file in ['server.py', 'mcp_server.py', 'fastmcp_server.py']:
+    for base in [
+        repo_path / "src" / pkg_name_underscore,
+        repo_path / "src" / pkg_name,
+        repo_path / pkg_name,
+    ]:
+        for server_file in ["server.py", "mcp_server.py", "fastmcp_server.py"]:
             candidate = base / server_file
             if candidate.exists():
                 try:
-                    content = candidate.read_text(encoding='utf-8', errors='ignore')
+                    content = candidate.read_text(encoding="utf-8", errors="ignore")
                     if tool_pattern.search(content):
                         has_server_tools = True
                         break
@@ -758,20 +910,22 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     pass  # Non-critical file read error
         if has_server_tools:
             break
-    
+
     if tools_dir and tools_dir.exists():
-        for py_file in tools_dir.glob('*.py'):
-            if py_file.name != '__init__.py':
+        for py_file in tools_dir.glob("*.py"):
+            if py_file.name != "__init__.py":
                 try:
-                    content = py_file.read_text(encoding='utf-8', errors='ignore')
+                    content = py_file.read_text(encoding="utf-8", errors="ignore")
                     if tool_pattern.search(content):
                         has_tools_dir_tools = True
                         break
                 except Exception:
                     pass  # Non-critical file read error
-    
+
     if has_server_tools and has_tools_dir_tools:
-        info["runt_reasons"].append("Tools split between server.py and tools/ (incomplete refactor)")
+        info["runt_reasons"].append(
+            "Tools split between server.py and tools/ (incomplete refactor)"
+        )
         info["issues"].append("Split tools (server.py + tools/)")
         info["recommendations"].append("Move all tools to tools/ directory, keep server.py clean")
 
@@ -787,7 +941,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     has_src = (repo_path / "src").exists()
     has_tests = (repo_path / "tests").exists()
     has_scripts = (repo_path / "scripts").exists()
-    
+
     tools_paths = [
         repo_path / "src" / pkg_name_underscore / "tools",
         repo_path / "src" / pkg_name / "tools",
@@ -796,7 +950,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         repo_path / "tools",
     ]
     has_tools_dir = any(p.exists() and p.is_dir() for p in tools_paths)
-    
+
     info["has_src"] = has_src
     info["has_tests"] = has_tests
     info["has_scripts"] = has_scripts
@@ -804,10 +958,10 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
 
     # Evaluate FastMCP version
     try:
-        version_parts = [int(x) for x in fastmcp_version.split('.')[:2]]
-        runt_parts = [int(x) for x in FASTMCP_RUNT_THRESHOLD.split('.')[:2]]
-        warn_parts = [int(x) for x in FASTMCP_WARN_THRESHOLD.split('.')[:2]]
-        
+        version_parts = [int(x) for x in fastmcp_version.split(".")[:2]]
+        runt_parts = [int(x) for x in FASTMCP_RUNT_THRESHOLD.split(".")[:2]]
+        warn_parts = [int(x) for x in FASTMCP_WARN_THRESHOLD.split(".")[:2]]
+
         if version_parts < runt_parts:
             info["is_runt"] = True
             info["runt_reasons"].append(f"FastMCP {fastmcp_version} is ancient")
@@ -837,16 +991,26 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         info["runt_reasons"].append("No src/ directory")
         info["issues"].append("No src/ directory")
         info["recommendations"].append("Use proper src/ layout")
-    
+
     if not has_tests and tool_count >= 10:
         info["runt_reasons"].append("No tests/ directory")
         info["issues"].append("No tests/ directory")
         info["recommendations"].append("Add tests/ with pytest")
-    
+
     # Check for multiple server files (code smell)
     server_files = []
-    for server_name in ['server.py', 'fastmcp_server.py', 'mcp_server.py', 'simple_mcp_server.py', 'mcp_compliant_server.py']:
-        for base in [repo_path / "src" / pkg_name_underscore, repo_path / "src" / pkg_name, repo_path / pkg_name]:
+    for server_name in [
+        "server.py",
+        "fastmcp_server.py",
+        "mcp_server.py",
+        "simple_mcp_server.py",
+        "mcp_compliant_server.py",
+    ]:
+        for base in [
+            repo_path / "src" / pkg_name_underscore,
+            repo_path / "src" / pkg_name,
+            repo_path / pkg_name,
+        ]:
             if (base / server_name).exists():
                 server_files.append(server_name)
                 break
@@ -854,44 +1018,52 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         info["runt_reasons"].append(f"Multiple server files: {', '.join(server_files)}")
         info["issues"].append(f"Multiple server files ({len(server_files)})")
         info["recommendations"].append("Keep only the main server file, delete obsolete ones")
-    
+
     # Check for MCPB packaging (manifest.json)
     has_mcpb = (repo_path / "manifest.json").exists()
-    has_dxt = (repo_path / "dxt").exists() or (repo_path / "dxt").is_dir() if (repo_path / "dxt").exists() else False
+    has_dxt = (
+        (repo_path / "dxt").exists() or (repo_path / "dxt").is_dir()
+        if (repo_path / "dxt").exists()
+        else False
+    )
     info["has_mcpb"] = has_mcpb
     info["has_dxt"] = has_dxt
-    
+
     if not has_mcpb and tool_count >= 5:
         info["runt_reasons"].append("No MCPB packaging (manifest.json)")
         info["issues"].append("No MCPB packaging")
         info["recommendations"].append("Add manifest.json for MCPB distribution")
-    
+
     if has_dxt and not has_mcpb:
         info["runt_reasons"].append("Uses deprecated DXT instead of MCPB")
         info["issues"].append("DXT without MCPB")
         info["recommendations"].append("Migrate from DXT to MCPB (manifest.json)")
-    
+
     # Check for README
-    has_readme = any((repo_path / f).exists() for f in ['README.md', 'README.rst', 'README.txt', 'README'])
+    has_readme = any(
+        (repo_path / f).exists() for f in ["README.md", "README.rst", "README.txt", "README"]
+    )
     if not has_readme:
         info["runt_reasons"].append("No README")
         info["issues"].append("No README")
         info["recommendations"].append("Add README.md with usage instructions")
-    
+
     # Check for LICENSE
-    has_license = any((repo_path / f).exists() for f in ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'COPYING'])
+    has_license = any(
+        (repo_path / f).exists() for f in ["LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING"]
+    )
     if not has_license:
         info["runt_reasons"].append("No LICENSE file")
         info["issues"].append("No LICENSE")
         info["recommendations"].append("Add LICENSE file (MIT recommended)")
-    
+
     # Check for .cursorrules
     has_cursorrules = (repo_path / ".cursorrules").exists()
     if not has_cursorrules:
         info["runt_reasons"].append("No .cursorrules")
         info["issues"].append("No .cursorrules")
         info["recommendations"].append("Add .cursorrules for Cursor AI context")
-    
+
     # Check for git repository
     has_git = (repo_path / ".git").exists()
     if not has_git:
@@ -904,15 +1076,15 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         has_remote = False
         if git_config.exists():
             try:
-                config_content = git_config.read_text(encoding='utf-8', errors='ignore')
-                has_remote = '[remote "origin"]' in config_content or '[remote ' in config_content
+                config_content = git_config.read_text(encoding="utf-8", errors="ignore")
+                has_remote = '[remote "origin"]' in config_content or "[remote " in config_content
             except Exception:
                 pass  # Git config read error
         if not has_remote:
             info["runt_reasons"].append("No git remote configured")
             info["issues"].append("No git remote")
             info["recommendations"].append("Add remote: git remote add origin <url>")
-    
+
     # Check for setup.py without pyproject.toml (old packaging)
     has_setup_py = (repo_path / "setup.py").exists()
     has_pyproject = (repo_path / "pyproject.toml").exists()
@@ -920,20 +1092,21 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         info["runt_reasons"].append("Uses setup.py without pyproject.toml")
         info["issues"].append("Old packaging (setup.py)")
         info["recommendations"].append("Migrate to pyproject.toml")
-    
+
     # Check for print() statements outside tests (scan main server file)
     print_count = 0
     if monolithic_server:
         try:
-            server_content = monolithic_server.read_text(encoding='utf-8', errors='ignore')
+            server_content = monolithic_server.read_text(encoding="utf-8", errors="ignore")
             # Count print( but not:
             # - print(file=sys.stderr) or print(..., file=
             # - console.print() (Rich console to stderr)
             # - logger.print() or similar
             import re as re_module
-            prints = re_module.findall(r'(?<!\w)print\s*\(', server_content)
-            stderr_prints = re_module.findall(r'print\s*\([^)]*file\s*=', server_content)
-            console_prints = re_module.findall(r'console\.print\s*\(', server_content)
+
+            prints = re_module.findall(r"(?<!\w)print\s*\(", server_content)
+            stderr_prints = re_module.findall(r"print\s*\([^)]*file\s*=", server_content)
+            console_prints = re_module.findall(r"console\.print\s*\(", server_content)
             print_count = len(prints) - len(stderr_prints) - len(console_prints)
         except Exception:
             pass  # Print count check failed
@@ -941,70 +1114,80 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         info["runt_reasons"].append(f"{print_count} print() calls in server (use logging)")
         info["issues"].append(f"{print_count} print() statements")
         info["recommendations"].append("Replace print() with logging or print(file=sys.stderr)")
-    
+
     # Check for oversized server file (>1000 lines)
     server_lines = 0
     if monolithic_server:
         try:
-            server_lines = len(monolithic_server.read_text(encoding='utf-8', errors='ignore').splitlines())
+            server_lines = len(
+                monolithic_server.read_text(encoding="utf-8", errors="ignore").splitlines()
+            )
         except Exception:
             pass  # Server file line count failed
     if server_lines > 1000:
         info["runt_reasons"].append(f"Monolithic server.py ({server_lines} lines)")
         info["issues"].append(f"Server file too large ({server_lines} lines)")
         info["recommendations"].append("Split server.py into modules (tools/, handlers/)")
-    
+
     # Check for dual interface (stdio MCP + HTTP/FastAPI)
     has_mcp_server = False
     has_fastapi_server = False
     has_health_endpoint = False
-    
+
     # Build comprehensive search dirs including actual src subdirectories
     dual_search_dirs = [
-        repo_path / 'src' / pkg_name, 
-        repo_path / 'src' / pkg_name_short, 
-        repo_path / 'src' / pkg_name_underscore, 
+        repo_path / "src" / pkg_name,
+        repo_path / "src" / pkg_name_short,
+        repo_path / "src" / pkg_name_underscore,
         repo_path / pkg_name,
-        repo_path / pkg_name_short, 
-        repo_path
+        repo_path / pkg_name_short,
+        repo_path,
     ]
     # Add actual subdirectories under src/
-    src_dir = repo_path / 'src'
+    src_dir = repo_path / "src"
     if src_dir.exists():
         for subdir in src_dir.iterdir():
-            if subdir.is_dir() and not subdir.name.startswith('.') and not subdir.name.startswith('_'):
+            if (
+                subdir.is_dir()
+                and not subdir.name.startswith(".")
+                and not subdir.name.startswith("_")
+            ):
                 dual_search_dirs.append(subdir)
-    
+
     # Look for MCP server file
-    mcp_server_files = ['mcp_server.py', 'fastmcp_server.py']
+    mcp_server_files = ["mcp_server.py", "fastmcp_server.py"]
     for mcp_file in mcp_server_files:
         for search_dir in dual_search_dirs:
             if search_dir.exists() and (search_dir / mcp_file).exists():
                 has_mcp_server = True
                 break
-    
+
     # Look for FastAPI server file (main.py, server.py with FastAPI)
-    fastapi_files = ['main.py', 'server.py', 'app.py']
+    fastapi_files = ["main.py", "server.py", "app.py"]
     for fa_file in fastapi_files:
         for search_dir in dual_search_dirs:
             if search_dir.exists():
                 file_path = search_dir / fa_file
                 if file_path.exists():
                     try:
-                        content = file_path.read_text(encoding='utf-8', errors='ignore')
-                        if 'FastAPI' in content or 'fastapi' in content:
+                        content = file_path.read_text(encoding="utf-8", errors="ignore")
+                        if "FastAPI" in content or "fastapi" in content:
                             has_fastapi_server = True
                             # Check for health endpoint
-                            if '/health' in content or '@app.get("/health")' in content or "health" in content.lower():
+                            if (
+                                "/health" in content
+                                or '@app.get("/health")' in content
+                                or "health" in content.lower()
+                            ):
                                 has_health_endpoint = True
                             break
                     except Exception:
                         pass  # FastAPI file read error
-    
+
     info["has_dual_interface"] = has_mcp_server and has_fastapi_server
     info["has_http_interface"] = has_fastapi_server
     info["has_health_endpoint"] = has_health_endpoint
-    
+
     # Flag dual interface as advantage
     if has_mcp_server and has_fastapi_server:
         if has_health_endpoint:
@@ -1018,14 +1201,14 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         info["runt_reasons"].append("REST API only, no MCP tools")
         info["issues"].append("No MCP interface")
         info["recommendations"].append("Add mcp_server.py with @mcp.tool decorators")
-    
+
     if has_nonconforming:
         if tool_count == 0 and nonconforming_count > 10:
             info["is_runt"] = True
             info["runt_reasons"].append(f"All tools non-FastMCP ({nonconforming_count}x)")
             info["issues"].append(f"All tools non-FastMCP ({nonconforming_count}x)")
         info["recommendations"].append("Use @app.tool decorators")
-    
+
     # Check for proper multiline docstrings with Args/Returns
     proper_docstrings = 0
     if tool_count > 0:
@@ -1035,7 +1218,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         # \s* after \n handles indented decorators in nested functions (blender-mcp pattern)
         docstring_pattern = re.compile(
             r'@(?:app|mcp|self\.(?:app|mcp)|server)\.tool(?:\(\))?\s*\n\s*(?:async\s+)?def\s+\w+\([^)]*\)[^:]*:\s*\n\s*"""[\s\S]*?(?:Args:|Returns:|Examples:)[\s\S]*?"""',
-            re.MULTILINE
+            re.MULTILINE,
         )
         for search_dir in dual_search_dirs:
             if search_dir.exists():
@@ -1043,32 +1226,34 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     if any(skip in str(py_file) for skip in SKIP_DIRS):
                         continue
                     try:
-                        content = py_file.read_text(encoding='utf-8', errors='ignore')
+                        content = py_file.read_text(encoding="utf-8", errors="ignore")
                         matches = docstring_pattern.findall(content)
                         proper_docstrings += len(matches)
                     except Exception:
                         pass  # Docstring scan error
-    
+
     info["has_proper_docstrings"] = proper_docstrings > 0 and proper_docstrings >= tool_count * 0.5
     if tool_count >= 3 and not info["has_proper_docstrings"]:
         info["runt_reasons"].append("Missing proper docstrings (Args/Returns)")
         info["issues"].append("Poor docstrings")
-        info["recommendations"].append("Add multiline docstrings with Args, Returns, Examples sections")
+        info["recommendations"].append(
+            "Add multiline docstrings with Args, Returns, Examples sections"
+        )
     elif info["has_proper_docstrings"]:
         info["features"].append("Good docstrings")
-    
+
     # Check for prompt templates (assets/prompts/)
     prompts_dir = repo_path / "assets" / "prompts"
     has_prompts = prompts_dir.exists() and any(prompts_dir.glob("*.md"))
     mcpb_prompts = repo_path / "mcpb" / "assets" / "prompts"
     has_mcpb_prompts = mcpb_prompts.exists() and any(mcpb_prompts.glob("*.md"))
-    
+
     info["has_prompt_templates"] = has_prompts or has_mcpb_prompts
     if has_prompts or has_mcpb_prompts:
         prompt_count = len(list(prompts_dir.glob("*.md"))) if has_prompts else 0
         prompt_count += len(list(mcpb_prompts.glob("*.md"))) if has_mcpb_prompts else 0
         info["features"].append(f"Prompt templates ({prompt_count})")
-    
+
     # Check for type hints usage
     has_type_hints = False
     for search_dir in dual_search_dirs:
@@ -1077,20 +1262,20 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                 if any(skip in str(py_file) for skip in SKIP_DIRS):
                     continue
                 try:
-                    content = py_file.read_text(encoding='utf-8', errors='ignore')
+                    content = py_file.read_text(encoding="utf-8", errors="ignore")
                     # Check for type annotations: -> Type, : Type, List[, Dict[, Optional[
-                    if re.search(r'def \w+\([^)]*:\s*\w+|-> \w+|\[[\w\[\], ]+\]', content):
+                    if re.search(r"def \w+\([^)]*:\s*\w+|-> \w+|\[[\w\[\], ]+\]", content):
                         has_type_hints = True
                         break
                 except Exception:
                     pass  # Non-critical file read error
             if has_type_hints:
                 break
-    
+
     info["has_type_hints"] = has_type_hints
     if has_type_hints:
         info["features"].append("Type hints")
-    
+
     # Check for proper logging (not just print)
     has_logging = False
     for search_dir in dual_search_dirs:
@@ -1099,26 +1284,26 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                 if any(skip in str(py_file) for skip in SKIP_DIRS):
                     continue
                 try:
-                    content = py_file.read_text(encoding='utf-8', errors='ignore')
-                    if 'import logging' in content or 'from logging' in content:
+                    content = py_file.read_text(encoding="utf-8", errors="ignore")
+                    if "import logging" in content or "from logging" in content:
                         has_logging = True
                         break
                 except Exception:
                     pass  # Non-critical file read error
             if has_logging:
                 break
-    
+
     info["has_logging"] = has_logging
     if has_logging:
         info["features"].append("Proper logging")
-    
+
     # Check for comprehensive tests
     tests_dir = repo_path / "tests"
     test_count = 0
     if tests_dir.exists():
         test_files = list(tests_dir.rglob("test_*.py")) + list(tests_dir.rglob("*_test.py"))
         test_count = len(test_files)
-    
+
     info["test_count"] = test_count
     if test_count >= 3:
         info["features"].append(f"Test suite ({test_count} files)")
@@ -1162,62 +1347,79 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
 
     return info
 
+
+def log_scan(message: str, is_error: bool = False):
+    """Log a message to the scan activity log."""
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    formatted_msg = f"{timestamp} | {message}"
+
+    # Initialize log if needed
+    if "activity_log" not in state["scan_progress"]:
+        state["scan_progress"]["activity_log"] = []
+
+    state["scan_progress"]["activity_log"].append(formatted_msg)
+
+    # Keep only last 50 entries
+    if len(state["scan_progress"]["activity_log"]) > 50:
+        state["scan_progress"]["activity_log"] = state["scan_progress"]["activity_log"][-50:]
+
+    if is_error:
+        state["scan_progress"]["errors"] += 1
+        log(f"❌ SCAN ERROR: {message}")
+    else:
+        # Optional: don't clog main server log with every granular step
+        pass
+
+
 def scan_repos() -> List[Dict[str, Any]]:
     """Scan all repositories for MCP servers."""
     results = []
-    
+
     if not REPOS_DIR.exists():
         return results
-    
-    dirs = [d for d in REPOS_DIR.iterdir() if d.is_dir() and not d.name.startswith('.')]
+
+    dirs = [d for d in REPOS_DIR.iterdir() if d.is_dir() and not d.name.startswith(".")]
     state["scan_progress"]["total"] = len(dirs)
     state["scan_progress"]["status"] = "scanning"
     state["scan_progress"]["mcp_repos_found"] = 0
     state["scan_progress"]["errors"] = 0
     state["scan_progress"]["skipped"] = 0
     state["scan_progress"]["activity_log"] = []
-    
+
     # Add initial activity
-    state["scan_progress"]["activity_log"].append(f"🔍 Starting scan of {len(dirs)} directories...")
-    
+    log_scan(f"🔍 Starting scan of {len(dirs)} directories...")
+
     for i, repo_path in enumerate(dirs):
         state["scan_progress"]["current"] = repo_path.name
         state["scan_progress"]["done"] = i + 1
-        
+
         try:
             # analyze_repo returns None if not MCP repo
+            # It now handles its own granular logging
             info = analyze_repo(repo_path)
             if info:
                 results.append(info)
                 mcp_count = state["scan_progress"]["mcp_repos_found"] + 1
                 state["scan_progress"]["mcp_repos_found"] = mcp_count
-                activity_msg = f"  {info['zoo_emoji']} {info['status_emoji']} {info['name']} v{info['fastmcp_version'] or '?'} ({info['tools']} tools)"
-                state["scan_progress"]["activity_log"].append(activity_msg)
-                # Keep only last 20 entries to avoid memory bloat
-                if len(state["scan_progress"]["activity_log"]) > 20:
-                    state["scan_progress"]["activity_log"].pop(0)
-                log(activity_msg)
+
+                log_scan(
+                    f"  {info['zoo_emoji']} Found {info['name']} v{info['fastmcp_version'] or '?'} ({info['tools']} tools)"
+                )
             else:
                 skipped = state["scan_progress"]["skipped"] + 1
                 state["scan_progress"]["skipped"] = skipped
         except Exception as e:
-            errors = state["scan_progress"]["errors"] + 1
-            state["scan_progress"]["errors"] = errors
+            log_scan(f"Error analyzing {repo_path.name}: {str(e)}", is_error=True)
             logger.error(f"Error analyzing {repo_path.name}: {e}", exc_info=True)
-            error_msg = f"  ❌ {repo_path.name}: {str(e)[:50]}"
-            state["scan_progress"]["activity_log"].append(error_msg)
-            # Keep only last 20 entries
-            if len(state["scan_progress"]["activity_log"]) > 20:
-                state["scan_progress"]["activity_log"].pop(0)
-            log(error_msg)
-    
+
     # Final summary
     state["scan_progress"]["status"] = "complete"
     summary = f"✅ Scan complete: {len(results)} MCP repos found, {state['scan_progress']['skipped']} skipped, {state['scan_progress']['errors']} errors"
-    state["scan_progress"]["activity_log"].append(summary)
+    log_scan(summary)
     log(summary)
-    
+
     return results
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # RUNTIME - Live server connections with FastMCP
@@ -1226,26 +1428,27 @@ def scan_repos() -> List[Dict[str, Any]]:
 # Cache for Cursor config
 _cursor_config_cache: Optional[Dict] = None
 
+
 def load_cursor_config() -> Dict[str, Dict]:
     """Load Cursor MCP config from ~/.cursor/mcp.json"""
     global _cursor_config_cache
     if _cursor_config_cache is not None:
         return _cursor_config_cache
-    
+
     # Check if running in Docker - if so, map paths to mounted locations
     in_docker = Path("/.dockerenv").exists() or os.path.exists("/.dockerenv")
-    
+
     cursor_config_path = Path.home() / ".cursor" / "mcp.json"
     if in_docker:
         # Try mounted path
         mounted_path = Path("/host/home") / ".cursor" / "mcp.json"
         if mounted_path.exists():
             cursor_config_path = mounted_path
-    
+
     if not cursor_config_path.exists():
         _cursor_config_cache = {}
         return _cursor_config_cache
-    
+
     try:
         with open(cursor_config_path) as f:
             data = json.load(f)
@@ -1253,23 +1456,25 @@ def load_cursor_config() -> Dict[str, Dict]:
     except Exception as e:
         log(f"⚠️ Failed to load Cursor config: {e}")
         _cursor_config_cache = {}
-    
+
     return _cursor_config_cache
+
 
 def find_cursor_config_for_repo(repo_name: str, repo_path: Path) -> Optional[Dict]:
     """Find matching Cursor MCP server config for a repository."""
     configs = load_cursor_config()
     repo_path_str = str(repo_path).replace("\\", "/").lower()
-    
+
     # Try to match by cwd or path in args
     for server_id, config in configs.items():
         cwd = config.get("cwd", "").replace("\\", "/").lower()
         args = " ".join(config.get("args", [])).replace("\\", "/").lower()
-        
+
         if repo_path_str in cwd or repo_path_str in args or repo_name.lower() in cwd:
             return {"id": server_id, **config}
-    
+
     return None
+
 
 def parse_readme_config(repo_path: Path) -> Optional[Dict]:
     """Parse README to find MCP server configuration JSON snippets."""
@@ -1277,24 +1482,26 @@ def parse_readme_config(repo_path: Path) -> Optional[Dict]:
         repo_path / "README.md",
         repo_path / "README.rst",
         repo_path / "README.txt",
-        repo_path / "README"
+        repo_path / "README",
     ]
-    
+
     for readme_file in readme_files:
         if not readme_file.exists():
             continue
-        
+
         try:
-            content = readme_file.read_text(encoding='utf-8', errors='ignore')
-            
+            content = readme_file.read_text(encoding="utf-8", errors="ignore")
+
             # Look for JSON code blocks with mcpServers
             import re
-            
+
             # Pattern 1: JSON code blocks with mcpServers
             # Matches ```json ... "mcpServers": {...} ... ```
-            json_block_pattern = r'```(?:json|javascript)?\s*\n(.*?"mcpServers"\s*:\s*\{[^`]*?\})\s*```'
+            json_block_pattern = (
+                r'```(?:json|javascript)?\s*\n(.*?"mcpServers"\s*:\s*\{[^`]*?\})\s*```'
+            )
             matches = re.finditer(json_block_pattern, content, re.DOTALL | re.IGNORECASE)
-            
+
             for match in matches:
                 json_str = match.group(1)
                 try:
@@ -1312,7 +1519,7 @@ def parse_readme_config(repo_path: Path) -> Optional[Dict]:
                                     "env": server_config.get("env", {}),
                                     "type": server_config.get("type", "stdio"),
                                     "url": server_config.get("url", ""),
-                                    "source": "README.md"
+                                    "source": "README.md",
                                 }
                 except json.JSONDecodeError:
                     # Try to extract just the server config part
@@ -1327,26 +1534,28 @@ def parse_readme_config(repo_path: Path) -> Optional[Dict]:
                         args = []
                         for arg_match in re.finditer(r'"([^"]+)"', args_str):
                             args.append(arg_match.group(1))
-                        
+
                         # Look for cwd and env in the same block
                         cwd_match = re.search(r'"cwd"\s*:\s*"([^"]+)"', json_str)
                         cwd = cwd_match.group(1) if cwd_match else None
-                        
+
                         env = {}
                         env_match = re.search(r'"env"\s*:\s*\{([^}]*?)\}', json_str, re.DOTALL)
                         if env_match:
-                            for env_pair in re.finditer(r'"([^"]+)"\s*:\s*"([^"]+)"', env_match.group(1)):
+                            for env_pair in re.finditer(
+                                r'"([^"]+)"\s*:\s*"([^"]+)"', env_match.group(1)
+                            ):
                                 env[env_pair.group(1)] = env_pair.group(2)
-                        
+
                         return {
                             "id": server_id,
                             "command": command,
                             "args": args,
                             "cwd": cwd,
                             "env": env,
-                            "source": "README.md"
+                            "source": "README.md",
                         }
-            
+
             # Pattern 2: Look for installation/configuration sections with JSON examples
             # Common section headers: Installation, Configuration, Setup, Usage
             section_pattern = r'(?:##?\s+(?:Installation|Configuration|Setup|Usage|Getting Started|Quick Start)[^\n]*\n.*?)(?:```(?:json|javascript)?\s*\n(.*?"mcpServers"[^`]*?)\s*```)'
@@ -1366,31 +1575,35 @@ def parse_readme_config(repo_path: Path) -> Optional[Dict]:
                                     "env": server_config.get("env", {}),
                                     "type": server_config.get("type", "stdio"),
                                     "url": server_config.get("url", ""),
-                                    "source": "README.md"
+                                    "source": "README.md",
                                 }
                 except json.JSONDecodeError:
                     pass
-            
+
         except Exception as e:
             log(f"⚠️ Failed to parse README for {repo_path.name}: {e}")
             continue
-    
+
     return None
+
 
 def parse_pyproject_entrypoint(repo_path: Path) -> Optional[Dict]:
     """Parse pyproject.toml to find the MCP server entrypoint."""
     pyproject = repo_path / "pyproject.toml"
     if not pyproject.exists():
         return None
-    
+
     try:
         content = pyproject.read_text()
-        
+
         # Look for [project.scripts] section
         if "[project.scripts]" in content:
             import re
+
             # Match patterns like: server = "package.module:main"
-            match = re.search(r'\[project\.scripts\][^\[]*?(\w+)\s*=\s*["\']([^"\']+)["\']', content, re.DOTALL)
+            match = re.search(
+                r'\[project\.scripts\][^\[]*?(\w+)\s*=\s*["\']([^"\']+)["\']', content, re.DOTALL
+            )
             if match:
                 script_name, entry = match.groups()
                 # Parse "package.module:main" -> "-m package.module"
@@ -1401,13 +1614,18 @@ def parse_pyproject_entrypoint(repo_path: Path) -> Optional[Dict]:
                         "args": ["-m", module_path],
                         "cwd": str(repo_path),
                         "env": {"PYTHONPATH": str(repo_path / "src")},
-                        "source": "pyproject.toml"
+                        "source": "pyproject.toml",
                     }
-        
+
         # Look for [tool.poetry.scripts]
         if "[tool.poetry.scripts]" in content:
             import re
-            match = re.search(r'\[tool\.poetry\.scripts\][^\[]*?(\w+)\s*=\s*["\']([^"\']+)["\']', content, re.DOTALL)
+
+            match = re.search(
+                r'\[tool\.poetry\.scripts\][^\[]*?(\w+)\s*=\s*["\']([^"\']+)["\']',
+                content,
+                re.DOTALL,
+            )
             if match:
                 script_name, entry = match.groups()
                 if ":" in entry:
@@ -1417,22 +1635,23 @@ def parse_pyproject_entrypoint(repo_path: Path) -> Optional[Dict]:
                         "args": ["-m", module_path],
                         "cwd": str(repo_path),
                         "env": {"PYTHONPATH": str(repo_path / "src")},
-                        "source": "pyproject.toml"
+                        "source": "pyproject.toml",
                     }
     except Exception as e:
         log(f"⚠️ Failed to parse pyproject.toml for {repo_path.name}: {e}")
-    
+
     return None
+
 
 async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
     """Connect to an MCP server from a repository using Cursor config or pyproject.toml."""
     repo_path = REPOS_DIR / repo_name
-    
+
     if not repo_path.exists() or not repo_path.is_dir():
         raise HTTPException(404, f"Repository {repo_name} not found at {repo_path}")
-    
+
     connection_id = f"repo:{repo_name}"
-    
+
     # Check if already connected
     if connection_id in state["connected_servers"]:
         conn = state["connected_servers"][connection_id]
@@ -1443,7 +1662,7 @@ async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
                 "status": "connected",
                 "tools": conn.get("tools", []),
             }
-    
+
     result = {
         "id": connection_id,
         "name": repo_name,
@@ -1451,40 +1670,42 @@ async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
         "tools": [],
         "error": None,
     }
-    
+
     if not FASTMCP_AVAILABLE:
         result["status"] = "error"
         result["error"] = "FastMCP not installed. Install with: pip install fastmcp"
         return result
-    
+
     try:
         # 1. Try Cursor config first (best option - has tested command/args/env)
         cursor_config = find_cursor_config_for_repo(repo_name, repo_path)
-        
+
         # 2. Fallback to pyproject.toml
         if not cursor_config:
             cursor_config = parse_pyproject_entrypoint(repo_path)
-        
+
         if not cursor_config:
             result["status"] = "error"
-            result["error"] = f"No config found for {repo_name}. Add to Cursor mcp.json or define in pyproject.toml"
+            result["error"] = (
+                f"No config found for {repo_name}. Add to Cursor mcp.json or define in pyproject.toml"
+            )
             return result
-        
+
         # Extract config
         command = cursor_config.get("command", "python")
         args = cursor_config.get("args", [])
         cwd = cursor_config.get("cwd", str(repo_path))
         config_env = cursor_config.get("env", {})
         source = cursor_config.get("source", "cursor")
-        
+
         log(f"🔌 Connecting to {repo_name} via {source} config...")
         log(f"   cmd: {command} {' '.join(args[:3])}{'...' if len(args) > 3 else ''}")
-        
+
         # Prepare environment
         env = os.environ.copy()
         env.update(config_env)
         env["PYTHONUNBUFFERED"] = "1"  # Always unbuffered for stdio
-        
+
         # Create stdio transport
         transport = StdioTransport(
             command=command,
@@ -1492,26 +1713,28 @@ async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
             env=env,
             cwd=cwd,
         )
-        
+
         # Create client and connect
         client = Client(transport)
-        
+
         async with client:
             await client.initialize()
             tools = await client.list_tools()
-            
+
             # Convert tools to dict format
             tool_list = []
             for tool in tools:
-                tool_list.append({
-                    "name": tool.name,
-                    "description": tool.description or "No description",
-                    "inputSchema": tool.inputSchema if hasattr(tool, 'inputSchema') else {},
-                })
-            
+                tool_list.append(
+                    {
+                        "name": tool.name,
+                        "description": tool.description or "No description",
+                        "inputSchema": tool.inputSchema if hasattr(tool, "inputSchema") else {},
+                    }
+                )
+
             result["status"] = "connected"
             result["tools"] = tool_list
-            
+
             # Store connection state (note: actual client connection closes after async with block)
             # This is intentional - we only store tool metadata, not the live connection
             state["connected_servers"][connection_id] = {
@@ -1519,9 +1742,9 @@ async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
                 "tools": tool_list,
                 "config": cursor_config,
             }
-            
+
             log(f"✅ Connected to {repo_name}: {len(tool_list)} tools")
-    
+
     except Exception as e:
         result["status"] = "error"
         result["error"] = str(e)
@@ -1532,13 +1755,14 @@ async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
             "tools": [],
         }
         log(f"❌ Failed to connect to {repo_name}: {e}")
-    
+
     return result
+
 
 async def connect_config_server(client: str, server_id: str, server_config: Dict) -> Dict[str, Any]:
     """Connect to an MCP server from client configuration."""
     connection_id = f"{client}:{server_id}"
-    
+
     if connection_id in state["connected_servers"]:
         conn = state["connected_servers"][connection_id]
         if conn.get("status") == "connected":
@@ -1548,7 +1772,7 @@ async def connect_config_server(client: str, server_id: str, server_config: Dict
                 "status": "connected",
                 "tools": conn.get("tools", []),
             }
-    
+
     result = {
         "id": connection_id,
         "name": server_config.get("name", server_id),
@@ -1556,59 +1780,61 @@ async def connect_config_server(client: str, server_id: str, server_config: Dict
         "tools": [],
         "error": None,
     }
-    
+
     if not FASTMCP_AVAILABLE:
         result["status"] = "error"
         result["error"] = "FastMCP not installed"
         return result
-    
+
     try:
         cmd = server_config.get("command")
         if not cmd:
             result["status"] = "error"
             result["error"] = "Missing 'command' in server configuration"
             return result
-        
+
         args = server_config.get("args", [])
         cwd = server_config.get("cwd")
         env = {**os.environ, **server_config.get("env", {})}
-        
+
         server_name = server_config.get("name", server_id)
         log(f"🔌 Connecting to {server_name}...")
-        
+
         transport = StdioTransport(
             command=cmd,
             args=args,
             env=env,
             cwd=cwd,
         )
-        
+
         client_obj = Client(transport)
-        
+
         async with client_obj:
             await client_obj.initialize()
             tools = await client_obj.list_tools()
-            
+
             tool_list = []
             for tool in tools:
-                tool_list.append({
-                    "name": tool.name,
-                    "description": tool.description or "No description",
-                    "inputSchema": tool.inputSchema if hasattr(tool, 'inputSchema') else {},
-                })
-            
+                tool_list.append(
+                    {
+                        "name": tool.name,
+                        "description": tool.description or "No description",
+                        "inputSchema": tool.inputSchema if hasattr(tool, "inputSchema") else {},
+                    }
+                )
+
             result["status"] = "connected"
             result["tools"] = tool_list
-            
+
             # Store connection state (note: actual client connection closes after async with block)
             # This is intentional - we only store tool metadata, not the live connection
             state["connected_servers"][connection_id] = {
                 "status": "connected",
                 "tools": tool_list,
             }
-            
+
             log(f"✅ Connected to {server_name}: {len(tool_list)} tools")
-    
+
     except Exception as e:
         result["status"] = "error"
         result["error"] = str(e)
@@ -1619,12 +1845,14 @@ async def connect_config_server(client: str, server_id: str, server_config: Dict
             "tools": [],
         }
         log(f"❌ Failed to connect: {e}")
-    
+
     return result
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # LOGGING
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 def log(message: str):
     """Add a log message with timestamp."""
@@ -1634,17 +1862,26 @@ def log(message: str):
         state["logs"] = state["logs"][-500:]
     print(f"{timestamp} | {message}")
 
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # API ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 @app.get("/api/clients")
 async def get_discovered_clients():
     """Get all discovered MCP client configurations."""
     return discover_mcp_clients()
 
+
+@app.post("/api/clients/refresh")
+def refresh_clients():
+    """Force refresh of discovered clients."""
+    return discover_mcp_clients()
+
+
 @app.get("/api/clients/{client_name}/servers")
-async def get_client_servers(client_name: str):
+def get_client_servers(client_name: str):
     """Get all servers for a specific client."""
     clients = discover_mcp_clients()
     if client_name not in clients:
@@ -1652,18 +1889,19 @@ async def get_client_servers(client_name: str):
     return {
         "client": client_name,
         "path": clients[client_name]["path"],
-        "servers": clients[client_name]["servers"]
+        "servers": clients[client_name]["servers"],
     }
 
+
 @app.post("/api/clients/{client_name}/servers")
-async def create_server(client_name: str, server_data: dict):
+def create_server(client_name: str, server_data: dict):
     """Add a new MCP server to a client configuration."""
     clients = discover_mcp_clients()
     if client_name not in clients:
         raise HTTPException(404, f"Client {client_name} not found")
-    
+
     config_path = Path(clients[client_name]["path"])
-    
+
     # Map path if in Docker
     in_docker = Path("/.dockerenv").exists() or os.path.exists("/.dockerenv")
     if in_docker:
@@ -1673,7 +1911,7 @@ async def create_server(client_name: str, server_data: dict):
                 parts = Path(path_str).parts
                 if "Roaming" in parts:
                     roaming_idx = [i for i, p in enumerate(parts) if p == "Roaming"][0]
-                    rel_path = Path(*parts[roaming_idx + 1:])
+                    rel_path = Path(*parts[roaming_idx + 1 :])
                     config_path = Path("/host/appdata") / rel_path
             except (IndexError, ValueError):
                 pass
@@ -1683,15 +1921,15 @@ async def create_server(client_name: str, server_data: dict):
                 config_path = Path("/host/home") / rel_path
             except ValueError:
                 pass
-    
+
     if not config_path.exists():
         raise HTTPException(404, f"Config file not found: {config_path}")
-    
+
     try:
         # Read existing config
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
-        
+
         # Determine config structure
         if "mcpServers" in config:
             servers = config["mcpServers"]
@@ -1703,12 +1941,12 @@ async def create_server(client_name: str, server_data: dict):
             # Default to mcpServers format
             config["mcpServers"] = {}
             servers = config["mcpServers"]
-        
+
         # Add new server
         server_id = server_data.get("id", server_data.get("name", "").lower().replace(" ", "-"))
         if server_id in servers:
             raise HTTPException(400, f"Server '{server_id}' already exists")
-        
+
         servers[server_id] = {
             "command": server_data.get("command", ""),
             "args": server_data.get("args", []),
@@ -1721,27 +1959,28 @@ async def create_server(client_name: str, server_data: dict):
             servers[server_id]["type"] = server_data["type"]
         if "url" in server_data:
             servers[server_id]["url"] = server_data["url"]
-        
+
         # Write back to file
-        with open(config_path, 'w', encoding='utf-8') as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
-        
+
         log(f"✅ Added server '{server_id}' to {client_name}")
         return {"success": True, "server_id": server_id}
-    
+
     except Exception as e:
         log(f"❌ Error adding server: {e}")
         raise HTTPException(500, f"Failed to add server: {str(e)}")
 
+
 @app.put("/api/clients/{client_name}/servers/{server_id}")
-async def update_server(client_name: str, server_id: str, server_data: dict):
+def update_server(client_name: str, server_id: str, server_data: dict):
     """Update an existing MCP server configuration."""
     clients = discover_mcp_clients()
     if client_name not in clients:
         raise HTTPException(404, f"Client {client_name} not found")
-    
+
     config_path = Path(clients[client_name]["path"])
-    
+
     # Map path if in Docker (same logic as create)
     in_docker = Path("/.dockerenv").exists() or os.path.exists("/.dockerenv")
     if in_docker:
@@ -1751,7 +1990,7 @@ async def update_server(client_name: str, server_id: str, server_data: dict):
                 parts = Path(path_str).parts
                 if "Roaming" in parts:
                     roaming_idx = [i for i, p in enumerate(parts) if p == "Roaming"][0]
-                    rel_path = Path(*parts[roaming_idx + 1:])
+                    rel_path = Path(*parts[roaming_idx + 1 :])
                     config_path = Path("/host/appdata") / rel_path
             except (IndexError, ValueError):
                 pass
@@ -1761,14 +2000,14 @@ async def update_server(client_name: str, server_id: str, server_data: dict):
                 config_path = Path("/host/home") / rel_path
             except ValueError:
                 pass
-    
+
     if not config_path.exists():
         raise HTTPException(404, f"Config file not found: {config_path}")
-    
+
     try:
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
-        
+
         # Determine config structure
         if "mcpServers" in config:
             servers = config["mcpServers"]
@@ -1778,10 +2017,10 @@ async def update_server(client_name: str, server_id: str, server_data: dict):
             servers = config["servers"]
         else:
             raise HTTPException(404, f"Server '{server_id}' not found")
-        
+
         if server_id not in servers:
             raise HTTPException(404, f"Server '{server_id}' not found")
-        
+
         # Update server config
         if "command" in server_data:
             servers[server_id]["command"] = server_data["command"]
@@ -1795,29 +2034,30 @@ async def update_server(client_name: str, server_id: str, server_data: dict):
             servers[server_id]["type"] = server_data["type"]
         if "url" in server_data:
             servers[server_id]["url"] = server_data["url"]
-        
+
         # Write back
-        with open(config_path, 'w', encoding='utf-8') as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
-        
+
         log(f"✅ Updated server '{server_id}' in {client_name}")
         return {"success": True, "server_id": server_id}
-    
+
     except HTTPException:
         raise
     except Exception as e:
         log(f"❌ Error updating server: {e}")
         raise HTTPException(500, f"Failed to update server: {str(e)}")
 
+
 @app.delete("/api/clients/{client_name}/servers/{server_id}")
-async def delete_server(client_name: str, server_id: str):
+def delete_server(client_name: str, server_id: str):
     """Delete an MCP server from a client configuration."""
     clients = discover_mcp_clients()
     if client_name not in clients:
         raise HTTPException(404, f"Client {client_name} not found")
-    
+
     config_path = Path(clients[client_name]["path"])
-    
+
     # Map path if in Docker (same logic as create)
     in_docker = Path("/.dockerenv").exists() or os.path.exists("/.dockerenv")
     if in_docker:
@@ -1827,7 +2067,7 @@ async def delete_server(client_name: str, server_id: str):
                 parts = Path(path_str).parts
                 if "Roaming" in parts:
                     roaming_idx = [i for i, p in enumerate(parts) if p == "Roaming"][0]
-                    rel_path = Path(*parts[roaming_idx + 1:])
+                    rel_path = Path(*parts[roaming_idx + 1 :])
                     config_path = Path("/host/appdata") / rel_path
             except (IndexError, ValueError):
                 pass
@@ -1837,14 +2077,14 @@ async def delete_server(client_name: str, server_id: str):
                 config_path = Path("/host/home") / rel_path
             except ValueError:
                 pass
-    
+
     if not config_path.exists():
         raise HTTPException(404, f"Config file not found: {config_path}")
-    
+
     try:
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
-        
+
         # Determine config structure
         if "mcpServers" in config:
             servers = config["mcpServers"]
@@ -1854,114 +2094,32 @@ async def delete_server(client_name: str, server_id: str):
             servers = config["servers"]
         else:
             raise HTTPException(404, f"Server '{server_id}' not found")
-        
+
         if server_id not in servers:
             raise HTTPException(404, f"Server '{server_id}' not found")
-        
+
         # Delete server
         del servers[server_id]
-        
+
         # Write back
-        with open(config_path, 'w', encoding='utf-8') as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
-        
+
         log(f"✅ Deleted server '{server_id}' from {client_name}")
         return {"success": True, "server_id": server_id}
-    
+
     except HTTPException:
         raise
     except Exception as e:
         log(f"❌ Error deleting server: {e}")
         raise HTTPException(500, f"Failed to delete server: {str(e)}")
 
+
 @app.get("/api/repos")
-async def get_repo_analysis():
+def get_repo_analysis():
     """Get static analysis of all MCP repositories."""
     return scan_repos()
 
-def detect_installation_methods(repo_path: Path) -> Dict[str, Any]:
-    """Detect available installation methods for an MCP server."""
-    methods = {
-        "mcpb": False,
-        "npm": False,
-        "npx": False,
-        "python": True,  # Always available as fallback
-        "mcpb_path": None,
-        "npm_package": None,
-        "npx_command": None
-    }
-    
-    # Check for MCPB (manifest.json)
-    manifest_path = repo_path / "manifest.json"
-    if manifest_path.exists():
-        methods["mcpb"] = True
-        methods["mcpb_path"] = str(manifest_path)
-    
-    # Check for npm/npx setup (package.json)
-    package_json = repo_path / "package.json"
-    if package_json.exists():
-        try:
-            with open(package_json, 'r', encoding='utf-8') as f:
-                pkg = json.load(f)
-            
-            # Check for bin field (npx support)
-            if "bin" in pkg:
-                methods["npx"] = True
-                if isinstance(pkg["bin"], dict):
-                    # Get first bin command
-                    methods["npx_command"] = list(pkg["bin"].keys())[0]
-                elif isinstance(pkg["bin"], str):
-                    methods["npx_command"] = pkg["name"] if "name" in pkg else repo_path.name
-            
-            # Check for name field (npm package)
-            if "name" in pkg:
-                methods["npm"] = True
-                methods["npm_package"] = pkg["name"]
-        except Exception:
-            pass
-    
-    return methods
-
-def get_client_config_hints(client_name: str) -> Dict[str, str]:
-    """Get installation hints for different MCP clients."""
-    hints = {
-        "claude-desktop": {
-            "config_path": "Claude → Settings → Developer → Edit Config",
-            "config_file": "claude_desktop_config.json",
-            "location": "%APPDATA%\\Claude\\claude_desktop_config.json (Windows) or ~/.config/Claude/claude_desktop_config.json (Linux/Mac)",
-            "mcpb_hint": "Open Claude Desktop → Settings → Developer → Add MCP Server → Paste manifest.json path or drag & drop"
-        },
-        "cursor": {
-            "config_path": "Cursor → Settings → Extensions → MCP",
-            "config_file": "mcp.json",
-            "location": "%APPDATA%\\Cursor\\User\\globalStorage\\...\\cline_mcp_settings.json or ~/.cursor/mcp.json",
-            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
-        },
-        "windsurf-ide": {
-            "config_path": "Windsurf → Settings → MCP Servers",
-            "config_file": "mcp_config.json",
-            "location": "%APPDATA%\\Codeium\\Windsurf\\mcp_config.json",
-            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
-        },
-        "zed-ide": {
-            "config_path": "Zed → Settings → MCP",
-            "config_file": "settings.json",
-            "location": "~/.config/zed/settings.json or ~/Library/Application Support/Zed/settings.json",
-            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
-        },
-        "antigravity-ide": {
-            "config_path": "Antigravity → Agent Panel → MCP Servers → Manage",
-            "config_file": "mcp_config.json",
-            "location": "%APPDATA%\\Antigravity\\mcp_config.json",
-            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
-        }
-    }
-    return hints.get(client_name, {
-        "config_path": "Client settings",
-        "config_file": "config.json",
-        "location": "Check client documentation",
-        "mcpb_hint": "Check if client supports MCPB"
-    })
 
 def detect_installation_methods(repo_path: Path) -> Dict[str, Any]:
     """Detect available installation methods for an MCP server."""
@@ -1972,22 +2130,22 @@ def detect_installation_methods(repo_path: Path) -> Dict[str, Any]:
         "python": True,  # Always available as fallback
         "mcpb_path": None,
         "npm_package": None,
-        "npx_command": None
+        "npx_command": None,
     }
-    
+
     # Check for MCPB (manifest.json)
     manifest_path = repo_path / "manifest.json"
     if manifest_path.exists():
         methods["mcpb"] = True
         methods["mcpb_path"] = str(manifest_path)
-    
+
     # Check for npm/npx setup (package.json)
     package_json = repo_path / "package.json"
     if package_json.exists():
         try:
-            with open(package_json, 'r', encoding='utf-8') as f:
+            with open(package_json, "r", encoding="utf-8") as f:
                 pkg = json.load(f)
-            
+
             # Check for bin field (npx support)
             if "bin" in pkg:
                 methods["npx"] = True
@@ -1996,15 +2154,178 @@ def detect_installation_methods(repo_path: Path) -> Dict[str, Any]:
                     methods["npx_command"] = list(pkg["bin"].keys())[0]
                 elif isinstance(pkg["bin"], str):
                     methods["npx_command"] = pkg["name"] if "name" in pkg else repo_path.name
-            
+
             # Check for name field (npm package)
             if "name" in pkg:
                 methods["npm"] = True
                 methods["npm_package"] = pkg["name"]
         except Exception:
             pass
-    
+
     return methods
+    return methods
+
+
+def detect_fullstack_features(repo_path: Path) -> Dict[str, Any]:
+    """Detect fullstack capabilities (frontend, backend, infra, docs)."""
+    features = {
+        "is_fullstack": False,
+        "frontend": [],
+        "backend": [],
+        "infrastructure": [],
+        "docs": [],
+        "git": {"exists": False, "dirty": False, "branch": "unknown"},
+        "runtime": {"running": False, "container_id": None},
+    }
+
+    # --- Frontend Detection ---
+    package_json = repo_path / "package.json"
+    if package_json.exists():
+        try:
+            with open(package_json, "r", encoding="utf-8") as f:
+                pkg = json.load(f)
+                deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+
+                if "react" in deps:
+                    features["frontend"].append("React")
+                if "vue" in deps:
+                    features["frontend"].append("Vue")
+                if "svelte" in deps:
+                    features["frontend"].append("Svelte")
+                if "angular" in deps:
+                    features["frontend"].append("Angular")
+                if "next" in deps:
+                    features["frontend"].append("Next.js")
+                if "vite" in deps:
+                    features["frontend"].append("Vite")
+                if "tailwindcss" in deps:
+                    features["frontend"].append("Tailwind")
+                if "typescript" in deps:
+                    features["frontend"].append("TypeScript")
+        except:
+            pass
+
+    # Simple file checks
+    if list(repo_path.glob("*.html")):
+        features["frontend"].append("HTML")
+    if list(repo_path.glob("*.css")):
+        features["frontend"].append("CSS")
+
+    # --- Backend Detection ---
+    # Python
+    req_txt = repo_path / "requirements.txt"
+    py_toml = repo_path / "pyproject.toml"
+    if req_txt.exists() or py_toml.exists():
+        features["backend"].append("Python")
+        # Read content to be more specific
+        content = ""
+        if req_txt.exists():
+            content += req_txt.read_text(errors="ignore")
+        if py_toml.exists():
+            content += py_toml.read_text(errors="ignore")
+
+        if "fastapi" in content:
+            features["backend"].append("FastAPI")
+        if "flask" in content:
+            features["backend"].append("Flask")
+        if "django" in content:
+            features["backend"].append("Django")
+        if "starlette" in content:
+            features["backend"].append("Starlette")
+
+    # Node Backend (Express/Nest)
+    if package_json.exists():
+        try:
+            with open(package_json, "r", encoding="utf-8") as f:
+                pkg = json.load(f)
+                deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+                if "express" in deps:
+                    features["backend"].append("Express")
+                if "nestjs" in deps:
+                    features["backend"].append("NestJS")
+        except:
+            pass
+
+    # --- Infrastructure ---
+    if (repo_path / "docker-compose.yml").exists() or (repo_path / "docker-compose.yaml").exists():
+        features["infrastructure"].append("Docker Compose")
+    if (repo_path / "Dockerfile").exists():
+        features["infrastructure"].append("Dockerfile")
+    if (repo_path / "k8s").exists() or (repo_path / "kubernetes").exists():
+        features["infrastructure"].append("Kubernetes")
+
+    # --- Docs ---
+    if (repo_path / "README.md").exists():
+        features["docs"].append("README")
+    if (repo_path / "docs").exists():
+        features["docs"].append("docs/")
+    if (repo_path / "openapi.json").exists() or (repo_path / "openapi.yaml").exists():
+        features["docs"].append("OpenAPI")
+
+    # --- Git Status ---
+    git_dir = repo_path / ".git"
+    if git_dir.exists():
+        features["git"]["exists"] = True
+        try:
+            # Check branch
+            branch = subprocess.check_output(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=repo_path,
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+            features["git"]["branch"] = branch
+
+            # Check dirty
+            status = subprocess.check_output(
+                ["git", "status", "--porcelain"],
+                cwd=repo_path,
+                text=True,
+                stderr=subprocess.DEVNULL,
+            )
+            features["git"]["dirty"] = bool(status.strip())
+        except:
+            pass
+
+    # --- Runtime (Docker) ---
+    # Try to find a container related to this repo
+    # Strategy: Match folder name to formatting names
+    repo_name = repo_path.name.lower()
+    try:
+        # Get all running container names and IDs
+        # docker ps --format "{{.ID}}|{{.Names}}"
+        output = subprocess.check_output(
+            ["docker", "ps", "--format", "{{.ID}}|{{.Names}}"], text=True, stderr=subprocess.DEVNULL
+        )
+        for line in output.strip().splitlines():
+            if "|" in line:
+                cid, name = line.split("|", 1)
+                # Loose matching: if repo name is substring of container name or vice versa
+                if repo_name in name.lower() or name.lower() in repo_name:
+                    features["runtime"]["running"] = True
+                    features["runtime"]["container_id"] = cid
+                    features["runtime"]["name"] = name
+                    break
+    except:
+        pass
+
+    # Decision
+    has_frontend = len(features["frontend"]) > 0
+    has_backend = len(features["backend"]) > 0
+    has_docker = "Docker Compose" in features["infrastructure"]
+
+    # It's fullstack if it has significant parts of both or is a known type
+    if (
+        (has_frontend and has_backend)
+        or (has_frontend and has_docker)
+        or (has_backend and has_docker)
+    ):
+        features["is_fullstack"] = True
+    elif (repo_path / "package.json").exists() and (repo_path / "requirements.txt").exists():
+        features["is_fullstack"] = True
+
+    return features
+
 
 def get_client_config_hints(client_name: str) -> Dict[str, str]:
     """Get installation hints for different MCP clients."""
@@ -2013,65 +2334,69 @@ def get_client_config_hints(client_name: str) -> Dict[str, str]:
             "config_path": "Claude → Settings → Developer → Edit Config",
             "config_file": "claude_desktop_config.json",
             "location": "%APPDATA%\\Claude\\claude_desktop_config.json (Windows) or ~/.config/Claude/claude_desktop_config.json (Linux/Mac)",
-            "mcpb_hint": "Open Claude Desktop → Settings → Developer → Add MCP Server → Paste manifest.json path or drag & drop"
+            "mcpb_hint": "Open Claude Desktop → Settings → Developer → Add MCP Server → Paste manifest.json path or drag & drop",
         },
         "cursor": {
             "config_path": "Cursor → Settings → Extensions → MCP",
             "config_file": "mcp.json",
             "location": "%APPDATA%\\Cursor\\User\\globalStorage\\...\\cline_mcp_settings.json or ~/.cursor/mcp.json",
-            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
+            "mcpb_hint": "MCPB not directly supported - use JSON snippet method",
         },
         "windsurf-ide": {
             "config_path": "Windsurf → Settings → MCP Servers",
             "config_file": "mcp_config.json",
             "location": "%APPDATA%\\Codeium\\Windsurf\\mcp_config.json",
-            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
+            "mcpb_hint": "MCPB not directly supported - use JSON snippet method",
         },
         "zed-ide": {
             "config_path": "Zed → Settings → MCP",
             "config_file": "settings.json",
             "location": "~/.config/zed/settings.json or ~/Library/Application Support/Zed/settings.json",
-            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
+            "mcpb_hint": "MCPB not directly supported - use JSON snippet method",
         },
         "antigravity-ide": {
             "config_path": "Antigravity → Agent Panel → MCP Servers → Manage",
             "config_file": "mcp_config.json",
             "location": "%APPDATA%\\Antigravity\\mcp_config.json",
-            "mcpb_hint": "MCPB not directly supported - use JSON snippet method"
-        }
+            "mcpb_hint": "MCPB not directly supported - use JSON snippet method",
+        },
     }
-    return hints.get(client_name, {
-        "config_path": "Client settings",
-        "config_file": "config.json",
-        "location": "Check client documentation",
-        "mcpb_hint": "Check if client supports MCPB"
-    })
+    return hints.get(
+        client_name,
+        {
+            "config_path": "Client settings",
+            "config_file": "config.json",
+            "location": "Check client documentation",
+            "mcpb_hint": "Check if client supports MCPB",
+        },
+    )
+
 
 @app.get("/api/available-servers")
 async def get_available_servers():
     """Get list of available MCP servers from scanned repositories."""
     available = []
-    
+
     if not REPOS_DIR.exists():
         return available
-    
+
     repos = scan_repos()  # Get scanned repos
     for repo in repos:
         repo_path = Path(repo["path"])
-        
+
         # Detect installation methods
         install_methods = detect_installation_methods(repo_path)
-        
+
         # Determine best config source (prioritize MCPB, then npm/npx, then README, then pyproject, then inferred)
         config_data = None
         source = "inferred"
-        
+
         # Priority 1: MCPB (if available)
         if install_methods["mcpb"]:
             # For MCPB, we still need to provide a JSON snippet for clients that don't support MCPB directly
             # But mark it as MCPB-preferred
             source = "MCPB (preferred)"
-        
+
         # Priority 2: npm/npx (if available)
         if install_methods["npx"]:
             if not config_data:
@@ -2080,7 +2405,7 @@ async def get_available_servers():
                     "args": ["-y", install_methods["npx_command"] or repo["name"]],
                     "cwd": None,
                     "env": {},
-                    "type": "stdio"
+                    "type": "stdio",
                 }
                 source = "npm/npx"
         elif install_methods["npm"]:
@@ -2091,24 +2416,24 @@ async def get_available_servers():
                     "args": [install_methods["npm_package"] or repo["name"]],
                     "cwd": None,
                     "env": {},
-                    "type": "stdio"
+                    "type": "stdio",
                 }
                 source = "npm"
-        
+
         # Priority 3: Try README (but user says these are often wrong, so lower priority)
         if not config_data:
             readme_config = parse_readme_config(repo_path)
             if readme_config:
                 config_data = readme_config
                 source = "README.md (verify accuracy)"
-        
+
         # Priority 4: pyproject.toml
         if not config_data:
             entrypoint = parse_pyproject_entrypoint(repo_path)
             if entrypoint:
                 config_data = entrypoint
                 source = "pyproject.toml"
-        
+
         # Priority 5: Infer from structure
         if not config_data:
             # Look for common entry points
@@ -2116,9 +2441,9 @@ async def get_available_servers():
                 repo_path / "fastmcp_server.py",
                 repo_path / "mcp_server.py",
                 repo_path / "server.py",
-                repo_path / "main.py"
+                repo_path / "main.py",
             ]
-            
+
             for server_file in server_files:
                 if server_file.exists():
                     if "src" in str(repo_path):
@@ -2128,7 +2453,7 @@ async def get_available_servers():
                             "args": ["-m", pkg_name],
                             "cwd": str(repo_path),
                             "env": {"PYTHONPATH": str(repo_path / "src")},
-                            "source": "inferred (package structure)"
+                            "source": "inferred (package structure)",
                         }
                     else:
                         config_data = {
@@ -2136,44 +2461,48 @@ async def get_available_servers():
                             "args": [str(server_file.relative_to(repo_path))],
                             "cwd": str(repo_path),
                             "env": {},
-                            "source": "inferred (file structure)"
+                            "source": "inferred (file structure)",
                         }
                     break
-        
+
         # If we have config data, add to available list
         if config_data:
-            available.append({
-                "id": repo["name"].replace("_", "-").replace(" ", "-").lower(),
-                "name": repo["name"].replace("-", " ").replace("_", " ").title(),
-                "repo": repo["name"],
-                "command": config_data.get("command", "python"),
-                "args": config_data.get("args", []),
-                "cwd": config_data.get("cwd", str(repo_path)),
-                "env": config_data.get("env", {}),
-                "type": config_data.get("type", "stdio"),
-                "url": config_data.get("url", ""),
-                "source": source,
-                "tools": repo.get("tools", 0),
-                "fastmcp_version": repo.get("fastmcp_version"),
-                "install_methods": install_methods,
-                "has_mcpb": install_methods["mcpb"],
-                "has_npm": install_methods["npm"] or install_methods["npx"]
-            })
-    
+            available.append(
+                {
+                    "id": repo["name"].replace("_", "-").replace(" ", "-").lower(),
+                    "name": repo["name"].replace("-", " ").replace("_", " ").title(),
+                    "repo": repo["name"],
+                    "command": config_data.get("command", "python"),
+                    "args": config_data.get("args", []),
+                    "cwd": config_data.get("cwd", str(repo_path)),
+                    "env": config_data.get("env", {}),
+                    "type": config_data.get("type", "stdio"),
+                    "url": config_data.get("url", ""),
+                    "source": source,
+                    "tools": repo.get("tools", 0),
+                    "fastmcp_version": repo.get("fastmcp_version"),
+                    "install_methods": install_methods,
+                    "has_mcpb": install_methods["mcpb"],
+                    "has_npm": install_methods["npm"] or install_methods["npx"],
+                }
+            )
+
     return available
 
+
 @app.get("/api/servers/{client}/{server_id}")
-async def get_server_details(client: str, server_id: str):
+def get_server_details(client: str, server_id: str):
     """Get details about a specific server."""
     clients = discover_mcp_clients()
     if client not in clients:
         raise HTTPException(404, f"Client {client} not found")
-    
+
     for server in clients[client]["servers"]:
         if server["id"] == server_id:
             return server
-    
+
     raise HTTPException(404, f"Server {server_id} not found")
+
 
 @app.post("/api/servers/{client}/{server_id}/connect")
 async def connect_to_server(client: str, server_id: str):
@@ -2181,18 +2510,20 @@ async def connect_to_server(client: str, server_id: str):
     clients = discover_mcp_clients()
     if client not in clients:
         raise HTTPException(404, f"Client {client} not found")
-    
+
     for server in clients[client]["servers"]:
         if server["id"] == server_id:
             result = await connect_config_server(client, server_id, server)
             return result
-    
+
     raise HTTPException(404, f"Server {server_id} not found")
+
 
 @app.post("/api/repos/{repo_name}/connect")
 async def connect_repo_endpoint(repo_name: str):
     """Connect to an MCP server from a repository."""
     return await connect_repo_server(repo_name)
+
 
 @app.get("/api/connections")
 async def list_connections():
@@ -2200,25 +2531,29 @@ async def list_connections():
     connections = []
     for conn_id, conn in state["connected_servers"].items():
         if conn.get("status") == "connected":
-            connections.append({
-                "id": conn_id,
-                "name": conn_id.split(":")[-1] if ":" in conn_id else conn_id,
-                "tools": conn.get("tools", []),
-                "tool_count": len(conn.get("tools", [])),
-            })
+            connections.append(
+                {
+                    "id": conn_id,
+                    "name": conn_id.split(":")[-1] if ":" in conn_id else conn_id,
+                    "tools": conn.get("tools", []),
+                    "tool_count": len(conn.get("tools", [])),
+                }
+            )
     return {"connections": connections}
+
 
 @app.get("/api/connections/{connection_id}/tools")
 async def get_connection_tools(connection_id: str):
     """Get tools from a connected server."""
     if connection_id not in state["connected_servers"]:
         raise HTTPException(404, f"Connection {connection_id} not found")
-    
+
     conn = state["connected_servers"][connection_id]
     if conn.get("status") != "connected":
         raise HTTPException(400, f"Server not connected: {conn.get('error', 'Unknown error')}")
-    
+
     return {"tools": conn.get("tools", [])}
+
 
 @app.post("/api/execute")
 async def execute_tool_endpoint(request: Request):
@@ -2227,71 +2562,74 @@ async def execute_tool_endpoint(request: Request):
     repo_name = data.get("repo_name")
     tool_name = data.get("tool_name")
     parameters = data.get("parameters", {})
-    
+
     if not repo_name or not tool_name:
         raise HTTPException(400, "repo_name and tool_name required")
-    
+
     if not FASTMCP_AVAILABLE:
         raise HTTPException(503, "FastMCP not available")
-    
+
     repo_path = REPOS_DIR / repo_name
     if not repo_path.exists() or not repo_path.is_dir():
         raise HTTPException(404, f"Repository {repo_name} not found at {repo_path}")
-    
+
     # Find config for this repo
     cursor_config = find_cursor_config_for_repo(repo_name, repo_path)
     if not cursor_config:
         cursor_config = parse_pyproject_entrypoint(repo_path)
-    
+
     if not cursor_config:
         raise HTTPException(400, f"No config found for {repo_name}")
-    
+
     try:
         command = cursor_config.get("command", "python")
         args = cursor_config.get("args", [])
         cwd = cursor_config.get("cwd", str(repo_path))
         config_env = cursor_config.get("env", {})
-        
+
         env = os.environ.copy()
         env.update(config_env)
         env["PYTHONUNBUFFERED"] = "1"
-        
+
         log(f"🔧 Executing {tool_name} on {repo_name}...")
-        
+
         transport = StdioTransport(
             command=command,
             args=args,
             env=env,
             cwd=cwd,
         )
-        
+
         client = Client(transport)
-        
+
         async with client:
             await client.initialize()
             result = await client.call_tool(tool_name, parameters)
-            
+
             log(f"✅ Executed {tool_name} successfully")
-            
+
             return {
                 "status": "success",
                 "tool": tool_name,
                 "result": result,
             }
-    
+
     except Exception as e:
         log(f"❌ Tool execution failed: {e}")
         raise HTTPException(500, f"Execution failed: {str(e)}")
+
 
 @app.get("/api/progress")
 async def get_progress():
     """Get current scan progress."""
     return state["scan_progress"]
 
+
 @app.get("/api/logs")
 async def get_logs():
     """Get recent log messages."""
     return {"logs": state["logs"][-100:]}
+
 
 @app.get("/api/ai/read-file")
 async def ai_read_file(path: str):
@@ -2301,39 +2639,42 @@ async def ai_read_file(path: str):
         file_path = Path(path)
         if not file_path.is_absolute():
             file_path = REPOS_DIR / path
-        
+
         # Ensure path is within repos dir
         file_path = file_path.resolve()
         if not str(file_path).startswith(str(REPOS_DIR.resolve())):
             return {"error": "Access denied: path must be within repos directory"}
-        
+
         if not file_path.exists():
             return {"error": f"File not found: {path}"}
-        
+
         if file_path.is_dir():
             # List directory contents
             items = []
             for item in sorted(file_path.iterdir())[:100]:  # Limit to 100 items
-                items.append({
-                    "name": item.name,
-                    "type": "dir" if item.is_dir() else "file",
-                    "size": item.stat().st_size if item.is_file() else None
-                })
+                items.append(
+                    {
+                        "name": item.name,
+                        "type": "dir" if item.is_dir() else "file",
+                        "size": item.stat().st_size if item.is_file() else None,
+                    }
+                )
             return {"type": "directory", "path": str(file_path), "items": items}
-        
+
         # Read file (limit size)
         size = file_path.stat().st_size
         if size > 100_000:  # 100KB limit
             return {"error": f"File too large ({size} bytes). Max 100KB."}
-        
+
         try:
-            content = file_path.read_text(encoding='utf-8')
+            content = file_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             return {"error": "Binary file, cannot read as text"}
-        
+
         return {"type": "file", "path": str(file_path), "content": content, "size": size}
     except Exception as e:
         return {"error": str(e)}
+
 
 @app.get("/api/ai/search-web")
 async def ai_search_web(query: str, num_results: int = 5):
@@ -2344,46 +2685,47 @@ async def ai_search_web(query: str, num_results: int = 5):
             resp = await client.get(
                 "https://html.duckduckgo.com/html/",
                 params={"q": query},
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                },
             )
-            
+
             if resp.status_code != 200:
                 return {"error": f"Search failed: {resp.status_code}"}
-            
+
             # Parse results (simple regex extraction)
             import re
+
             html = resp.text
-            
+
             results = []
             # Find result links and snippets
             pattern = r'<a rel="nofollow" class="result__a" href="([^"]+)"[^>]*>([^<]+)</a>.*?<a class="result__snippet"[^>]*>([^<]*)</a>'
             matches = re.findall(pattern, html, re.DOTALL)[:num_results]
-            
+
             for url, title, snippet in matches:
                 # Clean up URL (DuckDuckGo redirects)
                 if "uddg=" in url:
-                    actual_url = re.search(r'uddg=([^&]+)', url)
+                    actual_url = re.search(r"uddg=([^&]+)", url)
                     if actual_url:
                         from urllib.parse import unquote
+
                         url = unquote(actual_url.group(1))
-                
-                results.append({
-                    "title": title.strip(),
-                    "url": url,
-                    "snippet": snippet.strip()
-                })
-            
+
+                results.append({"title": title.strip(), "url": url, "snippet": snippet.strip()})
+
             return {"query": query, "results": results, "count": len(results)}
-    
+
     except Exception as e:
         return {"error": str(e)}
+
 
 @app.get("/api/ai/list-repos")
 async def ai_list_repos():
     """List all repos in the repos directory with basic info."""
     repos = []
     for item in sorted(REPOS_DIR.iterdir()):
-        if item.is_dir() and not item.name.startswith('.'):
+        if item.is_dir() and not item.name.startswith("."):
             info = {"name": item.name, "path": str(item)}
             # Check for common files
             if (item / "README.md").exists():
@@ -2397,41 +2739,75 @@ async def ai_list_repos():
             repos.append(info)
     return {"repos": repos, "count": len(repos), "base_path": str(REPOS_DIR)}
 
+
 @app.get("/api/ollama/models")
 async def get_ollama_models():
-    """Get list of available Ollama models."""
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+    """Get list of available AI models from Ollama, LM Studio, and vLLM."""
+    models = []
+    errors = []
+
+    async with httpx.AsyncClient(timeout=3.0) as client:
+        # 1. Ollama
+        try:
+            logger.info(f"Checking Ollama at {OLLAMA_URL}")
             resp = await client.get(f"{OLLAMA_URL}/api/tags")
             if resp.status_code == 200:
                 data = resp.json()
-                models = []
                 for model in data.get("models", []):
-                    name = model.get("name", "")
                     size_gb = model.get("size", 0) / (1024**3)
-                    models.append({
-                        "name": name,
-                        "size": f"{size_gb:.1f}GB",
-                        "modified": model.get("modified_at", "")[:10],
-                        "family": model.get("details", {}).get("family", "unknown")
-                    })
-                return {"models": models, "count": len(models)}
-            else:
-                return {"models": [], "error": f"Ollama returned {resp.status_code}"}
-    except Exception as e:
-        return {"models": [], "error": str(e)}
+                    models.append(
+                        {
+                            "name": model.get("name"),
+                            "size": f"{size_gb:.1f}GB",
+                            "modified": model.get("modified_at", "")[:10],
+                            "provider": "Ollama",
+                        }
+                    )
+        except Exception as e:
+            errors.append(f"Ollama: {str(e)}")
+
+        # 2. LM Studio (OpenAI Compatible)
+        try:
+            logger.info(f"Checking LM Studio at {LM_STUDIO_URL}")
+            resp = await client.get(f"{LM_STUDIO_URL}/v1/models")
+            if resp.status_code == 200:
+                data = resp.json()
+                for model in data.get("data", []):
+                    models.append(
+                        {
+                            "name": model.get("id"),
+                            "size": "—",  # API doesn't always return size
+                            "modified": "",
+                            "provider": "LM Studio",
+                        }
+                    )
+        except Exception as e:
+            errors.append(f"LM Studio: {str(e)}")
+
+        # 3. vLLM (OpenAI Compatible)
+        try:
+            logger.info(f"Checking vLLM at {VLLM_URL}")
+            resp = await client.get(f"{VLLM_URL}/v1/models")
+            if resp.status_code == 200:
+                data = resp.json()
+                for model in data.get("data", []):
+                    models.append(
+                        {"name": model.get("id"), "size": "—", "modified": "", "provider": "vLLM"}
+                    )
+        except Exception as e:
+            errors.append(f"vLLM: {str(e)}")
+
+    return {"models": models, "count": len(models), "errors": errors}
+
 
 @app.get("/api/ai/preprompts")
 async def get_preprompts():
     """Get available AI preprompt personalities from database."""
     try:
         import preprompt_db
+
         preprompts = preprompt_db.list_preprompts()
-        return {
-            "preprompts": preprompts,
-            "count": len(preprompts),
-            "default": "MCP Developer"
-        }
+        return {"preprompts": preprompts, "count": len(preprompts), "default": "MCP Developer"}
     except Exception as e:
         # Fallback to builtin preprompts
         log(f"❌ Error loading preprompts: {e}")
@@ -2442,48 +2818,53 @@ async def get_preprompts():
             ],
             "count": len(PREPROMPTS),
             "default": "dev",
-            "error": str(e)
+            "error": str(e),
         }
+
 
 @app.post("/api/preprompts/add")
 async def add_preprompt_endpoint(request: Request):
     """Add a new preprompt."""
     import preprompt_db
+
     data = await request.json()
-    
+
     result = preprompt_db.add_preprompt(
         name=data.get("name"),
         prompt_text=data.get("prompt_text"),
         emoji=data.get("emoji", "🤖"),
         source=data.get("source", "user"),
         author=data.get("author", "user"),
-        tags=data.get("tags")
+        tags=data.get("tags"),
     )
     return result
+
 
 @app.post("/api/preprompts/import")
 async def import_preprompt_markdown(request: Request):
     """Import preprompt from markdown file."""
     import preprompt_db
+
     data = await request.json()
-    
+
     content = data.get("content", "")
     filename = data.get("filename", "imported.md")
-    
+
     result = preprompt_db.import_from_markdown(content, filename)
     return result
+
 
 @app.post("/api/preprompts/ai-refine")
 async def ai_refine_preprompt(request: Request):
     """AI-generate an elaborate preprompt from simple text."""
     import preprompt_db
-    
+
     data = await request.json()
     simple_text = data.get("text", "")
-    
+
     if not simple_text:
         return {"success": False, "error": "No text provided"}
-    
+
     # Generate preprompt using Ollama
     refine_prompt = f"""You are a creative AI assistant helping design preprompts for an AI assistant personality.
 
@@ -2499,7 +2880,7 @@ Create an elaborate, engaging preprompt that:
 Format the output as a preprompt that starts with "You are..." and describes the personality, capabilities, and how they should help with code.
 
 Be creative and fun while staying professional!"""
-    
+
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
@@ -2507,30 +2888,38 @@ Be creative and fun while staying professional!"""
                 json={
                     "model": data.get("model_id", "qwen2.5:14b"),
                     "prompt": refine_prompt,
-                    "stream": False
-                }
+                    "stream": False,
+                },
             )
-            
+
             if resp.status_code != 200:
                 return {"success": False, "error": f"Ollama returned {resp.status_code}"}
-            
+
             result = resp.json()
             generated_prompt = result.get("response", "")
-            
+
             # Extract emoji from simple_text or generate one
             emoji_map = {
-                "coin": "🪙", "butterfly": "🦋", "pirate": "🏴‍☠️",
-                "zen": "🧘", "aussie": "🦘", "artist": "🎨",
-                "chef": "👨‍🍳", "detective": "🕵️", "wizard": "🧙",
-                "robot": "🤖", "cat": "🐱", "dog": "🐕"
+                "coin": "🪙",
+                "butterfly": "🦋",
+                "pirate": "🏴‍☠️",
+                "zen": "🧘",
+                "aussie": "🦘",
+                "artist": "🎨",
+                "chef": "👨‍🍳",
+                "detective": "🕵️",
+                "wizard": "🧙",
+                "robot": "🤖",
+                "cat": "🐱",
+                "dog": "🐕",
             }
-            
+
             emoji = "🤖"
             for key, val in emoji_map.items():
                 if key in simple_text.lower():
                     emoji = val
                     break
-            
+
             # Save to database
             name = simple_text.title()
             save_result = preprompt_db.add_preprompt(
@@ -2538,72 +2927,83 @@ Be creative and fun while staying professional!"""
                 prompt_text=generated_prompt,
                 emoji=emoji,
                 source="ai_generated",
-                author="ai"
+                author="ai",
             )
-            
+
             return {
                 "success": save_result["success"],
                 "preprompt": generated_prompt,
                 "name": name,
                 "emoji": emoji,
-                "id": save_result.get("id")
+                "id": save_result.get("id"),
             }
-    
+
     except Exception as e:
         return {"success": False, "error": str(e)}
+
 
 @app.get("/api/preprompts/{identifier}")
 async def get_preprompt_endpoint(identifier: str):
     """Get a specific preprompt by ID or name."""
     import preprompt_db
+
     preprompt = preprompt_db.get_preprompt(identifier)
-    
+
     if preprompt:
         return preprompt
     else:
         return {"error": "Preprompt not found"}
 
+
 @app.put("/api/preprompts/{identifier}")
 async def update_preprompt_endpoint(identifier: str, request: Request):
     """Update a preprompt."""
     import preprompt_db
+
     data = await request.json()
-    
+
     result = preprompt_db.update_preprompt(
         identifier=identifier,
         name=data.get("name"),
         emoji=data.get("emoji"),
         prompt_text=data.get("prompt_text"),
-        tags=data.get("tags")
+        tags=data.get("tags"),
     )
     return result
+
 
 @app.delete("/api/preprompts/{identifier}")
 async def delete_preprompt_endpoint(identifier: str):
     """Delete a preprompt."""
     import preprompt_db
+
     result = preprompt_db.delete_preprompt(identifier)
     return result
+
 
 @app.post("/api/preprompts/seed")
 async def seed_preprompts():
     """Seed database with built-in preprompts."""
     import preprompt_db
+
     try:
         preprompt_db.seed_builtin_preprompts()
         return {"success": True, "message": "Built-in preprompts seeded"}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+
 @app.get("/api/preprompts/stats/usage")
 async def get_usage_stats():
     """Get usage statistics for all preprompts."""
     import preprompt_db
+
     try:
         stats = preprompt_db.get_usage_stats()
         return {"success": True, "stats": stats, "count": len(stats)}
     except Exception as e:
         return {"success": False, "error": str(e), "stats": []}
+
 
 @app.post("/api/ai/chat")
 async def ai_chat(request: Request):
@@ -2614,42 +3014,52 @@ async def ai_chat(request: Request):
     include_repo_context = data.get("include_repo_context", False)
     file_path = data.get("file_path")  # Optional file to include
     web_search = data.get("web_search")  # Optional web search query
-    
+
     if not message:
         raise HTTPException(400, "message required")
-    
+
     log(f"🤖 AI chat with {model_id}: {message[:50]}...")
-    
+
     # Build enhanced context
     context_parts = []
-    
+
     # Add file content if requested
     if file_path:
         file_result = await ai_read_file(file_path)
         if "content" in file_result:
             context_parts.append(f"FILE: {file_path}\n```\n{file_result['content'][:10000]}\n```")
         elif "items" in file_result:
-            items_str = "\n".join([f"  {'📁' if i['type']=='dir' else '📄'} {i['name']}" for i in file_result['items'][:50]])
+            items_str = "\n".join(
+                [
+                    f"  {'📁' if i['type'] == 'dir' else '📄'} {i['name']}"
+                    for i in file_result["items"][:50]
+                ]
+            )
             context_parts.append(f"DIRECTORY: {file_path}\n{items_str}")
-    
+
     # Add web search results if requested
     if web_search:
         search_result = await ai_search_web(web_search)
         if "results" in search_result:
-            results_str = "\n".join([f"- [{r['title']}]({r['url']}): {r['snippet']}" for r in search_result['results']])
+            results_str = "\n".join(
+                [f"- [{r['title']}]({r['url']}): {r['snippet']}" for r in search_result["results"]]
+            )
             context_parts.append(f"WEB SEARCH for '{web_search}':\n{results_str}")
-    
+
     # Add repo list context if requested
     if include_repo_context:
         repos_result = await ai_list_repos()
-        repos_str = "\n".join([f"- {r['name']} ({r.get('type', 'unknown')})" for r in repos_result['repos'][:30]])
+        repos_str = "\n".join(
+            [f"- {r['name']} ({r.get('type', 'unknown')})" for r in repos_result["repos"][:30]]
+        )
         context_parts.append(f"AVAILABLE REPOS in {repos_result['base_path']}:\n{repos_str}")
-    
+
     # Get system prompt from database (use selected preprompt or default)
     preprompt_name = request.get("preprompt", "MCP Developer")
-    
+
     try:
         import preprompt_db
+
         preprompt_data = preprompt_db.get_preprompt(preprompt_name)
         if preprompt_data:
             system_prompt = preprompt_data["prompt_text"]
@@ -2659,17 +3069,20 @@ async def ai_chat(request: Request):
         else:
             log(f"⚠️ Preprompt not found: {preprompt_name}, using default")
             # Fallback to builtin
-            system_prompt = PREPROMPTS.get("dev", {}).get("prompt", "You are a helpful AI assistant.")
+            system_prompt = PREPROMPTS.get("dev", {}).get(
+                "prompt", "You are a helpful AI assistant."
+            )
     except Exception as e:
         log(f"❌ Error loading preprompt: {e}")
         import traceback
+
         log(f"Traceback: {traceback.format_exc()}")
         system_prompt = PREPROMPTS.get("dev", {}).get("prompt", "You are a helpful AI assistant.")
 
     full_message = message
     if context_parts:
         full_message = "\n\n".join(context_parts) + "\n\nUSER QUESTION: " + message
-    
+
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(
@@ -2678,29 +3091,31 @@ async def ai_chat(request: Request):
                     "model": model_id,
                     "messages": [
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": full_message}
+                        {"role": "user", "content": full_message},
                     ],
                     "stream": False,
-                }
+                },
             )
-            
+
             if resp.status_code != 200:
                 return {"error": f"Ollama returned {resp.status_code}: {resp.text}"}
-            
+
             result = resp.json()
             response = result.get("message", {}).get("content", "")
-            
+
             if not response:
                 response = str(result)
-            
+
             log(f"✅ AI response received ({len(response)} chars)")
             return {
-                "response": response, 
+                "response": response,
                 "context_used": list(context_parts) if context_parts else None,
                 "preprompt_used": preprompt_name,
-                "preprompt_found": preprompt_data is not None if 'preprompt_data' in locals() else False
+                "preprompt_found": preprompt_data is not None
+                if "preprompt_data" in locals()
+                else False,
             }
-    
+
     except httpx.TimeoutException:
         log("❌ AI chat timeout")
         return {"error": "Request timed out. The model may be loading or the response is too long."}
@@ -2708,14 +3123,16 @@ async def ai_chat(request: Request):
         log(f"❌ AI chat error: {e}")
         return {"error": str(e)}
 
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # DASHBOARD HTML
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
     """Serve the unified MCP Studio dashboard."""
-    return f'''<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
@@ -2878,6 +3295,20 @@ async def dashboard():
                     <div id="repos-health" class="p-4 space-y-3 max-h-96 overflow-y-auto">
                         <div class="text-gray-500 text-sm">Click "Scan" to analyze repos...</div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Scan Activity -->
+            <div class="mt-8 glass rounded-xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                        <h2 class="font-semibold">🔍 Scan Activity</h2>
+                        <div id="scan-progress-display" class="text-sm"></div>
+                    </div>
+                    <span id="scan-errors" class="text-xs text-red-400 font-bold"></span>
+                </div>
+                <div id="scan-activity" class="p-4 mono text-xs max-h-48 overflow-y-auto bg-black/30 text-gray-400">
+                    <div class="italic opacity-50">Ready to scan...</div>
                 </div>
             </div>
 
@@ -3516,7 +3947,7 @@ async def dashboard():
                 }} else if (trimmed.match(/^[-*]\\s+/) && currentParam) {{
                     // Detail line for current param (bullet point)
                     paramDetails.push(trimmed.replace(/^[-*]\\s+/, ''));
-                }} else if (trimmed.match(/^\\s{4,}/) && currentParam) {{
+                }} else if (trimmed.match(/^\\s{(4,)}/) && currentParam) {{
                     // Indented continuation line
                     currentParam.desc += ' ' + trimmed.trim();
                 }} else if (currentParam && !trimmed.match(/^\\w+:/)) {{
@@ -3574,7 +4005,7 @@ async def dashboard():
             if (!hasStructured) {{
                 const trimmed = examplesText.trim();
                 // If it looks like code (has indentation, keywords, etc.), format as code block
-                if (trimmed.match(/^(def |class |import |from |\\s{4,})/m)) {{
+                if (trimmed.match(/^(def |class |import |from |\\s{(4,)})/m)) {{
                     html = `<pre class="bg-black/40 p-3 rounded text-xs text-gray-300 font-mono overflow-x-auto border border-white/10"><code>${{escapeHtml(trimmed)}}</code></pre>`;
                 }} else {{
                     // Format as regular text with markdown support
@@ -3863,7 +4294,7 @@ async def dashboard():
                                     data-command="${{s.command}}" 
                                     data-args="${{JSON.stringify(s.args)}}" 
                                     data-cwd="${{s.cwd || ''}}" 
-                                    data-env="${{JSON.stringify(s.env || {})}}" 
+                                    data-env="${{JSON.stringify(s.env || null)}}" 
                                     data-name="${{s.name}}" 
                                     data-type="${{s.type || 'stdio'}}" 
                                     data-url="${{s.url || ''}}"
@@ -4329,7 +4760,7 @@ async def dashboard():
                     if (progress.status === 'scanning') {{
                         // Update progress display
                         document.getElementById('scan-current').textContent = progress.current || '-';
-                        document.getElementById('scan-progress').textContent = `${progress.done || 0} / ${progress.total || 0}`;
+                        document.getElementById('scan-progress').textContent = `${{progress.done || 0}} / ${{progress.total || 0}}`;
                         
                         const percent = progress.total > 0 ? ((progress.done || 0) / progress.total) * 100 : 0;
                         document.getElementById('scan-progress-bar').style.width = percent + '%';
@@ -4443,9 +4874,14 @@ async def dashboard():
                                 <span class="font-semibold truncate">${{r.name}}</span>
                             </div>
                             <div class="text-xs text-gray-400 mb-2">FastMCP ${{r.fastmcp_version || '?'}}</div>
-                            <div class="flex gap-2 text-xs">
+                            <div class="flex gap-2 text-xs flex-wrap mt-2">
                                 <span class="px-2 py-0.5 bg-indigo-500/20 rounded">${{r.tools}} tools</span>
                                 <span class="px-2 py-0.5 bg-purple-500/20 rounded">${{r.zoo_class}}</span>
+                                ${{r.is_fullstack ? '<span class="px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded">Fullstack</span>' : ''}}
+                                ${{ (r.frontend || []).map(t => `<span class="px-2 py-0.5 bg-pink-500/20 text-pink-300 rounded">${{t}}</span>`).join('') }}
+                                ${{ (r.backend || []).map(t => `<span class="px-2 py-0.5 bg-green-500/20 text-green-300 rounded">${{t}}</span>`).join('') }}
+                                ${{ (r.infrastructure || []).map(t => `<span class="px-2 py-0.5 bg-orange-500/20 text-orange-300 rounded">${{t}}</span>`).join('') }}
+                                ${{ (r.runtime && r.runtime.running) ? '<span class="px-2 py-0.5 bg-emerald-600 text-white rounded animate-pulse">Running</span>' : '' }}
                             </div>
                             ${{r.issues.length > 0 ? '<div class="mt-2 text-xs text-red-400">' + r.issues.length + ' issues</div>' : ''}}
                         </div>
@@ -4497,6 +4933,20 @@ async def dashboard():
                         <span class="px-2 py-1 rounded text-xs ${{repo.has_scripts ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}}">${{repo.has_scripts ? '✓' : '✗'}} scripts/</span>
                         <span class="px-2 py-1 rounded text-xs ${{repo.has_cicd ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}}">${{repo.has_cicd ? '✓' : '✗'}} CI/CD</span>
                     </div>
+
+                    ${{repo.is_fullstack || (repo.frontend && repo.frontend.length) || (repo.backend && repo.backend.length) ? `
+                        <div>
+                            <div class="border-t border-white/10 my-4"></div>
+                            <h3 class="font-semibold mb-2 text-indigo-400">🏗️ Tech Stack</h3>
+                            <div class="flex gap-2 flex-wrap">
+                                ${{repo.is_fullstack ? '<span class="px-2 py-1 rounded text-xs bg-blue-500/20 text-blue-300">Fullstack</span>' : ''}}
+                                ${{ (repo.frontend || []).map(t => `<span class="px-2 py-1 rounded text-xs bg-pink-500/20 text-pink-300">${{t}}</span>`).join('') }}
+                                ${{ (repo.backend || []).map(t => `<span class="px-2 py-1 rounded text-xs bg-green-500/20 text-green-300">${{t}}</span>`).join('') }}
+                                ${{ (repo.infrastructure || []).map(t => `<span class="px-2 py-1 rounded text-xs bg-orange-500/20 text-orange-300">${{t}}</span>`).join('') }}
+                                ${{ (repo.runtime && repo.runtime.running) ? '<span class="px-2 py-1 rounded text-xs bg-emerald-600 text-white animate-pulse">Running</span>' : '' }}
+                            </div>
+                        </div>
+                    ` : ''}}
 
                     ${{repo.issues.length > 0 ? `
                         <div>
@@ -4862,15 +5312,15 @@ async def dashboard():
                 const res = await fetch('/api/ollama/models');
                 const data = await res.json();
                 
-                if (data.error) {{
-                    select.innerHTML = '<option value="">❌ ' + data.error + '</option>';
-                    info.textContent = 'Make sure Ollama is running (ollama serve)';
+                if (!data || data.error) {{
+                    select.innerHTML = '<option value="">❌ ' + (data?.error || 'Connection failed') + '</option>';
+                    info.textContent = 'Check AI Service connection';
                     return;
                 }}
                 
-                if (data.models.length === 0) {{
+                if (!data.models || data.models.length === 0) {{
                     select.innerHTML = '<option value="">No models found</option>';
-                    info.textContent = 'Run "ollama pull llama3.2" to download a model';
+                    info.textContent = 'No models returned from configured services';
                     return;
                 }}
                 
@@ -4900,12 +5350,12 @@ async def dashboard():
                 const res = await fetch('/api/ollama/models');
                 const data = await res.json();
                 
-                if (data.error) {{
-                    throw new Error(data.error);
+                if (!data || data.error) {{
+                    throw new Error(data?.error || 'Connection failed');
                 }}
                 
-                if (data.models.length === 0) {{
-                    throw new Error('No models loaded in Ollama');
+                if (!data.models || data.models.length === 0) {{
+                    throw new Error('No models available');
                 }}
                 
                 aiConnected = true;
@@ -5676,20 +6126,23 @@ Please provide helpful, specific advice about MCP server development, tool desig
         </div>
     </div>
 </body>
-</html>'''
+</html>"""
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PORT CONFLICT HANDLING
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def is_port_available(port: int) -> bool:
     """Check if a port is available for binding."""
     import socket
+
     try:
         logger.debug(f"Checking if port {port} is available...")
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind(('0.0.0.0', port))
+            s.bind(("0.0.0.0", port))
             logger.debug(f"Port {port} is available")
             return True
     except OSError as e:
@@ -5699,9 +6152,12 @@ def is_port_available(port: int) -> bool:
         logger.error(f"Unexpected error checking port {port}: {e}", exc_info=True)
         return False
 
+
 def find_available_port(start_port: int, max_attempts: int = 10) -> int:
     """Find an available port starting from start_port."""
-    logger.info(f"Searching for available port starting from {start_port} (max {max_attempts} attempts)")
+    logger.info(
+        f"Searching for available port starting from {start_port} (max {max_attempts} attempts)"
+    )
     for i in range(max_attempts):
         port = start_port + i
         try:
@@ -5711,62 +6167,63 @@ def find_available_port(start_port: int, max_attempts: int = 10) -> int:
         except Exception as e:
             logger.warning(f"Error checking port {port}: {e}")
             continue
-    error_msg = f"Could not find available port in range {start_port}-{start_port + max_attempts - 1}"
+    error_msg = (
+        f"Could not find available port in range {start_port}-{start_port + max_attempts - 1}"
+    )
     logger.error(error_msg)
     raise RuntimeError(error_msg)
 
+
 def get_port_owner_info(port: int) -> Optional[Dict[str, Any]]:
     """Get information about what process is using a port (Windows)."""
-    if sys.platform != 'win32':
+    if sys.platform != "win32":
         logger.debug("get_port_owner_info only works on Windows")
         return None
-    
+
     try:
         logger.debug(f"Getting port owner info for port {port}...")
         import subprocess
-        result = subprocess.run(
-            ['netstat', '-ano'],
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        
+
+        result = subprocess.run(["netstat", "-ano"], capture_output=True, text=True, timeout=5)
+
         if result.returncode != 0:
             logger.warning(f"netstat command failed with return code {result.returncode}")
             return None
-        
-        for line in result.stdout.split('\n'):
-            if f':{port}' in line and 'LISTENING' in line:
+
+        for line in result.stdout.split("\n"):
+            if f":{port}" in line and "LISTENING" in line:
                 parts = line.split()
                 if len(parts) >= 5:
                     pid = parts[-1]
                     logger.debug(f"Found process using port {port}: PID {pid}")
                     try:
                         import psutil  # type: ignore[import-untyped]
+
                         proc = psutil.Process(int(pid))
                         info = {
-                            'pid': pid,
-                            'name': proc.name(),
-                            'path': proc.exe(),
-                            'cmdline': ' '.join(proc.cmdline())
+                            "pid": pid,
+                            "name": proc.name(),
+                            "path": proc.exe(),
+                            "cmdline": " ".join(proc.cmdline()),
                         }
                         logger.debug(f"Port owner info: {info}")
                         return info
                     except ImportError:
                         logger.debug("psutil not available, returning basic info")
-                        return {'pid': pid, 'name': 'Unknown', 'path': 'Unknown'}
+                        return {"pid": pid, "name": "Unknown", "path": "Unknown"}
                     except Exception as e:
                         logger.warning(f"Error getting process info for PID {pid}: {e}")
-                        return {'pid': pid, 'name': 'Unknown', 'path': 'Unknown'}
+                        return {"pid": pid, "name": "Unknown", "path": "Unknown"}
     except subprocess.TimeoutExpired:
         logger.error("netstat command timed out")
         return None
     except Exception as e:
         logger.error(f"Error getting port owner info: {e}", exc_info=True)
         return None
-    
+
     logger.debug(f"No process found using port {port}")
     return None
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # MAIN
@@ -5780,28 +6237,29 @@ if __name__ == "__main__":
         logger.info(f"Platform: {sys.platform}")
         logger.info(f"Working directory: {os.getcwd()}")
         logger.info(f"Script path: {__file__}")
-        
+
         # Set UTF-8 encoding for Windows console
-        if sys.platform == 'win32':
+        if sys.platform == "win32":
             try:
                 import codecs
-                sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+
+                sys.stdout = codecs.getwriter("utf-8")(sys.stdout.buffer, "strict")
                 logger.info("UTF-8 encoding configured for Windows console")
             except Exception as e:
                 logger.warning(f"Failed to set UTF-8 encoding: {e}")
-        
+
         log("🚀 Starting MCP Studio...")
         logger.info("Starting MCP Studio...")
         log(f"📂 Repos directory: {REPOS_DIR}")
         logger.info(f"Repos directory: {REPOS_DIR}")
-        
+
         # Verify repos directory exists
         if not REPOS_DIR.exists():
             error_msg = f"Repos directory does not exist: {REPOS_DIR}"
             logger.error(error_msg)
             log(f"❌ ERROR: {error_msg}")
             sys.exit(1)
-        
+
         # Check FastMCP availability
         try:
             if FASTMCP_AVAILABLE:
@@ -5814,7 +6272,7 @@ if __name__ == "__main__":
         except Exception as e:
             logger.error(f"Error checking FastMCP availability: {e}", exc_info=True)
             log(f"⚠️  Error checking FastMCP: {e}")
-        
+
         # Discover clients on startup
         try:
             logger.info("Discovering MCP clients...")
@@ -5827,14 +6285,15 @@ if __name__ == "__main__":
             logger.error(f"Error discovering MCP clients: {e}", exc_info=True)
             log(f"⚠️  Error discovering clients: {e}")
             clients = {}
-        
+
         # Initialize preprompt database and seed with builtins
         try:
             logger.info("Initializing preprompt database...")
             import preprompt_db
+
             preprompt_db.init_db()
             logger.info("Preprompt database initialized")
-            
+
             # Check if we need to seed
             existing = preprompt_db.list_preprompts(active_only=False)
             if len(existing) == 0:
@@ -5852,38 +6311,44 @@ if __name__ == "__main__":
         except Exception as e:
             logger.error(f"Preprompt database error: {e}", exc_info=True)
             log(f"⚠️  Preprompt database error: {e}")
-        
+
         # Check port availability before starting
         logger.info(f"Checking port availability for port {PORT}...")
         actual_port = PORT
         try:
             port_available = is_port_available(PORT)
             logger.info(f"Port {PORT} available: {port_available}")
-            
+
             if not port_available:
                 logger.warning(f"Port {PORT} is not available, checking what's using it...")
                 port_info = get_port_owner_info(PORT)
                 log(f"❌ PORT CONFLICT: Port {PORT} is already in use!")
                 logger.error(f"Port conflict detected on port {PORT}")
-                
+
                 if port_info:
                     log(f"   Port {PORT} is being used by:")
-                    log(f"   • Process: {port_info.get('name', 'Unknown')} (PID: {port_info.get('pid', 'Unknown')})")
+                    log(
+                        f"   • Process: {port_info.get('name', 'Unknown')} (PID: {port_info.get('pid', 'Unknown')})"
+                    )
                     log(f"   • Path: {port_info.get('path', 'Unknown')}")
-                    logger.error(f"Port {PORT} used by: {port_info.get('name', 'Unknown')} (PID: {port_info.get('pid', 'Unknown')})")
-                
+                    logger.error(
+                        f"Port {PORT} used by: {port_info.get('name', 'Unknown')} (PID: {port_info.get('pid', 'Unknown')})"
+                    )
+
                 log(f"\n💡 Solutions:")
                 log(f"   1. Stop the conflicting process:")
-                if port_info and port_info.get('pid'):
+                if port_info and port_info.get("pid"):
                     log(f"      Stop-Process -Id {port_info['pid']} -Force")
                 else:
-                    log(f"      Get-NetTCPConnection -LocalPort {PORT} | Select-Object OwningProcess")
+                    log(
+                        f"      Get-NetTCPConnection -LocalPort {PORT} | Select-Object OwningProcess"
+                    )
                     log(f"      Then: Stop-Process -Id <PID> -Force")
                 log(f"   2. Use a different port:")
                 log(f"      Set environment variable: $env:PORT=8002")
                 log(f"      Or edit .env file: PORT=8002")
                 log(f"   3. Auto-find available port (attempting now)...")
-                
+
                 try:
                     logger.info("Attempting to find available port...")
                     actual_port = find_available_port(PORT + 1, max_attempts=10)
@@ -5901,7 +6366,7 @@ if __name__ == "__main__":
             logger.error(f"Error checking port availability: {e}", exc_info=True)
             log(f"⚠️  Error checking port: {e}")
             # Continue with default port anyway
-        
+
         # Display startup banner with actual port
         try:
             banner = f"""
@@ -5917,27 +6382,29 @@ if __name__ == "__main__":
             logger.info(f"Startup banner displayed. Port: {actual_port}")
         except Exception as e:
             logger.error(f"Error displaying startup banner: {e}", exc_info=True)
-        
+
         # Start the server with error handling
         try:
             log(f"🌐 Starting server on port {actual_port}...")
             logger.info(f"Starting uvicorn server on port {actual_port}...")
             logger.info(f"Server will be accessible at: http://localhost:{actual_port}")
             logger.info(f"API docs will be at: http://localhost:{actual_port}/docs")
-            
+
             uvicorn.run(app, host="0.0.0.0", port=actual_port, log_level="warning")
-            
+
         except OSError as e:
             error_msg = f"OSError starting server: {e}"
             logger.error(error_msg, exc_info=True)
-            
+
             if "address already in use" in str(e).lower() or "10048" in str(e):
                 log(f"❌ PORT CONFLICT: Port {actual_port} is already in use!")
                 log(f"   Another process started using the port after we checked.")
                 logger.error(f"Port {actual_port} conflict detected after initial check")
                 log(f"   Solutions:")
                 log(f"   1. Stop the conflicting process:")
-                log(f"      Get-NetTCPConnection -LocalPort {actual_port} | Select-Object OwningProcess")
+                log(
+                    f"      Get-NetTCPConnection -LocalPort {actual_port} | Select-Object OwningProcess"
+                )
                 log(f"      Then: Stop-Process -Id <PID> -Force")
                 log(f"   2. Use a different port:")
                 log(f"      Set environment variable: $env:PORT={actual_port + 1}")
@@ -5945,32 +6412,33 @@ if __name__ == "__main__":
                 log(f"❌ Server startup error: {e}")
             logger.error(f"Server startup failed. Exiting.")
             sys.exit(1)
-            
+
         except KeyboardInterrupt:
             logger.info("Received KeyboardInterrupt - shutting down gracefully")
             log("\n👋 Shutting down MCP Studio...")
             sys.exit(0)
-            
+
         except Exception as e:
             error_msg = f"Unexpected error starting server: {e}"
             logger.critical(error_msg, exc_info=True)
             log(f"❌ {error_msg}")
             import traceback
+
             tb = traceback.format_exc()
             logger.critical(f"Traceback:\n{tb}")
             log(tb)
             log(f"\n📋 Full error details logged to: {LOG_FILE}")
             sys.exit(1)
-            
+
     except Exception as e:
         # Catch-all for any errors during initialization
         error_msg = f"Fatal error during startup initialization: {e}"
         logger.critical(error_msg, exc_info=True)
         import traceback
+
         tb = traceback.format_exc()
         logger.critical(f"Traceback:\n{tb}")
         print(f"❌ FATAL ERROR: {error_msg}")
         print(f"📋 Full error details logged to: {LOG_FILE}")
         print(f"\nTraceback:\n{tb}")
         sys.exit(1)
-

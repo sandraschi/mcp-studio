@@ -388,7 +388,7 @@ def format_client_info(client_id: str, format: str = "text") -> str:
 # ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    print("\n🦁 MCP CLIENT METADATA DATABASE 🦁\n")
+    print("\nMCP CLIENT METADATA DATABASE\n")
     print("=" * 70)
     
     print(f"\n📊 TOTAL CLIENTS: {len(MCP_CLIENT_DATABASE)}\n")
@@ -409,5 +409,5 @@ if __name__ == "__main__":
                 print(f"  Features: {', '.join(client.features[:3])}...")
     
     print("\n" + "=" * 70)
-    print("✅ Database loaded!\n")
+    print("Database loaded!\n")
 

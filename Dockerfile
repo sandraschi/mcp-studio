@@ -38,5 +38,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8001/', timeout=5)" || exit 1
 
 # Run the dashboard (web mode only, not MCP server mode)
-# The script handles uvicorn startup internally
-CMD ["python", "-u", "studio_dashboard_fixed.py"]
+ENV PYTHONPATH=/app/src
+CMD ["python", "-m", "mcp_studio.main"]

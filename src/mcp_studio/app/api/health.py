@@ -9,8 +9,30 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 import psutil
+
+# Prometheus client
+try:
+    from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+    PROMETHEUS_AVAILABLE = True
+except ImportError:
+    PROMETHEUS_AVAILABLE = False
+    # Dummy classes to prevent errors
+    class Counter:
+        def __init__(self, *args, **kwargs): pass
+        def labels(self, *args, **kwargs): return self
+        def inc(self): pass
+        def observe(self, value): pass
+    class Histogram:
+        def __init__(self, *args, **kwargs): pass
+        def labels(self, *args, **kwargs): return self
+    class Gauge:
+        def __init__(self, *args, **kwargs): pass
+        def set(self, value): pass
+        def inc(self): pass
+        def dec(self): pass
+    def generate_latest(): return b""
 
 from ...app.core.config import settings
 from ...app.core.logging_utils import get_logger
@@ -23,6 +45,56 @@ except ImportError:
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+# Prometheus metrics (only if prometheus_client is available)
+if PROMETHEUS_AVAILABLE:
+    # API metrics
+    API_REQUESTS_TOTAL = Counter(
+        'mcp_api_requests_total',
+        'Total number of API requests',
+        ['method', 'endpoint', 'status_code']
+    )
+
+    API_REQUEST_DURATION = Histogram(
+        'mcp_api_request_duration_seconds',
+        'API request duration in seconds',
+        ['method', 'endpoint'],
+        buckets=[0.1, 0.5, 1.0, 2.5, 5.0, 10.0]
+    )
+
+    # Active connections
+    ACTIVE_CONNECTIONS = Gauge(
+        'mcp_active_connections',
+        'Number of active connections'
+    )
+
+    # Repo scanning metrics
+    SCAN_PROGRESS_TOTAL = Gauge(
+        'mcp_scan_progress_total',
+        'Total repositories being scanned'
+    )
+
+    SCAN_PROGRESS_FOUND = Gauge(
+        'mcp_scan_progress_found',
+        'Number of MCP repositories found'
+    )
+
+    SCAN_PROGRESS_SKIPPED = Gauge(
+        'mcp_scan_progress_skipped',
+        'Number of repositories skipped'
+    )
+
+    SCAN_PROGRESS_ERRORS = Gauge(
+        'mcp_scan_progress_errors',
+        'Number of scanning errors'
+    )
+
+    # Repo metrics
+    REPO_TOOLS = Gauge(
+        'mcp_repo_tools',
+        'Number of tools in a repository',
+        ['repo_name']
+    )
 
 
 class ServiceInfo(BaseModel):
@@ -227,10 +299,10 @@ async def readiness_check() -> JSONResponse:
 async def liveness_check() -> JSONResponse:
     """
     Liveness check endpoint.
-    
+
     Simple check to verify the service is running.
     Used by Kubernetes liveness probes.
-    
+
     Returns:
         JSON response with status
     """
@@ -238,3 +310,41 @@ async def liveness_check() -> JSONResponse:
         status_code=status.HTTP_200_OK,
         content={"status": "alive"}
     )
+
+
+@router.get(
+    "/metrics",
+    summary="Prometheus Metrics",
+    description="Expose Prometheus metrics for monitoring",
+    response_class=PlainTextResponse,
+    responses={
+        200: {"description": "Metrics in Prometheus format"},
+    },
+)
+async def metrics():
+    """
+    Prometheus metrics endpoint.
+
+    Exposes application metrics in Prometheus format for monitoring and alerting.
+
+    Returns:
+        Plain text response with Prometheus metrics
+    """
+    if not PROMETHEUS_AVAILABLE:
+        return PlainTextResponse(
+            content="# Prometheus client not available\n",
+            media_type=CONTENT_TYPE_LATEST
+        )
+
+    try:
+        return PlainTextResponse(
+            content=generate_latest().decode('utf-8'),
+            media_type=CONTENT_TYPE_LATEST
+        )
+    except Exception as e:
+        logger.error("Failed to generate metrics", error=str(e))
+        return PlainTextResponse(
+            content=f"# Error generating metrics: {e}\n",
+            media_type=CONTENT_TYPE_LATEST,
+            status_code=500
+        )

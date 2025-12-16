@@ -74,6 +74,13 @@ Thumbs.db
 *.bak
 *.swp
 
+
 # MCP Studio specific
 preprompts.db
 *.db-journal
+
+# React App
+mcp-studio-react/node_modules/
+mcp-studio-react/build/
+mcp-studio-react/dist/
+

@@ -1,71 +1,70 @@
 version: '3.8'
 
 services:
+  # Traefik Reverse Proxy & Authentication
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    command:
+      - "--api.insecure=true" # Dashboard on 8080 (don't expose publicly)
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      # OIDC Plugin Configuration
+      # NOTE: Using the module for ID 6613338ea28c508f411a44d5
+      - "--experimental.plugins.traefik-oidc.modulename=github.com/noverby/traefik-oidc"
+      - "--experimental.plugins.traefik-oidc.version=v0.0.4"
+    ports:
+      - "80:80" # Public HTTP
+      - "8090:8080" # Traefik Dashboard (Internal/Private)
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - mcp-studio-network
+
   mcp-studio:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: mcp-studio
+    # Temporary debugging access
     ports:
-      - "${PORT:-8770}:8001"
+      - "8330:8001"
     volumes:
-      # Mount repos directory for FULL access (read-write required for tool execution)
-      # Windows: Use forward slashes, e.g., "D:/Dev/repos:/app/repos:rw"
-      # Linux/Mac: Use standard paths, e.g., "/home/user/repos:/app/repos:rw"
-      # The dashboard needs full access to:
-      # - Scan repository structure
-      # - Read files for analysis
-      # - Execute MCP tools from repos
-      # - Access configuration files
       - "${REPOS_DIR:-D:/Dev/repos}:/app/repos:rw"
-      # Mount MCP client config directories (read-only for discovery)
-      # Windows: Mount AppData for Claude Desktop, Cursor, Windsurf configs
-      # These will be set by docker-start.ps1 or can be set manually
       - "${APPDATA}:/host/appdata:ro"
-      # Mount user home for .config and .cursor directories (Linux/Mac/Windows)
-      # Use USERPROFILE on Windows, fallback to /tmp if not set
       - "${USERPROFILE:-/tmp}:/host/home:ro"
-      # Mount logs directory for persistence
+      - "./src/mcp_studio:/app/src/mcp_studio"
       - "./logs:/app/logs"
-      # Mount data directory for preprompts DB
       - "./data:/app/data"
     environment:
-      - PORT=${PORT:-8770}
+      - PORT=8001
       - REPOS_DIR=${REPOS_DIR:-/app/repos}
       - USERPROFILE=${USERPROFILE:-/tmp}
-      # Ollama connection - adjust based on your setup:
-      # Option 1: Ollama on host machine (Windows/Mac) - uses host.docker.internal
       - OLLAMA_URL=http://host.docker.internal:11434
-      # Option 2: Ollama in another container (uncomment and use service name)
-      # - OLLAMA_URL=http://ollama:11434
-      # Option 3: Ollama on network (uncomment and use IP/hostname)
-      # - OLLAMA_URL=http://192.168.1.100:11434
-      # Option 4: No Ollama (dashboard works without it, just no AI features)
-      # - OLLAMA_URL=
+      - LM_STUDIO_URL=${LM_STUDIO_URL:-http://host.docker.internal:1234}
+      - VLLM_URL=${VLLM_URL:-http://host.docker.internal:8000}
     restart: unless-stopped
     networks:
       - mcp-studio-network
-    # For Windows/Mac: use host.docker.internal to access host Ollama
-    # For Linux: may need --network=host or extra_hosts
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # Optional: Uncomment if you want to run Ollama in Docker too
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   container_name: ollama
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ollama_data:/root/.ollama
-  #   restart: unless-stopped
-  #   networks:
-  #     - mcp-studio-network
-  #   # Then change OLLAMA_URL in mcp-studio service to: http://ollama:11434
+    # Traefik Labels for OIDC
+    labels:
+      - "traefik.enable=true"
+      # Router Config (Change 'mcp-studio.localhost' to your actual domain)
+      - "traefik.http.routers.mcp-studio.rule=Host(`mcp-studio.localhost`)"
+      - "traefik.http.routers.mcp-studio.entrypoints=web"
+      - "traefik.http.routers.mcp-studio.middlewares=oidc-auth"
+      # Middleware Config (OIDC)
+      - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc.Issuer=${OIDC_ISSUER:-https://accounts.google.com}"
+      - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc.ClientID=${OIDC_CLIENT_ID:-changeme}"
+      - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc.ClientSecret=${OIDC_CLIENT_SECRET:-changeme}"
+      - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc.BaseUrl=${OIDC_BASE_URL:-http://mcp-studio.localhost}"
+      # Service Config
+      - "traefik.http.services.mcp-studio.loadbalancer.server.port=8001"
 
 networks:
   mcp-studio-network:
     driver: bridge
-
-# volumes:
-#   ollama_data:

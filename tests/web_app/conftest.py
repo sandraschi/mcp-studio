@@ -37,16 +37,18 @@ async def async_client():
 def mock_server_service(monkeypatch):
     """Mock server service for testing."""
     from unittest.mock import AsyncMock, MagicMock
-    
+
     mock_service = MagicMock()
     mock_service.get_servers = AsyncMock(return_value={})
     mock_service.get_server = AsyncMock(return_value=None)
     mock_service.get_server_tools = AsyncMock(return_value=[])
-    
-    # Monkeypatch the server_service instance
-    from mcp_studio.app.services import server_service
-    monkeypatch.setattr("mcp_studio.app.services.server_service.server_service", mock_service)
-    
+    mock_service.start_server = AsyncMock(return_value={"success": True, "message": "Server started"})
+    mock_service.stop_server = AsyncMock(return_value={"success": True, "message": "Server stopped"})
+    mock_service.execute_tool = AsyncMock(return_value={"success": True, "result": "Tool executed"})
+
+    # Mock the server_service import in the modules that use it
+    monkeypatch.setattr("mcp_studio.app.api.endpoints.mcp_servers.server_service", mock_service)
+
     return mock_service
 
 

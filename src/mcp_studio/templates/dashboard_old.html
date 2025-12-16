@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -24,29 +25,117 @@
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
-        body { font-family: 'Space Grotesk', sans-serif; }
-        code, .mono { font-family: 'JetBrains Mono', monospace; }
-        .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
-        .glow-border { box-shadow: 0 0 20px rgba(99, 102, 241, 0.3), inset 0 0 20px rgba(99, 102, 241, 0.1); }
-        .card-hover { transition: all 0.3s ease; }
-        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
-        .tab-active { border-bottom: 2px solid #6366f1; color: #6366f1; }
-        .pulse { animation: pulse 2s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .gradient-text { background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        code,
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .glow-border {
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.3), inset 0 0 20px rgba(99, 102, 241, 0.1);
+        }
+
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .tab-active {
+            border-bottom: 2px solid #6366f1;
+            color: #6366f1;
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
         /* Tool docstring formatting */
-        .tool-description { line-height: 1.6; }
-        .tool-description code { background: rgba(0, 0, 0, 0.3); padding: 0.125rem 0.25rem; border-radius: 0.25rem; font-size: 0.875rem; }
-        .tool-description strong { color: #ffffff; font-weight: 600; }
-        .tool-description ul { list-style-type: disc; margin-left: 1.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; }
-        .tool-description li { margin-top: 0.25rem; }
-        .tool-description pre { background: rgba(0, 0, 0, 0.4); padding: 0.75rem; border-radius: 0.375rem; border: 1px solid rgba(255, 255, 255, 0.1); overflow-x: auto; margin-top: 0.5rem; margin-bottom: 0.5rem; }
-        .tool-description pre code { background: transparent; padding: 0; }
-        .tool-description-compact { max-height: 200px; overflow-y: auto; }
-        .tool-description-compact .space-y-4 > * { margin-top: 0.5rem; margin-bottom: 0.5rem; }
+        .tool-description {
+            line-height: 1.6;
+        }
+
+        .tool-description code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+        }
+
+        .tool-description strong {
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        .tool-description ul {
+            list-style-type: disc;
+            margin-left: 1.5rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .tool-description li {
+            margin-top: 0.25rem;
+        }
+
+        .tool-description pre {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-x: auto;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .tool-description pre code {
+            background: transparent;
+            padding: 0;
+        }
+
+        .tool-description-compact {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .tool-description-compact .space-y-4>* {
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
     </style>
 </head>
+
 <body class="bg-midnight-900 text-gray-100 min-h-screen">
     <!-- Header -->
     <header class="glass sticky top-0 z-50 border-b border-white/10">
@@ -65,14 +154,17 @@
                         <span id="repo-count">0</span> repos | <span id="server-count">0</span> servers
                     </div>
                     <div class="flex items-center gap-3">
-                        <button onclick="toggleTheme()" id="theme-toggle" class="p-2 rounded-lg hover:bg-white/5 transition-colors" title="Toggle theme">
+                        <button onclick="toggleTheme()" id="theme-toggle"
+                            class="p-2 rounded-lg hover:bg-white/5 transition-colors" title="Toggle theme">
                             <span id="theme-icon-dark" class="text-xl">🌙</span>
                             <span id="theme-icon-light" class="text-xl hidden">☀️</span>
                         </button>
-                        <button onclick="showHelp()" class="p-2 rounded-lg hover:bg-white/5 transition-colors" title="Help">
+                        <button onclick="showHelp()" class="p-2 rounded-lg hover:bg-white/5 transition-colors"
+                            title="Help">
                             <span class="text-xl">❓</span>
                         </button>
-                        <button onclick="showLogs()" class="p-2 rounded-lg hover:bg-white/5 transition-colors" title="View logs">
+                        <button onclick="showLogs()" class="p-2 rounded-lg hover:bg-white/5 transition-colors"
+                            title="View logs">
                             <span class="text-xl">📋</span>
                         </button>
                     </div>
@@ -85,22 +177,28 @@
     <div class="border-b border-white/10">
         <div class="max-w-7xl mx-auto px-6">
             <nav class="flex gap-8">
-                <button onclick="switchTab('overview')" id="tab-overview" class="py-4 px-2 text-sm font-medium tab-active">
+                <button onclick="switchTab('overview')" id="tab-overview"
+                    class="py-4 px-2 text-sm font-medium tab-active">
                     📊 Overview
                 </button>
-                <button onclick="switchTab('clients')" id="tab-clients" class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+                <button onclick="switchTab('clients')" id="tab-clients"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
                     🔌 MCP Clients
                 </button>
-                <button onclick="switchTab('repos')" id="tab-repos" class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+                <button onclick="switchTab('repos')" id="tab-repos"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
                     📦 Repositories
                 </button>
-                <button onclick="switchTab('tools')" id="tab-tools" class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+                <button onclick="switchTab('tools')" id="tab-tools"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
                     🔧 Tools
                 </button>
-                <button onclick="switchTab('console')" id="tab-console" class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+                <button onclick="switchTab('console')" id="tab-console"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
                     💻 Console
                 </button>
-                <button onclick="switchTab('ai')" id="tab-ai" class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+                <button onclick="switchTab('ai')" id="tab-ai"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
                     🤖 AI Assistant
                 </button>
             </nav>
@@ -115,7 +213,8 @@
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <div class="glass rounded-xl p-6 card-hover">
                     <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-lg bg-indigo-500/20 flex items-center justify-center text-2xl">🔌</div>
+                        <div class="w-12 h-12 rounded-lg bg-indigo-500/20 flex items-center justify-center text-2xl">🔌
+                        </div>
                         <div>
                             <div class="text-2xl font-bold" id="stat-clients">0</div>
                             <div class="text-sm text-gray-400">MCP Clients</div>
@@ -124,7 +223,8 @@
                 </div>
                 <div class="glass rounded-xl p-6 card-hover">
                     <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-lg bg-green-500/20 flex items-center justify-center text-2xl">📦</div>
+                        <div class="w-12 h-12 rounded-lg bg-green-500/20 flex items-center justify-center text-2xl">📦
+                        </div>
                         <div>
                             <div class="text-2xl font-bold" id="stat-repos">0</div>
                             <div class="text-sm text-gray-400">MCP Repos</div>
@@ -133,7 +233,8 @@
                 </div>
                 <div class="glass rounded-xl p-6 card-hover">
                     <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-lg bg-purple-500/20 flex items-center justify-center text-2xl">🔧</div>
+                        <div class="w-12 h-12 rounded-lg bg-purple-500/20 flex items-center justify-center text-2xl">🔧
+                        </div>
                         <div>
                             <div class="text-2xl font-bold" id="stat-tools">0</div>
                             <div class="text-sm text-gray-400">Total Tools</div>
@@ -142,7 +243,8 @@
                 </div>
                 <div class="glass rounded-xl p-6 card-hover">
                     <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-lg bg-cyan-500/20 flex items-center justify-center text-2xl">✅</div>
+                        <div class="w-12 h-12 rounded-lg bg-cyan-500/20 flex items-center justify-center text-2xl">✅
+                        </div>
                         <div>
                             <div class="text-2xl font-bold" id="stat-sota">0</div>
                             <div class="text-sm text-gray-400">SOTA Repos</div>
@@ -157,7 +259,8 @@
                 <div class="glass rounded-xl overflow-hidden">
                     <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
                         <h2 class="font-semibold">🔌 Discovered MCP Clients</h2>
-                        <button onclick="loadClients()" class="text-xs text-indigo-400 hover:text-indigo-300">Refresh</button>
+                        <button onclick="loadClients()"
+                            class="text-xs text-indigo-400 hover:text-indigo-300">Refresh</button>
                     </div>
                     <div id="clients-list" class="p-4 space-y-3 max-h-96 overflow-y-auto">
                         <div class="text-gray-500 text-sm">Loading...</div>
@@ -168,7 +271,8 @@
                 <div class="glass rounded-xl overflow-hidden">
                     <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
                         <h2 class="font-semibold">📊 Repository Health</h2>
-                        <button onclick="loadRepos()" class="text-xs text-indigo-400 hover:text-indigo-300">Scan</button>
+                        <button onclick="loadRepos()"
+                            class="text-xs text-indigo-400 hover:text-indigo-300">Scan</button>
                     </div>
                     <div id="repos-health" class="p-4 space-y-3 max-h-96 overflow-y-auto">
                         <div class="text-gray-500 text-sm">Click "Scan" to analyze repos...</div>
@@ -193,7 +297,8 @@
             <div class="glass rounded-xl overflow-hidden">
                 <div class="px-6 py-4 border-b border-white/10">
                     <h2 class="font-semibold">🔌 MCP Client Configurations</h2>
-                    <p class="text-sm text-gray-400 mt-1">Servers discovered from Claude Desktop, Cursor, Windsurf, etc.</p>
+                    <p class="text-sm text-gray-400 mt-1">Servers discovered from Claude Desktop, Cursor, Windsurf, etc.
+                    </p>
                 </div>
                 <div id="clients-detail" class="p-6">
                     <div class="text-gray-500">Loading client configurations...</div>
@@ -210,16 +315,20 @@
                         <p class="text-sm text-gray-400 mt-1">Static analysis of MCP repos in {REPOS_DIR}</p>
                     </div>
                     <div class="flex gap-4">
-                        <select id="repo-filter" class="bg-midnight-800 border border-white/10 rounded px-3 py-1 text-sm">
+                        <select id="repo-filter"
+                            class="bg-midnight-800 border border-white/10 rounded px-3 py-1 text-sm">
                             <option value="all">All</option>
                             <option value="sota">✅ SOTA</option>
                             <option value="improvable">⚠️ Improvable</option>
                             <option value="runt">🐛 Issues</option>
                         </select>
-                        <button onclick="showScannerCriteria()" class="px-4 py-1 bg-purple-600/50 hover:bg-purple-600/70 rounded text-sm border border-purple-500/30" title="View classification criteria">
+                        <button onclick="showScannerCriteria()"
+                            class="px-4 py-1 bg-purple-600/50 hover:bg-purple-600/70 rounded text-sm border border-purple-500/30"
+                            title="View classification criteria">
                             📋 Criteria
                         </button>
-                        <button onclick="loadRepos()" class="px-4 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">
+                        <button onclick="loadRepos()"
+                            class="px-4 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">
                             🔍 Scan
                         </button>
                     </div>
@@ -239,7 +348,8 @@
                         <p class="text-sm text-gray-400 mt-1">Browse tools from your MCP repos</p>
                     </div>
                     <div class="flex gap-4 items-center">
-                        <select id="tools-repo-select" onchange="loadRepoTools()" class="bg-midnight-800 border border-white/10 rounded-lg px-4 py-2 text-sm min-w-64">
+                        <select id="tools-repo-select" onchange="loadRepoTools()"
+                            class="bg-midnight-800 border border-white/10 rounded-lg px-4 py-2 text-sm min-w-64">
                             <option value="">Select a repository...</option>
                         </select>
                     </div>
@@ -258,43 +368,52 @@
             <div class="glass rounded-xl overflow-hidden">
                 <div class="px-6 py-4 border-b border-white/10">
                     <h2 class="font-semibold">💻 Execution Console</h2>
-                    <p class="text-sm text-gray-400 mt-1">Execute tools without an LLM - connect to a server first in the Tools tab</p>
+                    <p class="text-sm text-gray-400 mt-1">Execute tools without an LLM - connect to a server first in
+                        the Tools tab</p>
                 </div>
                 <div class="p-6">
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div>
                             <label class="block text-sm font-medium mb-2">Connected Server</label>
-                            <select id="console-server" class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
+                            <select id="console-server"
+                                class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
                                 <option value="">Select a connected server...</option>
                             </select>
                             <p class="text-xs text-gray-500 mt-1">Connect to servers via the Tools tab first</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-2">Tool</label>
-                            <select id="console-tool" class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
+                            <select id="console-tool"
+                                class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
                                 <option value="">Select a tool...</option>
                             </select>
                         </div>
                     </div>
-                    
+
                     <!-- Tool description/schema -->
                     <div id="tool-schema" class="mt-4 hidden"></div>
-                    
+
                     <div class="mt-6">
                         <label class="block text-sm font-medium mb-2">Parameters (JSON)</label>
-                        <textarea id="console-params" class="w-full h-40 bg-midnight-800 border border-white/10 rounded px-3 py-2 mono text-sm" placeholder='{"key": "value"}'>{}</textarea>
+                        <textarea id="console-params"
+                            class="w-full h-40 bg-midnight-800 border border-white/10 rounded px-3 py-2 mono text-sm"
+                            placeholder='{"key": "value"}'>{}</textarea>
                     </div>
                     <div class="mt-4 flex gap-4">
-                        <button onclick="executeToolConsole()" class="px-6 py-2 bg-green-600 hover:bg-green-500 rounded font-medium">
+                        <button onclick="executeToolConsole()"
+                            class="px-6 py-2 bg-green-600 hover:bg-green-500 rounded font-medium">
                             ▶ Execute Tool
                         </button>
-                        <button onclick="document.getElementById('console-result').textContent = 'Ready...'; document.getElementById('console-result').className = 'bg-black/30 rounded p-4 mono text-sm min-h-32 overflow-auto';" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded font-medium">
+                        <button
+                            onclick="document.getElementById('console-result').textContent = 'Ready...'; document.getElementById('console-result').className = 'bg-black/30 rounded p-4 mono text-sm min-h-32 overflow-auto';"
+                            class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded font-medium">
                             Clear
                         </button>
                     </div>
                     <div class="mt-6">
                         <label class="block text-sm font-medium mb-2">Result</label>
-                        <pre id="console-result" class="bg-black/30 rounded p-4 mono text-sm min-h-32 max-h-96 overflow-auto">Ready...</pre>
+                        <pre id="console-result"
+                            class="bg-black/30 rounded p-4 mono text-sm min-h-32 max-h-96 overflow-auto">Ready...</pre>
                     </div>
                 </div>
             </div>
@@ -304,55 +423,65 @@
         <div id="content-ai" class="tab-content hidden">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- Left: Chat Interface -->
-                <div class="lg:col-span-2 glass rounded-xl overflow-hidden flex flex-col" style="height: 90vh; min-height: 800px;">
+                <div class="lg:col-span-2 glass rounded-xl overflow-hidden flex flex-col"
+                    style="height: 90vh; min-height: 800px;">
                     <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
                         <div class="flex-1">
                             <h2 class="font-semibold flex items-center gap-2">
                                 🤖 AI Assistant
-                                <span id="ai-status" class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400">Not Connected</span>
+                                <span id="ai-status" class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400">Not
+                                    Connected</span>
                             </h2>
                             <div class="flex items-center gap-3 mt-2">
                                 <p class="text-sm text-gray-400">Powered by Ollama</p>
                                 <div class="flex items-center gap-2">
                                     <label class="text-xs text-gray-500">Personality:</label>
-                                    <select id="ai-preprompt" class="bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs" onchange="updatePreprompt()">
+                                    <select id="ai-preprompt"
+                                        class="bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs"
+                                        onchange="updatePreprompt()">
                                         <option value="">⏳ Loading...</option>
                                     </select>
                                 </div>
                             </div>
                         </div>
                         <div class="flex gap-2">
-                            <button onclick="clearAIChat()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-medium" title="Clear chat">
+                            <button onclick="clearAIChat()"
+                                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-medium"
+                                title="Clear chat">
                                 🗑️ Clear
                             </button>
-                            <button onclick="connectAI()" id="ai-connect-btn" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-medium">
+                            <button onclick="connectAI()" id="ai-connect-btn"
+                                class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-medium">
                                 🔌 Connect to LLM
                             </button>
                         </div>
                     </div>
-                    
+
                     <!-- Chat Messages -->
                     <div id="ai-chat" class="flex-1 p-4 overflow-y-auto space-y-4">
                         <div class="text-center text-gray-500 py-8">
                             <div class="text-4xl mb-4">🧠</div>
                             <div>Connect to local-llm-mcp to start chatting</div>
-                            <div class="text-sm mt-2">The AI can analyze your MCP repos, suggest improvements, and help with tool design</div>
+                            <div class="text-sm mt-2">The AI can analyze your MCP repos, suggest improvements, and help
+                                with tool design</div>
                         </div>
                     </div>
-                    
+
                     <!-- Input Area -->
                     <div class="p-4 border-t border-white/10">
                         <div class="flex gap-2">
-                            <textarea id="ai-input" class="flex-1 bg-midnight-800 border border-white/10 rounded-lg px-4 py-3 text-sm resize-none" 
-                                      rows="2" placeholder="Ask about your MCP servers, tools, or get suggestions..."
-                                      onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendAIMessage();}"></textarea>
-                            <button onclick="sendAIMessage()" class="px-6 bg-purple-600 hover:bg-purple-500 rounded-lg font-medium">
+                            <textarea id="ai-input"
+                                class="flex-1 bg-midnight-800 border border-white/10 rounded-lg px-4 py-3 text-sm resize-none"
+                                rows="2" placeholder="Ask about your MCP servers, tools, or get suggestions..."
+                                onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendAIMessage();}"></textarea>
+                            <button onclick="sendAIMessage()"
+                                class="px-6 bg-purple-600 hover:bg-purple-500 rounded-lg font-medium">
                                 Send
                             </button>
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Right: Quick Actions & Context -->
                 <div class="space-y-6">
                     <!-- Tools Panel -->
@@ -368,17 +497,17 @@
                             </div>
                             <div>
                                 <label class="text-xs text-gray-400">📁 Read file/folder</label>
-                                <input id="ai-file-path" type="text" placeholder="repo-name/src/main.py" 
-                                       class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs">
+                                <input id="ai-file-path" type="text" placeholder="repo-name/src/main.py"
+                                    class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs">
                             </div>
                             <div>
                                 <label class="text-xs text-gray-400">🌐 Web search</label>
-                                <input id="ai-web-search" type="text" placeholder="FastMCP best practices" 
-                                       class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs">
+                                <input id="ai-web-search" type="text" placeholder="FastMCP best practices"
+                                    class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs">
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Preprompt Manager -->
                     <div class="glass rounded-xl overflow-hidden">
                         <div class="px-4 py-3 border-b border-white/10">
@@ -389,62 +518,67 @@
                             <div>
                                 <label class="text-xs text-gray-400 mb-1 block">🤖 AI Refine (Generate)</label>
                                 <div class="flex gap-2">
-                                    <input id="ai-refine-text" type="text" placeholder="coin collector, chef, detective..." 
-                                           class="flex-1 bg-midnight-800 border border-white/10 rounded px-2 py-1.5 text-xs">
-                                    <button onclick="aiRefinePreprompt()" 
-                                            class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded text-xs font-medium whitespace-nowrap">
+                                    <input id="ai-refine-text" type="text"
+                                        placeholder="coin collector, chef, detective..."
+                                        class="flex-1 bg-midnight-800 border border-white/10 rounded px-2 py-1.5 text-xs">
+                                    <button onclick="aiRefinePreprompt()"
+                                        class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded text-xs font-medium whitespace-nowrap">
                                         Generate
                                     </button>
                                 </div>
                             </div>
-                            
+
                             <!-- Import MD File -->
                             <div>
                                 <label class="text-xs text-gray-400 mb-1 block">📁 Import .md File</label>
-                                <input id="preprompt-file-upload" type="file" accept=".md,.txt" 
-                                       onchange="importPrepromptFile(this)"
-                                       class="w-full text-xs bg-midnight-800 border border-white/10 rounded px-2 py-1.5 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-purple-600 file:text-white hover:file:bg-purple-500">
+                                <input id="preprompt-file-upload" type="file" accept=".md,.txt"
+                                    onchange="importPrepromptFile(this)"
+                                    class="w-full text-xs bg-midnight-800 border border-white/10 rounded px-2 py-1.5 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-purple-600 file:text-white hover:file:bg-purple-500">
                             </div>
-                            
+
                             <!-- Library Browser -->
                             <div>
-                                <button onclick="togglePrepromptLibrary()" 
-                                        class="w-full text-left p-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium">
+                                <button onclick="togglePrepromptLibrary()"
+                                    class="w-full text-left p-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium">
                                     📚 Browse Library
                                 </button>
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Quick Prompts -->
                     <div class="glass rounded-xl overflow-hidden">
                         <div class="px-4 py-3 border-b border-white/10">
                             <h3 class="font-semibold text-sm">⚡ Quick Prompts</h3>
                         </div>
                         <div class="p-4 space-y-2">
-                            <button onclick="setAIPrompt('Analyze my MCP zoo and identify repos that need the most improvement', true)"
-                                    class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                            <button
+                                onclick="setAIPrompt('Analyze my MCP zoo and identify repos that need the most improvement', true)"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
                                 🔍 Analyze repos
                             </button>
-                            <button onclick="setAIPrompt('Suggest which tools could be combined into portmanteau patterns', true)" 
-                                    class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                            <button
+                                onclick="setAIPrompt('Suggest which tools could be combined into portmanteau patterns', true)"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
                                 🔧 Suggest portmanteaus
                             </button>
-                            <button onclick="setAIPrompt('Review tool naming conventions and suggest improvements', true)" 
-                                    class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                            <button
+                                onclick="setAIPrompt('Review tool naming conventions and suggest improvements', true)"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
                                 📝 Review naming
                             </button>
-                            <button onclick="askWithWebSearch('FastMCP 2.x best practices and patterns')" 
-                                    class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                            <button onclick="askWithWebSearch('FastMCP 2.x best practices and patterns')"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
                                 🌐 FastMCP best practices
                             </button>
-                            <button onclick="setAIPrompt('Generate a summary of all my MCP servers and their capabilities', true)" 
-                                    class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                            <button
+                                onclick="setAIPrompt('Generate a summary of all my MCP servers and their capabilities', true)"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
                                 📊 Zoo summary
                             </button>
                         </div>
                     </div>
-                    
+
                     <!-- Context -->
                     <div class="glass rounded-xl overflow-hidden">
                         <div class="px-4 py-3 border-b border-white/10">
@@ -469,17 +603,19 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <!-- Model Settings -->
                     <div class="glass rounded-xl overflow-hidden">
                         <div class="px-4 py-3 border-b border-white/10 flex items-center justify-between">
                             <h3 class="font-semibold text-sm">⚙️ Model</h3>
-                            <button onclick="loadOllamaModels()" class="text-xs text-purple-400 hover:text-purple-300">↻ Refresh</button>
+                            <button onclick="loadOllamaModels()" class="text-xs text-purple-400 hover:text-purple-300">↻
+                                Refresh</button>
                         </div>
                         <div class="p-4 space-y-3">
                             <div>
                                 <label class="text-xs text-gray-400">Ollama Model</label>
-                                <select id="ai-model" class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-3 py-2 text-sm">
+                                <select id="ai-model"
+                                    class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-3 py-2 text-sm">
                                     <option value="">Loading models...</option>
                                 </select>
                             </div>
@@ -494,7 +630,8 @@
     </main>
 
     <!-- Detail Modal -->
-    <div id="modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4" onclick="if(event.target.id==='modal'){closeModal();}">
+    <div id="modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4"
+        onclick="if(event.target.id==='modal'){closeModal();}">
         <div class="glass rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
             <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
                 <h2 id="modal-title" class="font-semibold text-lg">Details</h2>
@@ -509,15 +646,15 @@
         // ═══════════════════════════════════════════════════════════════════
         // DOCSTRING FORMATTER - Makes tool docstrings human-readable
         // ═══════════════════════════════════════════════════════════════════
-        
+
         function formatDocstring(docstring) {
             if (!docstring || docstring.trim() === '') {
                 return '<div class="text-gray-500 italic">No description available</div>';
             }
-            
+
             // Clean up the docstring
             let text = docstring.trim();
-            
+
             // Split into sections
             const sections = {
                 brief: '',
@@ -530,35 +667,35 @@
                 notes: '',
                 seeAlso: ''
             };
-            
+
             // Extract brief description (first line or paragraph)
             const lines = text.split('\\n');
             let currentSection = 'brief';
             let currentContent = [];
             let inCodeBlock = false;
-            
+
             for (let i = 0; i < lines.length; i++) {
                 const originalLine = lines[i];
                 const trimmed = originalLine.trim();
-                
+
                 // Skip empty lines at start
                 if (i === 0 && trimmed === '') continue;
-                
+
                 // Detect code blocks (preserve original line including leading spaces)
                 if (trimmed.startsWith('```')) {
                     inCodeBlock = !inCodeBlock;
                     currentContent.push(originalLine);
                     continue;
                 }
-                
+
                 // If in code block, preserve line as-is
                 if (inCodeBlock) {
                     currentContent.push(originalLine);
                     continue;
                 }
-                
+
                 const line = trimmed;
-                
+
                 // Detect section headers (case-insensitive)
                 const sectionPatterns = {
                     'args': /^(Args|Parameters|Arguments):/i,
@@ -569,7 +706,7 @@
                     'notes': /^(Notes?|Note):/i,
                     'seeAlso': /^(See Also|See|Related):/i
                 };
-                
+
                 let sectionFound = false;
                 for (const [section, pattern] of Object.entries(sectionPatterns)) {
                     if (pattern.test(line)) {
@@ -587,7 +724,7 @@
                         break;
                     }
                 }
-                
+
                 if (!sectionFound) {
                     // First non-empty line after brief becomes detailed description
                     if (currentSection === 'brief' && line && sections.brief && !sections.detailed) {
@@ -598,7 +735,7 @@
                     }
                 }
             }
-            
+
             // Save last section
             if (currentContent.length > 0) {
                 if (currentSection === 'brief') {
@@ -607,25 +744,25 @@
                     sections[currentSection] = currentContent.join('\\n').trim();
                 }
             }
-            
+
             // If no sections found, treat entire docstring as brief
             if (!sections.brief && !sections.args && !sections.returns) {
                 sections.brief = text;
             }
-            
+
             // Build HTML
             let html = '<div class="space-y-4">';
-            
+
             // Brief description
             if (sections.brief) {
                 html += `<div class="text-base text-gray-200 leading-relaxed">${formatText(sections.brief)}</div>`;
             }
-            
+
             // Detailed description
             if (sections.detailed) {
                 html += `<div class="text-sm text-gray-300 mt-2 leading-relaxed">${formatText(sections.detailed)}</div>`;
             }
-            
+
             // Usage section
             if (sections.usage) {
                 html += `<div class="mt-4 pt-3 border-t border-white/10">
@@ -633,7 +770,7 @@
                     <div class="text-sm text-gray-300 leading-relaxed">${formatText(sections.usage)}</div>
                 </div>`;
             }
-            
+
             // Args section
             if (sections.args) {
                 html += `<div class="mt-4 pt-3 border-t border-white/10">
@@ -641,7 +778,7 @@
                     <div class="text-sm text-gray-300 space-y-2">${formatArgs(sections.args)}</div>
                 </div>`;
             }
-            
+
             // Returns section
             if (sections.returns) {
                 html += `<div class="mt-4 pt-3 border-t border-white/10">
@@ -649,7 +786,7 @@
                     <div class="text-sm text-gray-300 leading-relaxed">${formatText(sections.returns)}</div>
                 </div>`;
             }
-            
+
             // Examples section
             if (sections.examples) {
                 html += `<div class="mt-4 pt-3 border-t border-white/10">
@@ -657,7 +794,7 @@
                     <div class="text-sm text-gray-300">${formatExamples(sections.examples)}</div>
                 </div>`;
             }
-            
+
             // Raises section
             if (sections.raises) {
                 html += `<div class="mt-4 pt-3 border-t border-white/10">
@@ -665,7 +802,7 @@
                     <div class="text-sm text-gray-300">${formatText(sections.raises)}</div>
                 </div>`;
             }
-            
+
             // Notes section
             if (sections.notes) {
                 html += `<div class="mt-4 pt-3 border-t border-white/10">
@@ -673,7 +810,7 @@
                     <div class="text-sm text-gray-300">${formatText(sections.notes)}</div>
                 </div>`;
             }
-            
+
             // See Also section
             if (sections.seeAlso) {
                 html += `<div class="mt-4 pt-3 border-t border-white/10">
@@ -681,20 +818,20 @@
                     <div class="text-sm text-gray-300">${formatText(sections.seeAlso)}</div>
                 </div>`;
             }
-            
+
             html += '</div>';
             return html;
         }
-        
+
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
-        
+
         function formatText(text) {
             if (!text) return '';
-            
+
             // Handle code blocks first (before escaping HTML)
             const codeBlockRegex = /```(\\w+)?\\n([\\s\\S]*?)```/g;
             const codeBlocks = [];
@@ -705,37 +842,37 @@
                 codeBlockIndex++;
                 return placeholder;
             });
-            
+
             // Convert markdown-style formatting
             let formatted = escapeHtml(processed);
-            
+
             // Restore code blocks with proper formatting
             codeBlocks.forEach((block, idx) => {
                 const placeholder = `__CODE_BLOCK_${idx}__`;
-                formatted = formatted.replace(placeholder, 
+                formatted = formatted.replace(placeholder,
                     `<pre class="bg-black/40 p-3 rounded text-xs text-gray-300 font-mono overflow-x-auto border border-white/10 my-2"><code>${escapeHtml(block.code)}</code></pre>`
                 );
             });
-            
+
             // Convert **bold** to <strong>
             formatted = formatted.replace(/\\*\\*(.+?)\\*\\*/g, '<strong class="text-white font-semibold">$1</strong>');
-            
+
             // Convert *italic* to <em>
             formatted = formatted.replace(/(?<!\\*)\\*(?!\\*)([^*]+?)\\*(?!\\*)/g, '<em class="text-gray-300">$1</em>');
-            
+
             // Convert `code` to <code> (inline code, not in code blocks)
             formatted = formatted.replace(/`([^`\\n]+)`/g, '<code class="bg-black/30 px-1 py-0.5 rounded text-indigo-300 font-mono text-xs">$1</code>');
-            
+
             // Convert bullet points (properly handle lists)
             const lines = formatted.split('<br>');
             let inList = false;
             let listItems = [];
             let result = [];
-            
+
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i];
                 const bulletMatch = line.match(/^([-*]|\\d+\\.)\\s+(.+)$/);
-                
+
                 if (bulletMatch) {
                     if (!inList) {
                         if (listItems.length > 0) {
@@ -756,33 +893,33 @@
                     }
                 }
             }
-            
+
             if (inList && listItems.length > 0) {
                 result.push(`<ul class="list-disc space-y-1 my-2 ml-4">${listItems.join('')}</ul>`);
             }
-            
+
             formatted = result.length > 0 ? result.join('<br>') : formatted;
-            
+
             // Convert line breaks (but preserve existing HTML)
             if (!formatted.includes('<pre>') && !formatted.includes('<ul>')) {
                 formatted = formatted.replace(/\\n/g, '<br>');
             }
-            
+
             return formatted;
         }
-        
+
         function formatArgs(argsText) {
             if (!argsText) return '';
-            
+
             const lines = argsText.split('\\n');
             let html = '';
             let currentParam = null;
             let paramDetails = [];
-            
+
             for (const line of lines) {
                 const trimmed = line.trim();
                 if (!trimmed) continue;
-                
+
                 // Check if this is a parameter name (supports various formats):
                 // - name: description
                 // - name (type): description
@@ -802,10 +939,10 @@
                         </div>`;
                     }
                     // Start new param
-                    currentParam = { 
-                        name: paramMatch[1], 
+                    currentParam = {
+                        name: paramMatch[1],
                         type: paramMatch[2] || null,
-                        desc: paramMatch[3] 
+                        desc: paramMatch[3]
                     };
                     paramDetails = [];
                 } else if (trimmed.match(/^[-*]\\s+/) && currentParam) {
@@ -819,7 +956,7 @@
                     currentParam.desc += ' ' + trimmed;
                 }
             }
-            
+
             // Save last param
             if (currentParam) {
                 const typeInfo = currentParam.type ? `<span class="text-purple-400 text-xs">(${currentParam.type})</span>` : '';
@@ -832,29 +969,29 @@
                     ${paramDetails.length > 0 ? `<ul class="text-xs text-gray-500 ml-6 mt-1 space-y-1 list-disc">${paramDetails.map(d => `<li>${formatText(d)}</li>`).join('')}</ul>` : ''}
                 </div>`;
             }
-            
+
             return html || formatText(argsText);
         }
-        
+
         function formatExamples(examplesText) {
             if (!examplesText) return '';
-            
+
             // Check if it's already a code block
             const codeBlockMatch = examplesText.match(/```(\\w+)?\\n([\\s\\S]*?)```/);
             if (codeBlockMatch) {
                 return `<pre class="bg-black/40 p-3 rounded text-xs text-gray-300 font-mono overflow-x-auto border border-white/10 my-2"><code>${escapeHtml(codeBlockMatch[2].trim())}</code></pre>`;
             }
-            
+
             // Split by example headers (e.g., "Example 1:", "Basic usage:", etc.)
             const parts = examplesText.split(/(?:^|\\n)([A-Z][^:\\n]+:)/gm);
             let html = '<div class="space-y-4">';
             let hasStructured = false;
-            
+
             for (let i = 0; i < parts.length; i += 2) {
                 if (i + 1 < parts.length && parts[i + 2]) {
                     const title = parts[i + 1].replace(':', '').trim();
                     const code = parts[i + 2].trim();
-                    
+
                     if (code) {
                         hasStructured = true;
                         html += `<div class="mb-4">
@@ -864,7 +1001,7 @@
                     }
                 }
             }
-            
+
             // If no structured examples, check for plain code or format as text
             if (!hasStructured) {
                 const trimmed = examplesText.trim();
@@ -878,14 +1015,14 @@
             } else {
                 html += '</div>';
             }
-            
+
             return html;
         }
-        
+
         // ═══════════════════════════════════════════════════════════════════
         // END DOCSTRING FORMATTER
         // ═══════════════════════════════════════════════════════════════════
-        
+
         // State
         let clientsData = {};
         let reposData = [];
@@ -907,19 +1044,19 @@
             try {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
-                
+
                 const res = await fetch('/api/v1/clients/', { signal: controller.signal });
                 clearTimeout(timeoutId);
-                
+
                 if (!res.ok) {
                     throw new Error(`HTTP ${res.status}: ${res.statusText}`);
                 }
-                
+
                 const responseData = await res.json();
                 clientsData = responseData.clients || [];
                 renderClients();
                 updateStats();
-            } catch(e) {
+            } catch (e) {
                 console.error('Failed to load clients:', e);
                 // Show error in UI but don't block
                 document.getElementById('clients-list').innerHTML = `
@@ -1100,7 +1237,7 @@
 
             // Use client data from API
             const icon = client.id.includes('claude') ? '🟣' : client.id.includes('cursor') ? '🔵' : client.id.includes('zed') ? '⚡' : client.id.includes('windsurf') ? '🌊' : '🟢';
-            
+
             const modal = document.getElementById('modal');
             const modalTitle = document.getElementById('modal-title');
             const modalContent = document.getElementById('modal-content');
@@ -1157,16 +1294,16 @@
             const modal = document.getElementById('modal');
             const modalTitle = document.getElementById('modal-title');
             const modalContent = document.getElementById('modal-content');
-            
+
             // Load available servers from repos
             let availableServers = [];
             try {
-                const res = await fetch('/api/available-servers');
+                const res = await fetch('/api/v1/mcp/servers');
                 availableServers = await res.json();
             } catch (e) {
                 console.error('Error loading available servers:', e);
             }
-            
+
             modalTitle.innerHTML = `➕ Add MCP Server to ${clientName}`;
             modalContent.innerHTML = `
                 <form id="add-server-form" class="space-y-4">
@@ -1176,18 +1313,18 @@
                         <select id="server-template" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm" onchange="fillServerFromTemplate()">
                             <option value="">-- Choose a server from repos --</option>
                             ${availableServers.map(s => {
-                                let methodIcon = '🐍';
-                                let methodLabel = 'Python';
-                                if (s.has_mcpb) {
-                                    methodIcon = '📦';
-                                    methodLabel = 'MCPB';
-                                } else if (s.has_npm) {
-                                    methodIcon = '📦';
-                                    methodLabel = 'npm/npx';
-                                }
-                                const sourceIcon = s.source && s.source.includes('MCPB') ? '📦' : s.source && s.source.includes('npm') ? '📦' : s.source === 'README.md' ? '📖' : s.source === 'pyproject.toml' ? '📦' : '🔍';
-                                const sourceLabel = s.source || 'inferred';
-                                return `
+                let methodIcon = '🐍';
+                let methodLabel = 'Python';
+                if (s.has_mcpb) {
+                    methodIcon = '📦';
+                    methodLabel = 'MCPB';
+                } else if (s.has_npm) {
+                    methodIcon = '📦';
+                    methodLabel = 'npm/npx';
+                }
+                const sourceIcon = s.source && s.source.includes('MCPB') ? '📦' : s.source && s.source.includes('npm') ? '📦' : s.source === 'README.md' ? '📖' : s.source === 'pyproject.toml' ? '📦' : '🔍';
+                const sourceLabel = s.source || 'inferred';
+                return `
                                 <option value="${s.id}" 
                                     data-command="${s.command}" 
                                     data-args="${JSON.stringify(s.args)}" 
@@ -1257,16 +1394,16 @@
                     </div>
                 </form>
             `;
-            
+
             // Function to fill form from template
-            window.fillServerFromTemplate = function() {
+            window.fillServerFromTemplate = function () {
                 const select = document.getElementById('server-template');
                 const option = select.options[select.selectedIndex];
                 if (!option || !option.value) {
                     document.getElementById('installation-hints').classList.add('hidden');
                     return;
                 }
-                
+
                 const command = option.dataset.command;
                 const args = JSON.parse(option.dataset.args || '[]');
                 const cwd = option.dataset.cwd;
@@ -1277,14 +1414,14 @@
                 const hasMcpb = option.dataset.hasMcpb === 'true';
                 const hasNpm = option.dataset.hasNpm === 'true';
                 const repo = option.dataset.repo;
-                
+
                 // Show installation hints
                 const hintsDiv = document.getElementById('installation-hints');
                 hintsDiv.classList.remove('hidden');
-                
+
                 let hintsHtml = '<div class="bg-blue-600/20 border border-blue-600/50 rounded p-2 space-y-1">';
                 hintsHtml += '<p class="font-semibold text-blue-300">Installation Methods (in order):</p>';
-                
+
                 if (hasMcpb) {
                     hintsHtml += '<p class="text-blue-200">1. 📦 <strong>MCPB (Recommended)</strong>: Open Claude Desktop → Settings → Developer → Add MCP Server → Paste path to manifest.json</p>';
                 }
@@ -1294,9 +1431,9 @@
                 hintsHtml += '<p class="text-blue-200">3. 📋 <strong>JSON Snippet</strong>: Add the config below to your client config file</p>';
                 hintsHtml += '<p class="text-blue-200">4. 🐍 <strong>Python</strong>: Clone repo and use Python setup (last resort)</p>';
                 hintsHtml += '</div>';
-                
+
                 hintsDiv.innerHTML = hintsHtml;
-                
+
                 document.getElementById('server-id').value = option.value;
                 if (document.getElementById('server-name')) {
                     document.getElementById('server-name').value = name;
@@ -1320,7 +1457,7 @@
                     }
                 }
             };
-            
+
             // Show/hide URL field based on type
             document.getElementById('server-type').addEventListener('change', (e) => {
                 const urlContainer = document.getElementById('server-url-container');
@@ -1330,7 +1467,7 @@
                     urlContainer.classList.add('hidden');
                 }
             });
-            
+
             document.getElementById('add-server-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const formData = {
@@ -1342,14 +1479,14 @@
                     type: document.getElementById('server-type').value,
                     url: document.getElementById('server-url').value.trim() || undefined
                 };
-                
+
                 try {
-                    const res = await fetch(`/api/clients/${clientName}/servers`, {
+                    const res = await fetch(`/api/v1/clients/${clientName}/servers`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(formData)
                     });
-                    
+
                     if (res.ok) {
                         await loadClients();
                         closeModal();
@@ -1368,11 +1505,11 @@
             const clientData = clientsData[clientName];
             const server = clientData.servers.find(s => s.id === serverId);
             if (!server) return;
-            
+
             const modal = document.getElementById('modal');
             const modalTitle = document.getElementById('modal-title');
             const modalContent = document.getElementById('modal-content');
-            
+
             modalTitle.innerHTML = `✏️ Edit Server: ${server.name}`;
             modalContent.innerHTML = `
                 <form id="edit-server-form" class="space-y-4">
@@ -1414,7 +1551,7 @@
                     </div>
                 </form>
             `;
-            
+
             document.getElementById('server-type').addEventListener('change', (e) => {
                 const urlContainer = document.getElementById('server-url-container');
                 if (e.target.value === 'http') {
@@ -1423,7 +1560,7 @@
                     urlContainer.classList.add('hidden');
                 }
             });
-            
+
             document.getElementById('edit-server-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const formData = {
@@ -1433,14 +1570,14 @@
                     type: document.getElementById('server-type').value,
                     url: document.getElementById('server-url').value.trim() || undefined
                 };
-                
+
                 try {
-                    const res = await fetch(`/api/clients/${clientName}/servers/${serverId}`, {
+                    const res = await fetch(`/api/v1/clients/${clientName}/servers/${serverId}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(formData)
                     });
-                    
+
                     if (res.ok) {
                         await loadClients();
                         closeModal();
@@ -1457,12 +1594,12 @@
 
         async function deleteServer(clientName, serverId) {
             if (!confirm(`Delete server "${serverId}" from ${clientName}?`)) return;
-            
+
             try {
                 const res = await fetch(`/api/clients/${clientName}/servers/${serverId}`, {
                     method: 'DELETE'
                 });
-                
+
                 if (res.ok) {
                     await loadClients();
                     closeModal();
@@ -1481,7 +1618,7 @@
             const modal = document.getElementById('modal');
             const modalTitle = document.getElementById('modal-title');
             const modalContent = document.getElementById('modal-content');
-            
+
             modalTitle.textContent = '📋 Repository Classification Criteria';
             modalContent.innerHTML = `
                 <div class="space-y-6">
@@ -1605,13 +1742,13 @@
             `;
             modal.classList.remove('hidden');
         }
-        
+
         // Load repos with progress tracking
         async function loadRepos() {
             // Show progress UI
             const progressHtml = `
                 <div class="p-4 space-y-3">
-                    <div class="text-sm font-semibold text-indigo-400 mb-3">🔍 Scanning Repositories...</div>
+                    <div class="text-sm font-semibold text-indigo-400 mb-3">Scanning Repositories...</div>
                     <div id="scan-progress-display" class="space-y-2">
                         <div class="flex items-center justify-between text-xs">
                             <span class="text-gray-400">Current:</span>
@@ -1648,71 +1785,76 @@
             `;
             document.getElementById('repos-health').innerHTML = progressHtml;
             document.getElementById('repos-detail').innerHTML = progressHtml;
-            
-            // Start polling for progress
-            const progressInterval = setInterval(async () => {
-                try {
-                    const progressRes = await fetch('/api/progress');
-                    const progress = await progressRes.json();
-                    
-                    if (progress.status === 'scanning') {
-                        // Update progress display
-                        document.getElementById('scan-current').textContent = progress.current || '-';
-                        document.getElementById('scan-progress').textContent = `${progress.done || 0} / ${progress.total || 0}`;
-                        
-                        const percent = progress.total > 0 ? ((progress.done || 0) / progress.total) * 100 : 0;
-                        document.getElementById('scan-progress-bar').style.width = percent + '%';
-                        
-                        document.getElementById('scan-found').textContent = progress.mcp_repos_found || 0;
-                        document.getElementById('scan-skipped').textContent = progress.skipped || 0;
-                        document.getElementById('scan-errors').textContent = progress.errors || 0;
-                        
-                        // Update activity log
-                        if (progress.activity_log && progress.activity_log.length > 0) {
-                            const activityDiv = document.getElementById('scan-activity');
-                            activityDiv.innerHTML = progress.activity_log.slice(-10).map(msg => 
-                                `<div class="text-gray-300">${msg}</div>`
-                            ).join('');
-                            activityDiv.scrollTop = activityDiv.scrollHeight;
-                        }
-                    } else if (progress.status === 'complete') {
-                        // Scan finished, clear interval and load results
-                        clearInterval(progressInterval);
-                        document.getElementById('scan-progress-display').innerHTML = 
-                            `<div class="text-green-400 text-sm font-semibold">✅ Scan complete! Loading results...</div>`;
-                        
-                        // Fetch final results
-                        const res = await fetch('/api/repos');
-                        reposData = await res.json();
-                        renderRepos();
-                        populateRepoSelector();
-                        updateStats();
-                        loadLogs();
-                    }
-                } catch(e) {
-                    console.error('Error polling progress:', e);
-                }
-            }, 200); // Poll every 200ms
-            
-            // Start the scan (this is async, so we poll for progress)
+
+            // Start the scan first, then poll for progress
+            let progressInterval;
             try {
-                const res = await fetch('/api/repos?scan_path=D:/Dev/repos/mcp-studio');
+                console.log('Starting repository scan...');
+                const scanPromise = fetch('/api/v1/repos');
+
+                // Start polling for progress immediately
+                progressInterval = setInterval(async () => {
+                    try {
+                        const progressRes = await fetch('/api/v1/repos/progress');
+                        const progress = await progressRes.json();
+
+                        if (progress.status === 'scanning') {
+                            // Update progress display
+                            document.getElementById('scan-current').textContent = progress.current || '-';
+                            document.getElementById('scan-progress').textContent = `${progress.done || 0} / ${progress.total || 0}`;
+
+                            const percent = progress.total > 0 ? ((progress.done || 0) / progress.total) * 100 : 0;
+                            document.getElementById('scan-progress-bar').style.width = percent + '%';
+
+                            document.getElementById('scan-found').textContent = progress.mcp_repos_found || 0;
+                            document.getElementById('scan-skipped').textContent = progress.skipped || 0;
+                            document.getElementById('scan-errors').textContent = progress.errors || 0;
+
+                            // Update activity log
+                            if (progress.activity_log && progress.activity_log.length > 0) {
+                                const activityDiv = document.getElementById('scan-activity');
+                                activityDiv.innerHTML = progress.activity_log.slice(-10).map(msg =>
+                                    `<div class="text-gray-300">${msg}</div>`
+                                ).join('');
+                                activityDiv.scrollTop = activityDiv.scrollHeight;
+                            }
+                        } else if (progress.status === 'complete') {
+                            // Scan finished, clear interval and load results
+                            clearInterval(progressInterval);
+                            document.getElementById('scan-progress-display').innerHTML =
+                                `<div class="text-green-400 text-sm font-semibold">Scan complete! Loading results...</div>`;
+
+                            // Fetch final results
+                            const res = await fetch('/api/v1/repos');
+                            reposData = await res.json();
+                            renderRepos();
+                            populateRepoSelector();
+                            updateStats();
+                            loadLogs();
+                        }
+                    } catch (e) {
+                        console.error('Error polling progress:', e);
+                    }
+                }, 500); // Poll every 500ms
+
+                // Wait for scan to complete
+                const res = await scanPromise;
                 const data = await res.json();
-                reposData = data.runts || [];
-                
-                // Clear interval if scan finished quickly
+                reposData = data || [];
+
+                // Clear interval after scan completes
                 clearInterval(progressInterval);
-                
+
                 renderRepos();
                 populateRepoSelector();
                 updateStats();
                 loadLogs();
-            } catch(e) {
-                clearInterval(progressInterval);
-                console.error('Error loading repos:', e);
-                document.getElementById('repos-health').innerHTML = 
+            } catch (e) {
+                if (progressInterval) clearInterval(progressInterval);
+                console.error('Error scanning repositories:', e);
+                document.getElementById('repos-health').innerHTML =
                     '<div class="text-red-400">Error scanning repositories: ' + e.message + '</div>';
-                document.getElementById('repos-detail').innerHTML = 
+                document.getElementById('repos-detail').innerHTML =
                     '<div class="text-red-400">Error scanning repositories: ' + e.message + '</div>';
             }
         }
@@ -1721,7 +1863,7 @@
             const health = document.getElementById('repos-health');
             const detail = document.getElementById('repos-detail');
             const filter = document.getElementById('repo-filter').value;
-            
+
             let filtered = reposData;
             if (filter !== 'all') {
                 filtered = reposData.filter(r => r.status === filter);
@@ -1731,7 +1873,7 @@
             const sota = reposData.filter(r => r.status === 'sota').length;
             const improvable = reposData.filter(r => r.status === 'improvable').length;
             const runts = reposData.filter(r => r.status === 'runt').length;
-            
+
             health.innerHTML = `
                 <div class="grid grid-cols-3 gap-3 mb-4">
                     <div class="p-3 bg-green-500/10 rounded-lg text-center">
@@ -1852,10 +1994,10 @@
 
         async function connectServer(client, serverId) {
             try {
-                const res = await fetch('/api/servers/' + client + '/' + serverId + '/connect', {method: 'POST'});
+                const res = await fetch('/api/v1/mcp/servers/' + client + '/' + serverId + '/connect', { method: 'POST' });
                 const data = await res.json();
                 alert('Connected! Status: ' + data.status);
-            } catch(e) {
+            } catch (e) {
                 alert('Connection failed: ' + e.message);
             }
         }
@@ -1868,7 +2010,7 @@
                 document.getElementById('log-count').textContent = data.logs.length + ' entries';
                 log.innerHTML = data.logs.map(l => '<div class="text-gray-300">' + l + '</div>').join('') || '<div class="text-gray-500">No activity</div>';
                 log.scrollTop = log.scrollHeight;
-            } catch(e) {
+            } catch (e) {
                 console.error('Error loading logs:', e);
             }
         }
@@ -1894,7 +2036,7 @@
         function populateRepoSelector() {
             const select = document.getElementById('tools-repo-select');
             if (!select || reposData.length === 0) return;
-            
+
             select.innerHTML = '<option value="">Select a repository...</option>' +
                 reposData.map(r => `<option value="${r.name}">${r.zoo_emoji} ${r.name} (${r.tools} tools)</option>`).join('');
         }
@@ -1904,7 +2046,7 @@
             const select = document.getElementById('tools-repo-select');
             const detail = document.getElementById('tools-detail');
             const repoName = select.value;
-            
+
             if (!repoName) {
                 detail.innerHTML = `
                     <div class="text-center py-12 text-gray-500">
@@ -1914,10 +2056,10 @@
                 `;
                 return;
             }
-            
+
             const repo = reposData.find(r => r.name === repoName);
             if (!repo) return;
-            
+
             detail.innerHTML = `
                 <div class="mb-6">
                     <div class="flex items-center gap-3 mb-4">
@@ -1982,18 +2124,18 @@
             const statusDiv = document.getElementById('repo-connection-status-' + repoName);
             const liveToolsDiv = document.getElementById('repo-live-tools-' + repoName);
             const toolsList = document.getElementById('live-tools-list-' + repoName);
-            
+
             statusDiv.textContent = 'Connecting...';
             statusDiv.className = 'text-sm text-yellow-400';
-            
+
             try {
-                const res = await fetch('/api/repos/repo/' + repoName, {method: 'GET'});
+                const res = await fetch('/api/v1/repos/repo/' + repoName, { method: 'GET' });
                 const data = await res.json();
-                
+
                 if (data.status === 'connected') {
                     statusDiv.textContent = '✅ Connected (' + data.tools.length + ' tools)';
                     statusDiv.className = 'text-sm text-green-400';
-                    
+
                     liveToolsDiv.classList.remove('hidden');
                     toolsList.innerHTML = data.tools.map(tool => `
                         <div class="p-3 bg-white/5 rounded-lg">
@@ -2005,7 +2147,7 @@
                     statusDiv.textContent = '❌ Error: ' + (data.error || data.status);
                     statusDiv.className = 'text-sm text-red-400';
                 }
-            } catch(e) {
+            } catch (e) {
                 statusDiv.textContent = '❌ Failed: ' + e.message;
                 statusDiv.className = 'text-sm text-red-400';
             }
@@ -2020,7 +2162,7 @@
         // ═══════════════════════════════════════════════════════════════════
         // CONSOLE TAB - Tool Execution
         // ═══════════════════════════════════════════════════════════════════
-        
+
         let consoleServers = [];
         let consoleSelectedServer = null;
         let consoleSelectedTool = null;
@@ -2031,7 +2173,7 @@
                 const data = await res.json();
                 consoleServers = data.connections || [];
                 renderConsoleServers();
-            } catch(e) {
+            } catch (e) {
                 console.error('Error loading connections:', e);
             }
         }
@@ -2046,17 +2188,17 @@
             const select = document.getElementById('console-server');
             const serverId = select.value;
             const toolSelect = document.getElementById('console-tool');
-            
+
             if (!serverId) {
                 consoleSelectedServer = null;
                 toolSelect.innerHTML = '<option value="">Select a tool...</option>';
                 document.getElementById('tool-schema').classList.add('hidden');
                 return;
             }
-            
+
             consoleSelectedServer = consoleServers.find(s => s.id === serverId);
             if (!consoleSelectedServer) return;
-            
+
             toolSelect.innerHTML = '<option value="">Select a tool...</option>' +
                 consoleSelectedServer.tools.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
         }
@@ -2066,16 +2208,16 @@
             const toolName = toolSelect.value;
             const schemaDiv = document.getElementById('tool-schema');
             const paramsInput = document.getElementById('console-params');
-            
+
             if (!toolName || !consoleSelectedServer) {
                 consoleSelectedTool = null;
                 schemaDiv.classList.add('hidden');
                 return;
             }
-            
+
             consoleSelectedTool = consoleSelectedServer.tools.find(t => t.name === toolName);
             if (!consoleSelectedTool) return;
-            
+
             // Show tool description and schema with formatted docstring
             const formattedDescription = formatDocstring(consoleSelectedTool.description);
             schemaDiv.innerHTML = `
@@ -2085,7 +2227,7 @@
                 </div>
             `;
             schemaDiv.classList.remove('hidden');
-            
+
             // Pre-populate params with schema hint
             if (consoleSelectedTool.inputSchema && consoleSelectedTool.inputSchema.properties) {
                 const example = {};
@@ -2106,22 +2248,22 @@
                 alert('Please select a server and tool first');
                 return;
             }
-            
+
             const paramsInput = document.getElementById('console-params');
             const resultDiv = document.getElementById('console-result');
-            
+
             let params = {};
             try {
                 params = JSON.parse(paramsInput.value || '{}');
-            } catch(e) {
+            } catch (e) {
                 resultDiv.textContent = 'Error: Invalid JSON in parameters';
                 resultDiv.className = 'bg-red-900/30 rounded p-4 mono text-sm min-h-32 overflow-auto text-red-300';
                 return;
             }
-            
+
             resultDiv.textContent = 'Executing...';
             resultDiv.className = 'bg-black/30 rounded p-4 mono text-sm min-h-32 overflow-auto';
-            
+
             try {
                 const repoName = consoleSelectedServer.id.replace('repo:', '');
                 const res = await fetch('/api/execute', {
@@ -2133,9 +2275,9 @@
                         parameters: params
                     })
                 });
-                
+
                 const data = await res.json();
-                
+
                 if (res.ok) {
                     resultDiv.textContent = JSON.stringify(data, null, 2);
                     resultDiv.className = 'bg-green-900/30 rounded p-4 mono text-sm min-h-32 overflow-auto text-green-300';
@@ -2143,7 +2285,7 @@
                     resultDiv.textContent = 'Error: ' + (data.detail || JSON.stringify(data));
                     resultDiv.className = 'bg-red-900/30 rounded p-4 mono text-sm min-h-32 overflow-auto text-red-300';
                 }
-            } catch(e) {
+            } catch (e) {
                 resultDiv.textContent = 'Error: ' + e.message;
                 resultDiv.className = 'bg-red-900/30 rounded p-4 mono text-sm min-h-32 overflow-auto text-red-300';
             }
@@ -2156,11 +2298,11 @@
         // ═══════════════════════════════════════════════════════════════════
         // AI ASSISTANT TAB
         // ═══════════════════════════════════════════════════════════════════
-        
+
         let aiConnected = false;
         let aiMessages = [];
         let currentPreprompt = 'MCP Developer';  // Track current preprompt
-        
+
         // Toast notification helper
         function showToast(message, type = 'success') {
             const backgrounds = {
@@ -2169,7 +2311,7 @@
                 'info': 'linear-gradient(to right, #3b82f6, #2563eb)',
                 'warning': 'linear-gradient(to right, #f59e0b, #d97706)'
             };
-            
+
             Toastify({
                 text: message,
                 duration: 3000,
@@ -2184,32 +2326,32 @@
         async function loadOllamaModels() {
             const select = document.getElementById('ai-model');
             const info = document.getElementById('ai-model-info');
-            
+
             select.innerHTML = '<option value="">Loading...</option>';
             info.textContent = 'Fetching from Ollama...';
-            
+
             try {
                 const res = await fetch('/api/ollama/models');
                 const data = await res.json();
-                
+
                 if (data.error) {
                     select.innerHTML = '<option value="">❌ ' + data.error + '</option>';
                     info.textContent = 'Make sure Ollama is running (ollama serve)';
                     return;
                 }
-                
+
                 if (data.models.length === 0) {
                     select.innerHTML = '<option value="">No models found</option>';
                     info.textContent = 'Run "ollama pull llama3.2" to download a model';
                     return;
                 }
-                
-                select.innerHTML = data.models.map(m => 
+
+                select.innerHTML = data.models.map(m =>
                     `<option value="${m.name}">${m.name} (${m.size})</option>`
                 ).join('');
-                
+
                 info.innerHTML = `<span class="text-green-400">${data.count} models available</span>`;
-            } catch(e) {
+            } catch (e) {
                 select.innerHTML = '<option value="">❌ Connection failed</option>';
                 info.textContent = 'Cannot connect to Ollama. Check OLLAMA_URL configuration.';
             }
@@ -2220,30 +2362,30 @@
             const btnEl = document.getElementById('ai-connect-btn');
             const chatEl = document.getElementById('ai-chat');
             const modelSelect = document.getElementById('ai-model');
-            
+
             statusEl.textContent = 'Checking Ollama...';
             statusEl.className = 'text-xs px-2 py-0.5 rounded bg-yellow-600 text-yellow-100';
             btnEl.disabled = true;
-            
+
             try {
                 // Check Ollama is running
                 const res = await fetch('/api/ollama/models');
                 const data = await res.json();
-                
+
                 if (data.error) {
                     throw new Error(data.error);
                 }
-                
+
                 if (data.models.length === 0) {
                     throw new Error('No models loaded in Ollama');
                 }
-                
+
                 aiConnected = true;
                 const selectedModel = modelSelect.value || data.models[0].name;
                 currentPreprompt = document.getElementById('ai-preprompt').value;
-                
+
                 showToast(`Connected with ${currentPreprompt}`, 'success');
-                
+
                 // Get personality-specific welcome message
                 const welcomeMessages = {
                     'Long John Silver, Pirate': `Ahoy, matey! ☠️ Long John Silver here, connected to Ollama's treasure chest o' ${data.count} models! We be sailin' with <strong>${selectedModel}</strong> as our trusty vessel. Let me navigate yer MCP seas and chart a course through yer code! What mysteries shall we unravel today, sailor?`,
@@ -2254,14 +2396,14 @@
                     'Aussie Coder': `G'day mate! 🦘 Just connected to Ollama's ripper collection of ${data.count} models! We're using <strong>${selectedModel}</strong> and she's a beaut! Ready to have a squiz at your MCP servers. What needs sortin' out, mate?`,
                     'MCP Developer': `Connected to Ollama with ${data.count} models! Using <strong>${selectedModel}</strong>. I can help you analyze your MCP zoo, suggest improvements, and answer questions about your servers. What would you like to know?`
                 };
-                
+
                 const welcomeMsg = welcomeMessages[currentPreprompt] || welcomeMessages['MCP Developer'];
-                
+
                 statusEl.textContent = `Ready (${data.count} models • ${currentPreprompt})`;
                 statusEl.className = 'text-xs px-2 py-0.5 rounded bg-green-600 text-green-100';
                 btnEl.textContent = '✓ Connected';
                 btnEl.className = 'px-4 py-2 bg-green-600 rounded text-sm font-medium cursor-default';
-                
+
                 chatEl.innerHTML = `
                     <div class="flex gap-3">
                         <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-sm">🤖</div>
@@ -2271,9 +2413,9 @@
                         </div>
                     </div>
                 `;
-                
+
                 updateAIContext();
-            } catch(e) {
+            } catch (e) {
                 statusEl.textContent = 'Error: ' + e.message;
                 statusEl.className = 'text-xs px-2 py-0.5 rounded bg-red-600 text-red-100';
                 btnEl.disabled = false;
@@ -2291,7 +2433,7 @@
             document.getElementById('ai-input').value = text;
             document.getElementById('ai-include-repos').checked = includeRepos;
         }
-        
+
         function askWithWebSearch(searchQuery) {
             document.getElementById('ai-web-search').value = searchQuery;
             document.getElementById('ai-input').value = 'Based on the web search results, summarize the key points and how they apply to my MCP projects.';
@@ -2301,7 +2443,7 @@
             currentPreprompt = document.getElementById('ai-preprompt').value;
             console.log('Preprompt changed to:', currentPreprompt);
             showToast(`Switched to: ${currentPreprompt}`, 'info');
-            
+
             // Update chat header if connected
             if (aiConnected) {
                 const headerEl = document.querySelector('#ai-chat').previousElementSibling;
@@ -2321,24 +2463,24 @@
             try {
                 console.log('Loading preprompts from database...');
                 const res = await fetch('/api/ai/preprompts');
-                
+
                 if (!res.ok) {
                     console.error('API returned error:', res.status);
                     return;
                 }
-                
+
                 const data = await res.json();
                 console.log('Preprompts loaded:', data);
-                
+
                 if (data.preprompts && data.preprompts.length > 0) {
                     const dropdown = document.getElementById('ai-preprompt');
                     if (!dropdown) {
                         console.error('Dropdown element not found!');
                         return;
                     }
-                    
+
                     dropdown.innerHTML = '';
-                    
+
                     // Reverse to show newest first
                     data.preprompts.reverse().forEach(p => {
                         const option = document.createElement('option');
@@ -2346,7 +2488,7 @@
                         option.textContent = `${p.emoji} ${p.name}`;
                         dropdown.appendChild(option);
                     });
-                    
+
                     console.log(`✓ Loaded ${data.preprompts.length} preprompts`);
                 } else {
                     console.warn('No preprompts found in database');
@@ -2363,17 +2505,17 @@
                 showToast('Please enter a personality concept (e.g., "coin collector")', 'warning');
                 return;
             }
-            
+
             const modelId = document.getElementById('ai-model').value;
-            
+
             // Show loading
             const btn = event.target;
             btn.disabled = true;
             btn.textContent = 'Generating...';
             btn.className = 'px-3 py-1.5 bg-yellow-600 rounded text-xs font-medium whitespace-nowrap animate-pulse';
-            
+
             showToast(`🤖 AI generating "${text}" personality... (30-60s)`, 'info');
-            
+
             try {
                 const res = await fetch('/api/preprompts/ai-refine', {
                     method: 'POST',
@@ -2383,14 +2525,14 @@
                         model_id: modelId
                     })
                 });
-                
+
                 const data = await res.json();
-                
+
                 if (data.success) {
                     showToast(`✨ Generated "${data.emoji} ${data.name}" preprompt!`, 'success');
                     document.getElementById('ai-refine-text').value = '';
                     await loadPrepromptsFromDB();
-                    
+
                     // Auto-select the new preprompt
                     const dropdown = document.getElementById('ai-preprompt');
                     dropdown.value = data.name;
@@ -2410,13 +2552,13 @@
         async function importPrepromptFile(input) {
             const file = input.files[0];
             if (!file) return;
-            
+
             showToast(`📁 Importing ${file.name}...`, 'info');
-            
+
             const reader = new FileReader();
             reader.onload = async (e) => {
                 const content = e.target.result;
-                
+
                 try {
                     const res = await fetch('/api/preprompts/import', {
                         method: 'POST',
@@ -2426,13 +2568,13 @@
                             filename: file.name
                         })
                     });
-                    
+
                     const data = await res.json();
-                    
+
                     if (data.success) {
                         showToast(`✅ Imported "${data.emoji} ${data.name}"!`, 'success');
                         await loadPrepromptsFromDB();
-                        
+
                         // Auto-select the imported preprompt
                         const dropdown = document.getElementById('ai-preprompt');
                         dropdown.value = data.name;
@@ -2443,7 +2585,7 @@
                 } catch (e) {
                     showToast('❌ Error: ' + e.message, 'error');
                 }
-                
+
                 input.value = '';
             };
             reader.readAsText(file);
@@ -2454,30 +2596,30 @@
             modal.classList.remove('hidden');
             await loadPrepromptLibrary();
         }
-        
+
         function closePrepromptLibrary() {
             document.getElementById('library-modal').classList.add('hidden');
         }
-        
+
         async function loadPrepromptLibrary() {
             const contentEl = document.getElementById('library-content');
             contentEl.innerHTML = '<div class="text-center text-gray-500 py-8"><div class="text-4xl mb-4">⏳</div><div>Loading...</div></div>';
-            
+
             try {
                 // Load preprompts and usage stats in parallel
                 const [prepsRes, statsRes] = await Promise.all([
                     fetch('/api/ai/preprompts'),
                     fetch('/api/preprompts/stats/usage')
                 ]);
-                
+
                 const prepsData = await prepsRes.json();
                 const statsData = await statsRes.json();
-                
+
                 if (!prepsData.preprompts || prepsData.preprompts.length === 0) {
                     contentEl.innerHTML = '<div class="text-center text-gray-500 py-8"><div class="text-4xl mb-4">📭</div><div>No preprompts found</div></div>';
                     return;
                 }
-                
+
                 // Merge usage stats with preprompts
                 const statsMap = {};
                 if (statsData.stats) {
@@ -2485,26 +2627,26 @@
                         statsMap[s.id] = s;
                     });
                 }
-                
+
                 prepsData.preprompts.forEach(p => {
                     p.usage_count = statsMap[p.id]?.usage_count || 0;
                     p.last_used = statsMap[p.id]?.last_used || null;
                 });
-                
+
                 // Store for filtering
                 window.allPreprompts = prepsData.preprompts;
                 document.getElementById('library-count').textContent = prepsData.preprompts.length;
-                
+
                 displayLibraryPreprompts(prepsData.preprompts);
             } catch (e) {
                 contentEl.innerHTML = `<div class="text-center text-red-500 py-8"><div class="text-4xl mb-4">❌</div><div>Error: ${e.message}</div></div>`;
             }
         }
-        
+
         function displayLibraryPreprompts(preprompts) {
             const contentEl = document.getElementById('library-content');
             contentEl.innerHTML = '';
-            
+
             preprompts.forEach(p => {
                 const sourceColors = {
                     'builtin': 'bg-blue-600',
@@ -2512,7 +2654,7 @@
                     'imported': 'bg-green-600',
                     'user': 'bg-yellow-600'
                 };
-                
+
                 const card = document.createElement('div');
                 card.className = 'glass rounded-lg p-4 hover:bg-white/10 transition';
                 card.innerHTML = `
@@ -2557,21 +2699,21 @@
                 contentEl.appendChild(card);
             });
         }
-        
+
         function filterLibrary() {
             if (!window.allPreprompts) return;
-            
+
             const searchText = document.getElementById('library-search').value.toLowerCase();
             const sourceFilter = document.getElementById('library-filter').value;
-            
+
             const filtered = window.allPreprompts.filter(p => {
-                const matchesSearch = !searchText || 
-                    p.name.toLowerCase().includes(searchText) || 
+                const matchesSearch = !searchText ||
+                    p.name.toLowerCase().includes(searchText) ||
                     p.prompt_text.toLowerCase().includes(searchText);
                 const matchesSource = !sourceFilter || p.source === sourceFilter;
                 return matchesSearch && matchesSource;
             });
-            
+
             displayLibraryPreprompts(filtered);
         }
 
@@ -2579,29 +2721,29 @@
             try {
                 const res = await fetch(`/api/preprompts/${id}`);
                 const prep = await res.json();
-                
+
                 if (prep.error) {
                     showToast('Error loading preprompt', 'error');
                     return;
                 }
-                
+
                 // Show in modal with full text
                 alert(`${prep.emoji} ${prep.name}\\n\\n${prep.prompt_text}\\n\\nSource: ${prep.source}\\nCreated: ${new Date(prep.created_at).toLocaleString()}`);
             } catch (e) {
                 showToast('Error: ' + e.message, 'error');
             }
         }
-        
+
         async function editPreprompt(id) {
             try {
                 const res = await fetch(`/api/preprompts/${id}`);
                 const prep = await res.json();
-                
+
                 if (prep.error) {
                     showToast('Error loading preprompt', 'error');
                     return;
                 }
-                
+
                 // Open editor modal with data
                 document.getElementById('edit-name').value = prep.name;
                 document.getElementById('edit-emoji').value = prep.emoji;
@@ -2609,45 +2751,45 @@
                 document.getElementById('edit-prompt').value = prep.prompt_text;
                 document.getElementById('editor-modal').dataset.editId = id;
                 updateCharCount();
-                
+
                 document.getElementById('editor-modal').classList.remove('hidden');
                 closePrepromptLibrary();
             } catch (e) {
                 showToast('Error: ' + e.message, 'error');
             }
         }
-        
+
         function closeEditor() {
             document.getElementById('editor-modal').classList.add('hidden');
         }
-        
+
         function updateCharCount() {
             const text = document.getElementById('edit-prompt').value;
             const count = text.length;
             const words = text.split(/\\s+/).filter(w => w.length > 0).length;
             document.getElementById('edit-char-count').textContent = `(${count} chars, ${words} words)`;
         }
-        
+
         async function saveEditedPreprompt() {
             const id = document.getElementById('editor-modal').dataset.editId;
             const name = document.getElementById('edit-name').value.trim();
             const emoji = document.getElementById('edit-emoji').value.trim();
             const prompt_text = document.getElementById('edit-prompt').value.trim();
-            
+
             if (!name || !prompt_text) {
                 showToast('Name and prompt text are required', 'warning');
                 return;
             }
-            
+
             try {
                 const res = await fetch(`/api/preprompts/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, emoji, prompt_text })
                 });
-                
+
                 const data = await res.json();
-                
+
                 if (data.success) {
                     showToast(`✅ Updated "${emoji} ${name}"`, 'success');
                     closeEditor();
@@ -2660,17 +2802,17 @@
                 showToast('Error: ' + e.message, 'error');
             }
         }
-        
+
         async function exportPreprompt(id, name) {
             try {
                 const res = await fetch(`/api/preprompts/${id}`);
                 const prep = await res.json();
-                
+
                 if (prep.error) {
                     showToast('Error loading preprompt', 'error');
                     return;
                 }
-                
+
                 // Create markdown file
                 const markdown = `# ${prep.emoji} ${prep.name}
 
@@ -2682,7 +2824,7 @@
 
 ${prep.prompt_text}
 `;
-                
+
                 // Download
                 const blob = new Blob([markdown], { type: 'text/markdown' });
                 const url = URL.createObjectURL(blob);
@@ -2693,25 +2835,25 @@ ${prep.prompt_text}
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                
+
                 showToast(`📥 Exported "${prep.name}.md"`, 'success');
             } catch (e) {
                 showToast('Error: ' + e.message, 'error');
             }
         }
-        
+
         async function deletePreprompt(id, name) {
             if (!confirm(`Delete "${name}"?\\n\\nThis can be undone via database.`)) {
                 return;
             }
-            
+
             try {
                 const res = await fetch(`/api/preprompts/${id}`, {
                     method: 'DELETE'
                 });
-                
+
                 const data = await res.json();
-                
+
                 if (data.success) {
                     showToast(`🗑️ Deleted "${name}"`, 'success');
                     await loadPrepromptsFromDB();
@@ -2723,7 +2865,7 @@ ${prep.prompt_text}
                 showToast('Error: ' + e.message, 'error');
             }
         }
-        
+
         function clearAIChat() {
             const chatEl = document.getElementById('ai-chat');
             chatEl.innerHTML = `
@@ -2739,7 +2881,7 @@ ${prep.prompt_text}
         function addChatMessage(role, content) {
             const chatEl = document.getElementById('ai-chat');
             const isUser = role === 'user';
-            
+
             const msgHtml = `
                 <div class="flex gap-3 ${isUser ? 'justify-end' : ''}">
                     ${isUser ? '' : '<div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-sm">🤖</div>'}
@@ -2750,7 +2892,7 @@ ${prep.prompt_text}
                     ${isUser ? '<div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm">👤</div>' : ''}
                 </div>
             `;
-            
+
             chatEl.insertAdjacentHTML('beforeend', msgHtml);
             chatEl.scrollTop = chatEl.scrollHeight;
         }
@@ -2760,37 +2902,37 @@ ${prep.prompt_text}
                 alert('Please connect to Ollama first');
                 return;
             }
-            
+
             const input = document.getElementById('ai-input');
             const message = input.value.trim();
             if (!message) return;
-            
+
             // Get tool options
             const includeRepos = document.getElementById('ai-include-repos').checked;
             const filePath = document.getElementById('ai-file-path').value.trim();
             const webSearch = document.getElementById('ai-web-search').value.trim();
-            
+
             // Show what tools are being used
             let toolsUsed = [];
             if (includeRepos) toolsUsed.push('📁 repos');
             if (filePath) toolsUsed.push('📄 ' + filePath);
             if (webSearch) toolsUsed.push('🌐 ' + webSearch);
-            
-            const userMsg = toolsUsed.length > 0 
+
+            const userMsg = toolsUsed.length > 0
                 ? message + '\\n\\n<span class="text-xs text-gray-500">Tools: ' + toolsUsed.join(', ') + '</span>'
                 : message;
-            
+
             input.value = '';
             document.getElementById('ai-file-path').value = '';
             document.getElementById('ai-web-search').value = '';
             document.getElementById('ai-include-repos').checked = false;
-            
+
             addChatMessage('user', userMsg);
-            
+
             // Add thinking indicator with preprompt info
             const chatEl = document.getElementById('ai-chat');
             const thinkingId = 'thinking-' + Date.now();
-            const thinkingText = toolsUsed.length > 0 
+            const thinkingText = toolsUsed.length > 0
                 ? 'Gathering context... (' + toolsUsed.join(', ') + ')'
                 : 'Thinking...';
             chatEl.insertAdjacentHTML('beforeend', `
@@ -2810,15 +2952,15 @@ ${prep.prompt_text}
                 </div>
             `);
             chatEl.scrollTop = chatEl.scrollHeight;
-            
+
             try {
                 // Build context about the MCP zoo
                 const context = buildZooContext();
                 const fullPrompt = context + '\\n\\nUser question: ' + message;
-                
+
                 const modelId = document.getElementById('ai-model').value;
                 const preprompt = document.getElementById('ai-preprompt').value;
-                
+
                 const res = await fetch('/api/ai/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2831,17 +2973,17 @@ ${prep.prompt_text}
                         preprompt: preprompt
                     })
                 });
-                
+
                 const data = await res.json();
-                
+
                 // Log preprompt usage for debugging
                 if (data.preprompt_used) {
                     console.log('✓ Response used preprompt:', data.preprompt_used, '(Found:', data.preprompt_found, ')');
                 }
-                
+
                 // Remove thinking indicator
                 document.getElementById(thinkingId)?.remove();
-                
+
                 if (data.response) {
                     addChatMessage('assistant', data.response);
                     // Show subtle confirmation
@@ -2854,7 +2996,7 @@ ${prep.prompt_text}
                 } else {
                     addChatMessage('assistant', JSON.stringify(data, null, 2));
                 }
-            } catch(e) {
+            } catch (e) {
                 document.getElementById(thinkingId)?.remove();
                 addChatMessage('assistant', '❌ Error: ' + e.message);
                 showToast('Error: ' + e.message, 'error');
@@ -2863,12 +3005,12 @@ ${prep.prompt_text}
 
         function buildZooContext() {
             if (reposData.length === 0) return 'No MCP repositories have been scanned yet.';
-            
+
             const sota = reposData.filter(r => r.status === 'sota');
             const improvable = reposData.filter(r => r.status === 'improvable');
             const runts = reposData.filter(r => r.status === 'runt'); // Still called runts for backward compatibility
             const totalTools = reposData.reduce((acc, r) => acc + r.tools, 0);
-            
+
             let context = `You are an AI assistant helping analyze an MCP (Model Context Protocol) server zoo.
 
 MCP ZOO SUMMARY:
@@ -2883,10 +3025,10 @@ SOTA REPOS: ${sota.map(r => r.name + ' (' + r.tools + ' tools)').join(', ') || '
 REPOS WITH ISSUES (need improvement): ${runts.map(r => r.name + ' - issues: ' + r.issues.join(', ')).join('; ') || 'none'}
 
 TOP REPOS BY TOOLS:
-${reposData.sort((a,b) => b.tools - a.tools).slice(0, 10).map(r => '- ' + r.name + ': ' + r.tools + ' tools, FastMCP ' + (r.fastmcp_version || '?') + ', status: ' + r.status).join('\\n')}
+${reposData.sort((a, b) => b.tools - a.tools).slice(0, 10).map(r => '- ' + r.name + ': ' + r.tools + ' tools, FastMCP ' + (r.fastmcp_version || '?') + ', status: ' + r.status).join('\\n')}
 
 Please provide helpful, specific advice about MCP server development, tool design, and best practices.`;
-            
+
             return context;
         }
 
@@ -2895,7 +3037,7 @@ Please provide helpful, specific advice about MCP server development, tool desig
             const html = document.documentElement;
             const darkIcon = document.getElementById('theme-icon-dark');
             const lightIcon = document.getElementById('theme-icon-light');
-            
+
             if (html.classList.contains('dark')) {
                 html.classList.remove('dark');
                 darkIcon.classList.add('hidden');
@@ -2908,7 +3050,7 @@ Please provide helpful, specific advice about MCP server development, tool desig
                 localStorage.theme = 'dark';
             }
         }
-        
+
         // Help modal
         function showHelp() {
             const helpContent = `
@@ -2959,11 +3101,11 @@ Please provide helpful, specific advice about MCP server development, tool desig
                     </div>
                 </div>
             `;
-            
+
             document.getElementById('modal-content').innerHTML = helpContent;
             document.getElementById('modal').classList.remove('hidden');
         }
-        
+
         // SOTA Logger Modal
         function showLogs() {
             const modal = document.getElementById('modal');
@@ -3204,7 +3346,7 @@ Please provide helpful, specific advice about MCP server development, tool desig
             loadOllamaModels().catch(e => console.error('Failed to load Ollama models:', e));
             loadPrepromptsFromDB().catch(e => console.error('Failed to load preprompts:', e));
         }, 100);
-        
+
         // Periodic updates - DISABLED to prevent looping/hanging
         // These endpoints don't exist and cause continuous 404 requests
         // setTimeout(() => {
@@ -3212,7 +3354,7 @@ Please provide helpful, specific advice about MCP server development, tool desig
         //     setInterval(() => loadConsoleServers().catch(e => console.error('Failed to load console servers:', e)), 3000);
         //     setInterval(() => updateAIContext().catch(e => console.error('Failed to update AI context:', e)), 5000);
         // }, 1000);
-        
+
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             // Ctrl+Enter: Send message
@@ -3245,13 +3387,16 @@ Please provide helpful, specific advice about MCP server development, tool desig
                 closeEditor();
             }
         });
-        
+
         showToast('⌨️ Keyboard shortcuts ready! Ctrl+B=Library, Ctrl+K=Preprompt, Ctrl+L=Clear', 'info');
     </script>
-    
+
     <!-- Preprompt Library Browser Modal -->
-    <div id="library-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center z-50" onclick="if(event.target.id==='library-modal'){closePrepromptLibrary();}">
-        <div class="glass rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col m-4" onclick="event.stopPropagation()">
+    <div id="library-modal"
+        class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center z-50"
+        onclick="if(event.target.id==='library-modal'){closePrepromptLibrary();}">
+        <div class="glass rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col m-4"
+            onclick="event.stopPropagation()">
             <!-- Modal Header -->
             <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
                 <div>
@@ -3259,24 +3404,25 @@ Please provide helpful, specific advice about MCP server development, tool desig
                     <p class="text-sm text-gray-400 mt-1"><span id="library-count">0</span> personalities</p>
                 </div>
                 <div class="flex gap-2 items-center">
-                    <input id="library-search" type="text" placeholder="Search..." 
-                           class="bg-midnight-800 border border-white/10 rounded px-3 py-1.5 text-sm w-48"
-                           oninput="filterLibrary()">
-                    <select id="library-filter" class="bg-midnight-800 border border-white/10 rounded px-3 py-1.5 text-sm"
-                            onchange="filterLibrary()">
+                    <input id="library-search" type="text" placeholder="Search..."
+                        class="bg-midnight-800 border border-white/10 rounded px-3 py-1.5 text-sm w-48"
+                        oninput="filterLibrary()">
+                    <select id="library-filter"
+                        class="bg-midnight-800 border border-white/10 rounded px-3 py-1.5 text-sm"
+                        onchange="filterLibrary()">
                         <option value="">All Sources</option>
                         <option value="builtin">Built-in</option>
                         <option value="ai_generated">AI Generated</option>
                         <option value="imported">Imported</option>
                         <option value="user">User Created</option>
                     </select>
-                    <button onclick="closePrepromptLibrary()" 
-                            class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                    <button onclick="closePrepromptLibrary()"
+                        class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm">
                         ✕
                     </button>
                 </div>
             </div>
-            
+
             <!-- Modal Content -->
             <div id="library-content" class="flex-1 overflow-y-auto p-6 space-y-3">
                 <div class="text-center text-gray-500 py-8">
@@ -3286,9 +3432,11 @@ Please provide helpful, specific advice about MCP server development, tool desig
             </div>
         </div>
     </div>
-    
+
     <!-- Preprompt Editor Modal -->
-    <div id="editor-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center z-50" onclick="if(event.target.id==='editor-modal'){closeEditor();}">
+    <div id="editor-modal"
+        class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center z-50"
+        onclick="if(event.target.id==='editor-modal'){closeEditor();}">
         <div class="glass rounded-xl w-full max-w-3xl m-4" onclick="event.stopPropagation()">
             <div class="px-6 py-4 border-b border-white/10">
                 <h2 class="text-xl font-semibold">✏️ Edit Preprompt</h2>
@@ -3296,29 +3444,37 @@ Please provide helpful, specific advice about MCP server development, tool desig
             <div class="p-6 space-y-4">
                 <div>
                     <label class="text-sm text-gray-400 block mb-2">Name</label>
-                    <input id="edit-name" type="text" class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
+                    <input id="edit-name" type="text"
+                        class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
                 </div>
                 <div class="flex gap-4">
                     <div class="flex-1">
                         <label class="text-sm text-gray-400 block mb-2">Emoji</label>
-                        <input id="edit-emoji" type="text" maxlength="2" class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2 text-2xl text-center">
+                        <input id="edit-emoji" type="text" maxlength="2"
+                            class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2 text-2xl text-center">
                     </div>
                     <div class="flex-1">
                         <label class="text-sm text-gray-400 block mb-2">Source</label>
-                        <input id="edit-source" type="text" readonly class="w-full bg-midnight-700 border border-white/10 rounded px-3 py-2 text-gray-500">
+                        <input id="edit-source" type="text" readonly
+                            class="w-full bg-midnight-700 border border-white/10 rounded px-3 py-2 text-gray-500">
                     </div>
                 </div>
                 <div>
-                    <label class="text-sm text-gray-400 block mb-2">Preprompt Text <span id="edit-char-count" class="text-xs text-gray-500"></span></label>
-                    <textarea id="edit-prompt" rows="10" class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2 font-mono text-sm"
-                              oninput="updateCharCount()"></textarea>
+                    <label class="text-sm text-gray-400 block mb-2">Preprompt Text <span id="edit-char-count"
+                            class="text-xs text-gray-500"></span></label>
+                    <textarea id="edit-prompt" rows="10"
+                        class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2 font-mono text-sm"
+                        oninput="updateCharCount()"></textarea>
                 </div>
                 <div class="flex gap-2 justify-end">
-                    <button onclick="closeEditor()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">Cancel</button>
-                    <button onclick="saveEditedPreprompt()" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded">Save Changes</button>
+                    <button onclick="closeEditor()"
+                        class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">Cancel</button>
+                    <button onclick="saveEditedPreprompt()"
+                        class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded">Save Changes</button>
                 </div>
             </div>
         </div>
     </div>
 </body>
+
 </html>
