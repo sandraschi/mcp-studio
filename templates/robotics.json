@@ -1,0 +1,49 @@
+{
+  "name": "Robotics & 3D Development",
+  "id": "robotics",
+  "description": "Complete robotics development environment with 3D modeling, simulation, and control",
+  "icon": "🤖",
+  "category": "Robotics",
+  "servers": [
+    {
+      "name": "robotics-mcp",
+      "required": true,
+      "description": "ROBOTICS - control and monitor robotic systems"
+    },
+    {
+      "name": "avatar-mcp",
+      "required": true,
+      "description": "3D - manage avatar models and animations"
+    },
+    {
+      "name": "unity3d-mcp",
+      "required": true,
+      "description": "3D - Unity game engine integration for simulations"
+    },
+    {
+      "name": "osc-mcp",
+      "required": true,
+      "description": "CONTROL - Open Sound Control for real-time communication"
+    },
+    {
+      "name": "blender-mcp",
+      "required": true,
+      "description": "3D - Blender integration for modeling and animation"
+    },
+    {
+      "name": "vrchat-mcp",
+      "required": false,
+      "description": "VR - VRChat world creation and avatar management"
+    },
+    {
+      "name": "basic-memory",
+      "required": false,
+      "description": "NOTES - track development progress and ideas"
+    },
+    {
+      "name": "filesystem",
+      "required": false,
+      "description": "FILES - access project files and assets"
+    }
+  ]
+}

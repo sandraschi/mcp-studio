@@ -584,6 +584,24 @@ def parse_new_ide_2026(self) -> List[MCPServerInfo]:
 
 ---
 
+## 🛠️ Client Management Features
+
+### Tool Enablement & Control
+- **🟢 Individual Tool Control**: Enable/disable specific tools within each MCP client
+- **📊 Status Visualization**: Visual badges showing enabled/disabled state
+- **🔄 Interactive Management**: Click to toggle tools on/off with immediate feedback
+- **💾 Client-Specific Settings**: Different tool configurations per MCP client
+
+**Example:** Claude Desktop might have 20 tools available, but you can disable 5 that you don't need for your workflow.
+
+### Advanced Discovery
+- **🔍 Deep Config Scanning**: Finds all MCP servers across multiple client configurations
+- **🧠 Smart Deduplication**: Same server only appears once, even if configured in multiple clients
+- **📍 Source Tracking**: Shows which clients have each server configured
+- **⚡ Real-time Updates**: Dynamic discovery when clients start/stop
+
+---
+
 ## 🔮 The Future
 
 As the MCP ecosystem grows, new clients will emerge. MCP Studio is designed to easily add support for:

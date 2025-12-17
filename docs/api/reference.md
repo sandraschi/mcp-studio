@@ -127,6 +127,7 @@ GET /api/v1/tools
       "name": "text_generator",
       "description": "Generates text based on input",
       "category": "text",
+      "enabled": true,
       "parameters": [
         {
           "name": "prompt",
@@ -146,6 +147,61 @@ GET /api/v1/tools
   "total": 1,
   "page": 1,
   "size": 20
+}
+```
+
+#### Get Client Tools
+
+```http
+GET /api/v1/clients/{client_id}/tools
+```
+
+**Response**
+```json
+{
+  "client_id": "cursor-ide",
+  "total": 56,
+  "tools": [
+    {
+      "name": "read_file",
+      "description": "Read the contents of a file at the given path. Returns the file contents as a string.",
+      "enabled": true,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path to the file to read"
+          }
+        },
+        "required": ["path"]
+      },
+      "server_id": "filesystem-server",
+      "server_name": "Filesystem Tools",
+      "status": "available"
+    }
+  ]
+}
+```
+
+#### Toggle Tool Enablement
+
+```http
+POST /api/v1/clients/{client_id}/tools/{tool_name}/toggle
+Content-Type: application/json
+
+{
+  "enabled": true
+}
+```
+
+**Response**
+```json
+{
+  "client_id": "cursor-ide",
+  "tool_name": "read_file",
+  "enabled": true,
+  "message": "Tool read_file enabled successfully"
 }
 ```
 

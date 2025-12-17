@@ -196,34 +196,73 @@ class WorkingSetManager:
 
         return new_config
 
-    def switch_to_working_set(self, working_set_id: str, create_backup: bool = True) -> bool:
-        """Switch to specified working set."""
+    def switch_to_working_set(self, working_set_id: str, create_backup: bool = True) -> Dict[str, Any]:
+        """Switch to specified working set with automatic rollback on failure."""
         working_set = self.get_working_set(working_set_id)
         if not working_set:
             raise ValueError(f"Working set not found: {working_set_id}")
 
+        backup_created = None
+        original_config = None
+
         try:
+            # Store original config for potential rollback
+            original_config = self._current_config.copy()
+
             # Create backup if requested
             if create_backup:
                 backup_name = f"before_{working_set_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                self.create_backup(backup_name)
+                backup_created = self.create_backup(backup_name)
+                logger.info(f"Backup created: {backup_created}")
 
             # Generate new config
             new_config = self.generate_config_for_working_set(working_set_id)
+
+            # Validate new config structure
+            if not isinstance(new_config, dict) or "mcpServers" not in new_config:
+                raise ValueError("Generated config is invalid - missing mcpServers key")
 
             # Write new config
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(new_config, f, indent=2, ensure_ascii=False)
 
+            # Verify the config was written correctly by reading it back
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                verify_config = json.load(f)
+
+            if not isinstance(verify_config, dict) or "mcpServers" not in verify_config:
+                raise ValueError("Written config is corrupted - invalid structure")
+
             # Update internal state
             self._current_config = new_config
 
-            logger.info(f"Switched to working set: {working_set.name}")
-            return True
+            logger.info(f"Successfully switched to working set: {working_set.name}")
+            return {
+                "success": True,
+                "working_set_id": working_set_id,
+                "working_set_name": working_set.name,
+                "backup_created": backup_created,
+                "servers_count": len(new_config.get("mcpServers", {}))
+            }
 
         except Exception as e:
-            logger.error(f"Failed to switch working set: {e}")
-            raise
+            logger.error(f"Failed to switch working set {working_set_id}: {e}")
+
+            # Attempt automatic rollback if we have a backup
+            if backup_created and original_config:
+                try:
+                    logger.info("Attempting automatic rollback...")
+                    with open(self.config_path, "w", encoding="utf-8") as f:
+                        json.dump(original_config, f, indent=2, ensure_ascii=False)
+                    self._current_config = original_config
+                    logger.info("Rollback successful - config restored from memory")
+                except Exception as rollback_error:
+                    logger.error(f"Rollback failed: {rollback_error}")
+                    logger.warning(f"Config may be in inconsistent state. Manual recovery needed.")
+                    logger.warning(f"Backup available at: {backup_created}")
+
+            raise RuntimeError(f"Failed to switch to working set {working_set_id}: {str(e)}. "
+                             f"{'Config automatically rolled back.' if backup_created else 'No backup available.'}")
 
     def preview_working_set_config(self, working_set_id: str) -> Dict[str, Any]:
         """Preview config changes for working set without applying."""

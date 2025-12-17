@@ -46,9 +46,9 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting MCP Studio...")
     try:
-        # Start the MCP discovery service
-        await start_discovery()
-        logger.info("MCP Discovery Service started")
+        # Temporarily disable MCP discovery service to test
+        # await start_discovery()
+        # logger.info("MCP Discovery Service started")
         logger.info("MCP Studio started successfully")
     except Exception as e:
         logger.error(f"Failed to start MCP Studio: {e}", exc_info=True)
@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down MCP Studio...")
     try:
         # Stop discovery service
-        await stop_discovery()
+        # await stop_discovery()
         logger.info("MCP Studio shutdown complete")
     except Exception as e:
         logger.error("Error during shutdown", error=str(e), exc_info=True)
@@ -186,11 +186,27 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Include API routers FIRST so they're matched before the web router catch-all
 app.include_router(api_router, prefix="/api")
+
+# Include clients router directly in main app
+try:
+    logger.info("Attempting to include clients router...")
+    from .app.api.clients import router as clients_router
+    logger.info(f"Clients router has {len(clients_router.routes)} routes before inclusion")
+    app.include_router(clients_router, prefix="/api/v1/clients", tags=["clients"])
+    logger.info(f"Clients router included with {len(clients_router.routes)} routes at prefix /api/v1/clients")
+except Exception as e:
+    logger.error(f"Failed to include clients router: {e}", exc_info=True)
+
 # MCP servers and repos are now included in the v1 API router
 # app.include_router(mcp_servers_router.router, prefix="/api")
 # app.include_router(repos_router.router, prefix="/api")
 
-# Include web router AFTER API routers so catch-all doesn't intercept API routes
+# Mount static files BEFORE web router so they take precedence
+static_dir = Path(__file__).parent / "static"
+static_dir.mkdir(exist_ok=True, parents=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+# Include web router AFTER static files so catch-all doesn't intercept static files
 if web_router:
     app.include_router(web_router)  # Include web UI routes (handles /, /dashboard, etc.)
     logger.info(f"Web router included with {len(web_router.routes)} routes")
@@ -198,11 +214,6 @@ else:
     logger.warning("Web router is None - not including web routes!")
 if working_sets_router:
     app.include_router(working_sets_router, tags=["working-sets"])  # Add working sets router
-
-# Mount static files
-static_dir = Path(__file__).parent / "static"
-static_dir.mkdir(exist_ok=True, parents=True)
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Setup templates
 templates_dir = Path(__file__).parent / "templates"

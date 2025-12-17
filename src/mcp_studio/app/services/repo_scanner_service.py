@@ -84,7 +84,7 @@ class RepoScannerService:
         return self.last_scan_results
 
     def log_scan(self, message: str, is_error: bool = False):
-        """Log a message to the scan activity log."""
+        """Log a message to the scan activity log and actual logs."""
         timestamp = datetime.now().strftime("%H:%M:%S")
         formatted_msg = f"{timestamp} | {message}"
 
@@ -98,14 +98,12 @@ class RepoScannerService:
         if len(self.scan_progress["activity_log"]) > 50:
             self.scan_progress["activity_log"] = self.scan_progress["activity_log"][-50:]
 
+        # Also log to actual logger so it appears in logger modal and Loki
         if is_error:
             self.scan_progress["errors"] += 1
-            if PROMETHEUS_AVAILABLE:
-                SCAN_ERRORS.inc()
-            logger.error(f"SCAN ERROR: {message}")
+            logger.error(f"[SCAN] {message}")
         else:
-            # Optional: debug level for granular steps
-            logger.debug(f"Scan activity: {message}")
+            logger.info(f"[SCAN] {message}")
 
     def scan_repos(self, scan_path: Optional[Path] = None) -> List[Dict[str, Any]]:
         """Scan all repositories for MCP servers."""

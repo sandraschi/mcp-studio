@@ -21,16 +21,124 @@ async def get_repos(
     """
     Get all MCP repositories with repo analysis.
 
-    Returns categorized list of repos:
-    - repos: Repos needing upgrades
-    - sota_repos: Repos meeting SOTA standards
+    If no scan data is available, returns a message indicating no scan has been completed yet.
+    Use POST /api/v1/repos/run_scan to trigger a scan.
+    """
+    from ..app.services.repo_scanner_service import repo_scanner
+
+    # Check if we have scan results
+    results = repo_scanner.get_results()
+    if results:
+        return {
+            "status": "success",
+            "data": results,
+            "count": len(results),
+            "scan_url": "/api/v1/repos/run_scan"
+        }
+    else:
+        return {
+            "status": "no_data",
+            "message": "No scan data yet. Click 'START REPO SCAN' to analyze repositories.",
+            "scan_url": "/api/v1/repos/run_scan"
+        }
+
+
+@router.post("/scan")
+async def start_repo_scan(
+    scan_path: str = Query(default=None, description="Directory to scan"),
+    include_sota: bool = Query(default=True, description="Include SOTA repos in response")
+):
+    """
+    Start a repository scan in the background.
+
+    Returns immediately with scan status. Use GET /api/v1/repos/progress to monitor progress.
     """
     # Use configured repos path if none provided
     if scan_path is None:
         scan_path = settings.REPOS_PATH
 
-    result = await analyze_runts(scan_path=scan_path, include_sota=include_sota)
-    return result
+    # Check if scan is already running
+    from ..app.services.repo_scanner_service import repo_scanner
+    if hasattr(repo_scanner, 'scan_task') and repo_scanner.scan_task and repo_scanner.scan_task.is_alive():
+        return {
+            "status": "already_scanning",
+            "message": "Scan already in progress. Use /api/v1/repos/progress to monitor.",
+            "progress_url": "/api/v1/repos/progress"
+        }
+
+    # Start background scan using daemon thread for true non-blocking
+    import threading
+
+    def run_scan():
+        try:
+            # Import here to avoid circular imports
+            from ..tools.runt_analyzer import analyze_runts_sync
+            result = analyze_runts_sync(scan_path=scan_path, include_sota=include_sota)
+            # Cache the result
+            repo_scanner.last_scan_results = result.get("runts", []) + result.get("sota_repos", [])
+        except Exception as e:
+            logger.error(f"Background scan failed: {e}")
+        finally:
+            # Clear the scan task reference
+            if hasattr(repo_scanner, 'scan_task'):
+                repo_scanner.scan_task = None
+
+    # Start daemon thread for scan (won't block main thread)
+    scan_thread = threading.Thread(target=run_scan, daemon=True)
+    scan_thread.start()
+    repo_scanner.scan_task = scan_thread
+
+    # Return immediately - scan is running in background
+    return {
+        "status": "scan_started",
+        "message": "Repository scan started in background. Use /api/v1/repos/progress to monitor.",
+        "progress_url": "/api/v1/repos/progress"
+    }
+
+
+@router.post("/run_scan")
+async def run_repo_scan(
+    scan_path: str = Query(default=None, description="Directory to scan"),
+    include_sota: bool = Query(default=True, description="Include SOTA repos in response")
+):
+    """
+    Start a repository scan.
+
+    Returns immediately while scan runs in background.
+    """
+    # Use configured repos path if none provided
+    if scan_path is None:
+        scan_path = settings.REPOS_PATH
+
+    # Start background scan using the repo scanner service
+    from ..app.services.repo_scanner_service import repo_scanner
+    import threading
+
+    def run_scan():
+        try:
+            from pathlib import Path
+            scan_path_obj = Path(scan_path)
+            results = repo_scanner.scan_repos(scan_path_obj)
+            # Store results for the get endpoint
+            repo_scanner.last_scan_results = results
+        except Exception as e:
+            print(f"Background scan failed: {e}")
+        finally:
+            # Clear any scan task reference
+            if hasattr(repo_scanner, 'scan_task'):
+                repo_scanner.scan_task = None
+
+    # Start daemon thread for scan (won't block main thread)
+    scan_thread = threading.Thread(target=run_scan, daemon=True)
+    scan_thread.start()
+    if hasattr(repo_scanner, 'scan_task'):
+        repo_scanner.scan_task = scan_thread
+
+    # Return immediately - scan is running in background
+    return {
+        "status": "scan_started",
+        "message": "Repository scan started in background. Check progress with /api/v1/repos/progress"
+    }
 
 
 @router.get("/summary")
@@ -66,6 +174,13 @@ async def get_repo_details(
     repo_path = f"{base_path}/{repo_name}"
     result = await get_repo_status(repo_path=repo_path)
     return result
+
+
+@router.get("/progress")
+async def get_scan_progress():
+    """Get real-time progress of the current scan."""
+    from ..app.services.repo_scanner_service import repo_scanner
+    return repo_scanner.get_progress()
 
 
 @router.get("/test")
@@ -157,10 +272,10 @@ async def get_thresholds():
         },
         "status_emojis": {
             "💀": "Critical (5+ issues)",
-            "🐛": "Bug (3-4 issues)",
-            "🐣": "Minor (1-2 issues)",
-            "⚠️": "Warning (non-critical issues)",
-            "✅": "SOTA compliant"
+            "[BUG]": "Bug (3-4 issues)",
+            "[MINOR]": "Minor (1-2 issues)",
+            "[WARN]": "Warning (non-critical issues)",
+            "[OK]": "SOTA compliant"
         }
     }
 

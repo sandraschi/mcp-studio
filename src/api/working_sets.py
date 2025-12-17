@@ -123,25 +123,28 @@ async def get_working_set(working_set_id: str):
 
 @router.post("/{working_set_id}/switch")
 async def switch_working_set(working_set_id: str, request: SwitchRequest = None):
-    """Switch to specified working set."""
+    """Switch to specified working set with backup and rollback protection."""
     try:
         create_backup = request.create_backup if request else True
-        success = manager.switch_to_working_set(working_set_id, create_backup)
-        
-        if success:
-            return {
-                "success": True,
-                "message": f"Switched to working set: {working_set_id}",
-                "working_set_id": working_set_id
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Failed to switch working set")
-            
+        result = manager.switch_to_working_set(working_set_id, create_backup)
+
+        return {
+            "success": result["success"],
+            "message": f"Successfully switched to working set: {result['working_set_name']}",
+            "working_set_id": result["working_set_id"],
+            "working_set_name": result["working_set_name"],
+            "backup_created": result.get("backup_created"),
+            "servers_count": result["servers_count"]
+        }
+
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        # This includes rollback information
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to switch to working set {working_set_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @router.get("/{working_set_id}/preview", response_model=PreviewResponse)
 async def preview_working_set(working_set_id: str):

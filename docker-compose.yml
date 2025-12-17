@@ -23,9 +23,7 @@ services:
       - mcp-studio-network
 
   mcp-studio:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: mcp-studio:latest
     container_name: mcp-studio
     # Temporary debugging access
     ports:
@@ -39,7 +37,7 @@ services:
       - "./data:/app/data"
     environment:
       - PORT=8001
-      - REPOS_DIR=${REPOS_DIR:-/app/repos}
+      - REPOS_DIR=/app/repos
       - USERPROFILE=${USERPROFILE:-/tmp}
       - OLLAMA_URL=http://host.docker.internal:11434
       - LM_STUDIO_URL=${LM_STUDIO_URL:-http://host.docker.internal:1234}

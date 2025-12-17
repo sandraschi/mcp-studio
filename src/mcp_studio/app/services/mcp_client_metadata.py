@@ -7,6 +7,9 @@ homepages, GitHub repos, and capabilities.
 
 from dataclasses import dataclass
 from typing import Dict, List, Optional
+import subprocess
+import platform
+import psutil
 
 from ..core.logging_utils import get_logger
 
@@ -28,11 +31,15 @@ class MCPClientMetadata:
     status: str = "Active"  # Active, Deprecated, Beta
     features: List[str] = None
     installed: bool = False  # Whether this client is detected as installed
+    running: bool = False  # Whether this client process is currently running
     server_count: int = 0  # Number of MCP servers configured
+    process_names: List[str] = None  # Process names to check for running status
 
     def __post_init__(self):
         if self.features is None:
             self.features = []
+        if self.process_names is None:
+            self.process_names = []
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -57,7 +64,8 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
             "Secure stdio transport",
             "Production-ready",
             "Auto-updates"
-        ]
+        ],
+        process_names=["Claude.exe", "Claude"]
     ),
     
     "cursor-ide": MCPClientMetadata(
@@ -77,7 +85,8 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
             "Integrated AI chat",
             "MCP tool support",
             "Code generation"
-        ]
+        ],
+        process_names=["Cursor.exe", "Cursor"]
     ),
     
     "windsurf-ide": MCPClientMetadata(
@@ -97,7 +106,8 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
             "MCP support via Roo-Cline",
             "Multi-file editing",
             "Cascade chat"
-        ]
+        ],
+        process_names=["Windsurf.exe", "Windsurf"]
     ),
     
     "cline-vscode": MCPClientMetadata(
@@ -197,7 +207,8 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
             "MCP support",
             "Advanced code completion",
             "Built-in Git tools"
-        ]
+        ],
+        process_names=["Antigravity.exe", "Antigravity"]
     ),
     
     "zed-editor": MCPClientMetadata(
@@ -217,7 +228,8 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
             "AI assistance",
             "MCP support",
             "Lightning fast"
-        ]
+        ],
+        process_names=["zed.exe", "zed"]
     ),
     
     "vscode-generic": MCPClientMetadata(
@@ -259,32 +271,98 @@ def get_client_metadata(client_id: str) -> Optional[MCPClientMetadata]:
     return MCP_CLIENT_DATABASE.get(client_id)
 
 
-def get_all_clients() -> List[MCPClientMetadata]:
+def _detect_running_processes() -> Dict[str, bool]:
     """
-    Get metadata for all known MCP clients with installation status.
+    Detect which MCP clients are currently running by checking process names.
 
     Returns:
-        List of all client metadata with installed/server_count populated
+        Dict mapping client_id to running status
+    """
+    running_clients = {}
+
+    try:
+        # Get all running processes
+        processes = []
+        for proc in psutil.process_iter(['pid', 'name', 'exe']):
+            try:
+                processes.append({
+                    'name': proc.info['name'] or '',
+                    'exe': proc.info['exe'] or ''
+                })
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        # Check each client
+        for client_id, client in MCP_CLIENT_DATABASE.items():
+            running = False
+
+            if client.process_names:
+                for process_name in client.process_names:
+                    # Check exact matches
+                    if any(p['name'].lower() == process_name.lower() for p in processes):
+                        running = True
+                        break
+
+                    # Check if process name is contained in exe path (for cases where exe is full path)
+                    if any(process_name.lower() in (p['exe'] or '').lower() for p in processes):
+                        running = True
+                        break
+
+            running_clients[client_id] = running
+
+    except Exception as e:
+        logger.warning(f"Failed to detect running processes: {e}")
+        # If process detection fails, assume none are running
+        for client_id in MCP_CLIENT_DATABASE.keys():
+            running_clients[client_id] = False
+
+    return running_clients
+
+
+def get_all_clients() -> List[MCPClientMetadata]:
+    """
+    Get metadata for all known MCP clients with installation and running status.
+
+    Returns:
+        List of all client metadata with installed/running/server_count populated
     """
     from .mcp_client_zoo import MCPClientZoo
 
     # Get static metadata
     clients = list(MCP_CLIENT_DATABASE.values())
 
+    # Detect running processes
+    try:
+        running_clients = _detect_running_processes()
+    except Exception as e:
+        logger.warning(f"Failed to detect running processes: {e}")
+        running_clients = {}
+
     # Scan for actual installations
     try:
         zoo = MCPClientZoo()
         installed_clients = zoo.scan_all_clients()
+        logger.info(f"Client scan found {len(installed_clients)} installed clients: {list(installed_clients.keys())}")
 
         # Update clients with installation status
         for client in clients:
             if client.id in installed_clients:
                 client.installed = True
                 client.server_count = len(installed_clients[client.id])
+                logger.info(f"Updated {client.id}: installed=True, server_count={client.server_count}")
+            else:
+                logger.debug(f"{client.id}: not found in scan results")
+
+            # Set running status
+            client.running = running_clients.get(client.id, False)
 
     except Exception as e:
         # If scanning fails, just return clients without installation status
         logger.warning(f"Failed to scan clients for installation status: {e}")
+
+        # Still set running status even if scanning failed
+        for client in clients:
+            client.running = running_clients.get(client.id, False)
 
     return clients
 
@@ -346,9 +424,9 @@ def format_client_info(client_id: str, format: str = "text") -> str:
         ]
         
         if client.homepage:
-            lines.append(f"🌐 **Homepage:** {client.homepage}")
+            lines.append(f"[WEB] **Homepage:** {client.homepage}")
         if client.github:
-            lines.append(f"💻 **GitHub:** {client.github}")
+            lines.append(f"[COMPUTER] **GitHub:** {client.github}")
         if client.documentation:
             lines.append(f"📚 **Docs:** {client.documentation}")
         
@@ -391,7 +469,7 @@ if __name__ == "__main__":
     print("\nMCP CLIENT METADATA DATABASE\n")
     print("=" * 70)
     
-    print(f"\n📊 TOTAL CLIENTS: {len(MCP_CLIENT_DATABASE)}\n")
+    print(f"\n[STATS] TOTAL CLIENTS: {len(MCP_CLIENT_DATABASE)}\n")
     
     # Group by type
     for client_type in ["Desktop", "IDE", "Extension"]:
@@ -403,9 +481,9 @@ if __name__ == "__main__":
                 print(f"\n  {client.name}")
                 print(f"  {client.short_description}")
                 if client.homepage:
-                    print(f"  🌐 {client.homepage}")
+                    print(f"  [WEB] {client.homepage}")
                 if client.github:
-                    print(f"  💻 {client.github}")
+                    print(f"  [COMPUTER] {client.github}")
                 print(f"  Features: {', '.join(client.features[:3])}...")
     
     print("\n" + "=" * 70)

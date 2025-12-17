@@ -72,7 +72,25 @@
 
 ---
 
-### **7. Python Dependency Hell Fix** ⚠️ **CRITICAL**
+### **7. Dashboard Refactoring** 🏗️ **ARCHITECTURE**
+📄 [DASHBOARD_REFACTORING.md](../MCP_STUDIO_DASHBOARD.md#dashboard-refactoring-december-2025)
+
+**From Monolithic to Modular (87% Complexity Reduction)**
+- 3,601-line file → 8 focused modules
+- Maintainability & performance improvements
+- Real-world refactoring lessons
+- "World record free!" 🎯
+
+### **9. Tool Enablement Feature** 🛠️ **NEW**
+📄 [TOOL_ENABLEMENT.md](../MCP_STUDIO_DASHBOARD.md#tool-enablement)
+
+**Individual Tool Control for MCP Clients**
+- Enable/disable specific tools per client
+- Visual status indicators and toggles
+- API endpoints for tool management
+- Real-time tool discovery and control
+
+### **8. Python Dependency Hell Fix** ⚠️ **CRITICAL**
 📄 [PYTHON_DEPENDENCY_HELL_FIX.md](PYTHON_DEPENDENCY_HELL_FIX.md)
 
 **The Great Python 3.13 Catastrophe of October 2025**
@@ -142,6 +160,8 @@ This directory contains **development-focused documentation** including:
 | **Tool choice** | [Tools Comparison](AI_DEVELOPMENT_TOOLS_COMPARISON.md) | 15 min |
 | **Debug help** | [Debugging Lessons](DEBUGGING_LESSONS_LEARNED.md) | 10 min |
 | **Python patterns** | [Python Snippets](PYTHON_SNIPPETS_USAGE_GUIDE.md) | 15 min |
+| **Dashboard architecture** | [Dashboard Refactoring](../MCP_STUDIO_DASHBOARD.md) | 10 min |
+| **Tool enablement** | [Tool Enablement](../MCP_STUDIO_DASHBOARD.md#tool-enablement) | 5 min |
 | **Update process** | [Project Updates](SYSTEMATIC_PROJECT_UPDATES.md) | 10 min |
 | **Dependency fix** | [Dependency Hell Fix](PYTHON_DEPENDENCY_HELL_FIX.md) | 5 min |
 
@@ -169,7 +189,7 @@ This directory contains **development-focused documentation** including:
 
 *Development Documentation*  
 *Location: `docs/development/`*  
-*Files: 7*  
+*Files: 8*  
 *Focus: Best practices & lessons learned*  
 *Target: Developers & Contributors*
 

@@ -50,15 +50,15 @@ def get_template_context(request: Request) -> dict:
 
 
 def get_dashboard_html(request: Request):
-    """Helper to serve the dashboard_old.html content."""
-    # Strict priority: Check explicit locations
+    """Helper to serve the refactored dashboard.html content."""
+    # Strict priority: Check explicit locations for dashboard
     possible_paths = [
         # 1. Relative to web.py (in dev/source source)
-        Path(__file__).resolve().parent.parent.parent / "templates" / "dashboard_old.html",
+        Path(__file__).resolve().parent.parent.parent / "templates" / "dashboard.html",
         # 2. Package install location
-        templates_dir / "dashboard_old.html",
+        templates_dir / "dashboard.html",
         # 3. Docker specific path (absolute fallback)
-        Path("/app/src/mcp_studio/templates/dashboard_old.html"),
+        Path("/app/src/mcp_studio/templates/dashboard.html"),
     ]
 
     for path in possible_paths:
@@ -70,10 +70,10 @@ def get_dashboard_html(request: Request):
             return HTMLResponse(content=html_content.replace("{VERSION}", "0.2.1-beta"))
 
     logger.warning(
-        "dashboard_old.html not found in any expected location, falling back to new dashboard"
+        "dashboard_new.html not found in any expected location, falling back to template"
     )
     return templates.TemplateResponse(
-        "dashboard.html",
+        "dashboard_new.html",
         {
             **get_template_context(request),
             "title": "Dashboard",
@@ -412,24 +412,8 @@ async def settings_page(request: Request):
     )
 
 
-# 404 handler - must be last route
-@router.get("/{full_path:path}", include_in_schema=False)
-async def catch_all(request: Request, full_path: str):
-    """Catch-all route for 404 errors."""
-    # Don't catch API routes
-    if full_path.startswith("api/"):
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=404, detail="Not Found")
-    return templates.TemplateResponse(
-        "errors/404.html",
-        {
-            **get_template_context(request),
-            "title": "Page Not Found",
-            "path": full_path,
-        },
-        status_code=404,
-    )
+# Note: Removed catch-all route to allow static files to be served properly
+# FastAPI will handle 404s automatically when no routes match
 
 
 # Note: Error middleware should be added to the FastAPI app in main.py, not the router

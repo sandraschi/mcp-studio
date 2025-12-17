@@ -27,6 +27,7 @@ HOST_APPDATA = Path("/host/appdata")
 HOST_HOME = Path("/host/home")
 
 from ..core.logging_utils import get_logger
+from .client_settings_manager import ClientSettingsManager
 
 logger = get_logger(__name__)
 
@@ -52,6 +53,7 @@ class MCPClientZoo:
         """Initialize the client zoo."""
         self.servers: Dict[str, MCPServerInfo] = {}
         self.sources_found: List[str] = []
+        self.settings_manager = ClientSettingsManager()
 
     # ═══════════════════════════════════════════════════════════════
     # CLAUDE DESKTOP (Anthropic Official)
@@ -123,6 +125,8 @@ class MCPClientZoo:
             Path.home() / ".config" / "Windsurf" / "mcp.json",  # Linux
             Path.home() / ".config" / "Windsurf" / "mcp_settings.json",  # Linux
             Path.home() / "Library" / "Application Support" / "Windsurf" / "mcp.json",  # Mac
+            # User's actual config location
+            Path.home() / ".codeium" / "windsurf" / "mcp_config.json",
         ]
 
         return self._parse_standard_format(paths, "windsurf-ide")
@@ -269,8 +273,9 @@ class MCPClientZoo:
     def parse_lm_studio(self) -> List[MCPServerInfo]:
         """Parse LM Studio MCP configuration."""
         paths = [
+            Path.home() / ".lmstudio" / "mcp.json",                      # User's preferred location
             Path(os.environ.get("APPDATA", "")) / "LM Studio" / "mcp_config.json",
-            Path.home() / ".lmstudio" / "mcp_config.json",
+            Path.home() / ".lmstudio" / "mcp_config.json",             # Alternative user location
             Path.home()
             / "Library"
             / "Application Support"
@@ -302,6 +307,8 @@ class MCPClientZoo:
             / "Application Support"
             / "Antigravity"
             / "mcp_config.json",  # Mac
+            # User's actual config location
+            Path.home() / ".gemini" / "antigravity" / "mcp_config.json",
             # Docker Host Mounts
             HOST_APPDATA / "Antigravity" / "mcp_config.json",
             HOST_APPDATA / "Antigravity" / "mcp.json",
@@ -324,7 +331,7 @@ class MCPClientZoo:
             Path.home() / ".config" / "zed" / "mcp.json",
             Path.home() / ".config" / "zed" / "settings.json",  # Might contain MCP config
             Path(os.environ.get("APPDATA", "")) / "Zed" / "mcp.json",  # Windows
-            Path(os.environ.get("APPDATA", "")) / "Zed" / "settings.json",  # Windows
+            Path(os.environ.get("APPDATA", "")) / "Zed" / "settings.json",  # Windows - contains context_servers section
             Path.home() / "Library" / "Application Support" / "Zed" / "mcp.json",  # Mac
             Path.home() / "Library" / "Application Support" / "Zed" / "settings.json",  # Mac
             # Alternative locations
@@ -332,7 +339,11 @@ class MCPClientZoo:
             Path.home() / ".zed" / "settings.json",
         ]
 
-        return self._parse_standard_format(paths, "zed-editor")
+        # Try standard format first, then Zed-specific format
+        result = self._parse_standard_format(paths, "zed-editor")
+        if not result:
+            result = self._parse_zed_settings(paths, "zed-editor")
+        return result
 
     # ═══════════════════════════════════════════════════════════════
     # VSCODE (Generic)
@@ -376,8 +387,11 @@ class MCPClientZoo:
 
         Most clients use the same format as Claude Desktop.
         """
+        logger.info(f"Scanning {len(paths)} paths for {source}: {[str(p) for p in paths]}")
         for config_path in paths:
-            if not config_path.exists():
+            exists = config_path.exists()
+            logger.info(f"Checking {source} config: {config_path} (exists: {exists})")
+            if not exists:
                 continue
 
             try:
@@ -545,6 +559,63 @@ class MCPClientZoo:
         logger.debug(f"No {source} MCP settings found")
         return []
 
+    def _parse_zed_settings(self, paths: List[Path], source: str) -> List[MCPServerInfo]:
+        """
+        Parse Zed Editor settings.json files which contain MCP configs in "context_servers" section.
+
+        Zed stores MCP server configs in settings.json under "context_servers" key.
+        """
+        for config_path in paths:
+            if not config_path.exists():
+                continue
+
+            try:
+                logger.info(f"Checking Zed settings: {config_path} (exists: True)")
+
+                with open(config_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+
+                # Remove comments (lines starting with //) before parsing JSON
+                lines = content.split('\n')
+                json_lines = [line for line in lines if not line.strip().startswith('//')]
+                json_content = '\n'.join(json_lines)
+
+                settings = json.loads(json_content)
+
+                servers = []
+
+                # Zed uses "context_servers" section for MCP configs
+                if "context_servers" in settings and isinstance(settings["context_servers"], dict):
+                    for server_id, server_config in settings["context_servers"].items():
+                        if isinstance(server_config, dict):
+                            server = MCPServerInfo(
+                                id=f"{source}:{server_id}",
+                                name=server_id.replace("-", " ").replace("_", " ").title(),
+                                command=server_config.get("command", ""),
+                                args=server_config.get("args", []),
+                                cwd=server_config.get("cwd"),
+                                env=server_config.get("env"),
+                                source=source,
+                            )
+                            servers.append(server)
+
+                if servers:
+                    logger.info(
+                        f"Parsed {len(servers)} MCP servers from Zed settings",
+                        path=str(config_path),
+                    )
+                    return servers
+
+            except json.JSONDecodeError as e:
+                logger.warning(
+                    f"Invalid JSON in Zed settings", path=str(config_path), error=str(e)
+                )
+            except Exception as e:
+                logger.debug(f"Error parsing Zed settings", path=str(config_path), error=str(e))
+
+        logger.debug(f"No Zed MCP settings found")
+        return []
+
     # ═══════════════════════════════════════════════════════════════
     # SCAN ALL CLIENTS
     # ═══════════════════════════════════════════════════════════════
@@ -591,13 +662,90 @@ class MCPClientZoo:
                 logger.warning(f"Error parsing {client_name}", error=str(e))
 
         logger.info(
-            f"🎉 Client Zoo scan complete",
+            f"[SUCCESS] Client Zoo scan complete",
             total_servers=total_servers,
             sources=len(self.sources_found),
             found_in=self.sources_found,
         )
 
         return results
+
+    def discover_client_settings(self, client_id: str) -> Optional[Any]:
+        """
+        Discover and parse settings from a client configuration file(s).
+
+        Args:
+            client_id: The client identifier (e.g., 'cursor-ide', 'claude-desktop')
+
+        Returns:
+            ClientConfig object with discovered settings, or None if not found
+        """
+        return self.settings_manager.discover_client_settings(client_id)
+
+    def get_client_settings(self, client_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get all settings for a client, organized by category.
+
+        Args:
+            client_id: The client identifier
+
+        Returns:
+            Dictionary with categorized settings, or None if client not found
+        """
+        # First try to discover settings if not already loaded
+        if client_id not in self.settings_manager.clients:
+            self.discover_client_settings(client_id)
+
+        return self.settings_manager.get_client_settings(client_id)
+
+    def update_client_setting(self, client_id: str, key: str, value: Any, create_backup: bool = True) -> bool:
+        """
+        Update a specific setting for a client.
+
+        Args:
+            client_id: The client identifier
+            key: Setting key to update
+            value: New value for the setting
+            create_backup: Whether to create a backup before updating
+
+        Returns:
+            True if update succeeded, False otherwise
+        """
+        return self.settings_manager.update_setting(client_id, key, value, create_backup)
+
+    def _get_client_config_path(self, client_id: str) -> Optional[Path]:
+        """
+        Get the configuration file path for a client.
+
+        Args:
+            client_id: The client identifier
+
+        Returns:
+            Path to the client's config file, or None if not found
+        """
+        # Use the settings manager's method for consistency
+        configs = self.settings_manager.get_client_config_paths(client_id)
+        if configs:
+            # For MCP scanning, we want the MCP-specific config if available, otherwise main config
+            mcp_configs = [config for config_type, config in configs if config_type == "mcp"]
+            if mcp_configs:
+                return mcp_configs[0]
+            # Fallback to main config
+            main_configs = [config for config_type, config in configs if config_type == "main"]
+            if main_configs:
+                return main_configs[0]
+
+        logger.warning(f"Config path not found for client: {client_id}")
+        return None
+
+    def get_setting_categories(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get information about available setting categories.
+
+        Returns:
+            Dictionary mapping category IDs to category info
+        """
+        return self.settings_manager.get_setting_categories()
 
     def get_all_servers(self) -> List[MCPServerInfo]:
         """
@@ -812,7 +960,7 @@ if __name__ == "__main__":
 
     summary = discover_all_mcp_clients()
 
-    print(f"\n📊 SUMMARY:")
+    print(f"\n[STATS] SUMMARY:")
     print(f"  Total Clients:  {summary['total_clients']}")
     print(f"  Total Servers:  {summary['total_servers']}")
     print(f"  Unique Servers: {summary['unique_servers']}")

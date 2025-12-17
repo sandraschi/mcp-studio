@@ -38,7 +38,29 @@ MCP Studio is currently in **beta**. This means:
 - Report issues on GitHub
 - Expect breaking changes in future releases
 
-## 🆕 **What's New (v0.2.1-beta)**
+## 🆕 **What's New (v0.3.0-beta)**
+
+### 🎯 **Enhanced Working Sets** - MAJOR UPDATE!
+Purpose-built MCP server configurations for specific workflows:
+
+#### **📺 Media Consumption Set**
+- **Calibre MCP** - Ebook library management
+- **Plex MCP** - Media streaming server
+- **Immich MCP** - Photo collection browsing
+
+#### **🤖 Robotics & 3D Development Set**
+- **Robotics MCP** - Robot control and monitoring
+- **Avatar MCP** - 3D avatar management
+- **Unity3D MCP** - Unity game engine integration
+- **OSC MCP** - Real-time communication protocol
+- **Blender MCP** - 3D modeling and animation
+- **VRChat MCP** - VR world creation
+
+#### **Key Features:**
+- **One-click activation** with automatic backup/restore
+- **6 specialized working sets** for different use cases
+- **Visual status indicators** for current active set
+- **Preview functionality** before switching
 
 ### 🔧 **Client Configuration Management** - NEW!
 Three powerful tools for managing MCP client configurations:

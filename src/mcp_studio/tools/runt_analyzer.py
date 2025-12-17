@@ -173,6 +173,18 @@ ZOO_ANIMALS = {
     tags=["runt", "analyzer", "sota", "upgrade"],
     estimated_runtime="2-10s"
 )
+def analyze_runts_sync(
+    scan_path: Optional[str] = None,
+    max_depth: int = 1,
+    include_sota: bool = True,
+    format: str = "json",
+    use_cache: bool = True,
+):
+    """Synchronous wrapper for analyze_runts."""
+    import asyncio
+    return asyncio.run(analyze_runts(scan_path, max_depth, include_sota, format, use_cache))
+
+
 async def analyze_runts(
     scan_path: Optional[str] = None,
     max_depth: int = 1,
