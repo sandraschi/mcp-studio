@@ -125,7 +125,7 @@ ClientWorkingSetManager
 
 ### Antigravity IDE
 - Windows: `%APPDATA%\Antigravity\mcp_config.json`
-- Windows Alt: `%APPDATA%\GitKraken\Antigravity\mcp_config.json`
+- Windows Alt: `%APPDATA%\Google\Antigravity\mcp_config.json`
 - Linux: `~/.config/antigravity/mcp_config.json`
 - Mac: `~/Library/Application Support/Antigravity/mcp_config.json`
 

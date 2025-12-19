@@ -109,7 +109,7 @@ MCP_CLIENT_CONFIGS = {
         # Antigravity IDE - config managed through UI, check common locations
         Path(os.environ.get("APPDATA", "")) / "Antigravity" / "mcp_config.json",
         Path(os.environ.get("APPDATA", "")) / "Antigravity" / "mcp.json",
-        Path(os.environ.get("APPDATA", "")) / "GitKraken" / "Antigravity" / "mcp_config.json",  # GitKraken owns Antigravity
+        Path(os.environ.get("APPDATA", "")) / "GitKraken" / "Antigravity" / "mcp_config.json",  # Google owns Antigravity
         Path.home() / ".config" / "antigravity" / "mcp_config.json",
         Path.home() / ".config" / "antigravity" / "mcp.json",
         Path.home() / ".antigravity" / "mcp_config.json",
@@ -3721,11 +3721,11 @@ async def dashboard():
             }},
             'antigravity-ide': {{
                 name: 'Antigravity IDE',
-                description: 'AI-powered IDE from GitKraken with integrated MCP server support.',
-                website: 'https://www.gitkraken.com/antigravity',
+                description: 'AI-powered IDE from Google with integrated MCP server support.',
+                website: 'https://antigravity.google',
                 configLocation: 'MCP servers managed through the IDE UI, stored in mcp_config.json.',
                 icon: '🚀',
-                developer: 'GitKraken'
+                developer: 'Google'
             }},
             'cline': {{
                 name: 'Cline (VSCode Extension)',

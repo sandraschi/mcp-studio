@@ -1,0 +1,846 @@
+{% extends "base.html" %}
+
+{% block title %}Client Details - MCP Studio{% endblock %}
+
+{% block content %}
+<div x-data="clientDetail()" x-init="init()" class="space-y-6">
+    <!-- Page header with back button -->
+    <div class="flex items-center">
+        <a href="/clients" class="mr-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                <span x-text="client.name || 'Loading...'"></span>
+                <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
+                      :class="{
+                        'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': configInfo && configInfo.config_exists,
+                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200': !configInfo || !configInfo.config_exists,
+                      }">
+                    <span x-text="configInfo && configInfo.config_exists ? 'Active' : 'Not Configured'"></span>
+                </span>
+            </h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400" x-text="client.short_description || ''"></p>
+        </div>
+    </div>
+
+    <!-- Client details tabs -->
+    <div class="border-b border-gray-200 dark:border-gray-700">
+        <nav class="-mb-px flex space-x-8">
+            <button @click="activeTab = 'overview'" 
+                    :class="activeTab === 'overview' ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                <i class="fas fa-info-circle mr-2"></i>
+                Overview
+            </button>
+            <button @click="activeTab = 'servers'" 
+                    :class="activeTab === 'servers' ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                <i class="fas fa-server mr-2"></i>
+                Servers
+                <span x-show="servers.length > 0" class="ml-1.5 py-0.5 px-1.5 rounded-full text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200" x-text="servers.length"></span>
+            </button>
+            <button @click="activeTab = 'tools'"
+                    :class="activeTab === 'tools' ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                <i class="fas fa-tools mr-2"></i>
+                Tools
+                <span x-show="tools.length > 0" class="ml-1.5 py-0.5 px-1.5 rounded-full text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200" x-text="tools.length"></span>
+            </button>
+            <button @click="activeTab = 'working-sets'"
+                    :class="activeTab === 'working-sets' ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                <i class="fas fa-layer-group mr-2"></i>
+                Working Sets
+            </button>
+
+            <button @click="activeTab = 'backups'"
+                    :class="activeTab === 'backups' ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                <i class="fas fa-shield-alt mr-2"></i>
+                Backups
+            </button>
+
+            <button @click="activeTab = 'settings'"
+                    :class="activeTab === 'settings' ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                <i class="fas fa-sliders-h mr-2"></i>
+                Settings
+            </button>
+        </nav>
+    </div>
+
+    <!-- Tab content -->
+    <div>
+        <!-- Overview tab -->
+        <div x-show="activeTab === 'overview'" x-transition>
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Client Information</h3>
+                    <div class="mt-5 border-t border-gray-200 dark:border-gray-700">
+                        <dl class="sm:divide-y sm:divide-gray-200 dark:divide-gray-700">
+                            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Client ID</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-200 sm:mt-0 sm:col-span-2" x-text="client.id || 'N/A'"></dd>
+                            </div>
+                            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Type</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-200 sm:mt-0 sm:col-span-2" x-text="client.client_type || 'N/A'"></dd>
+                            </div>
+                            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Platform</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-200 sm:mt-0 sm:col-span-2" x-text="client.platform || 'N/A'"></dd>
+                            </div>
+                            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Status</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-200 sm:mt-0 sm:col-span-2" x-text="client.status || 'N/A'"></dd>
+                            </div>
+                            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4" x-show="client.homepage">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Homepage</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-200 sm:mt-0 sm:col-span-2">
+                                    <a :href="client.homepage" target="_blank" class="text-primary-600 hover:text-primary-500 dark:text-primary-400" x-text="client.homepage"></a>
+                                </dd>
+                            </div>
+                            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Description</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-200 sm:mt-0 sm:col-span-2" x-text="client.full_description || 'No description provided'"></dd>
+                            </div>
+                            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4" x-show="configInfo">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Config Path</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-200 sm:mt-0 sm:col-span-2" x-text="configInfo.config_path || 'N/A'"></dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Servers tab -->
+        <div x-show="activeTab === 'servers'" x-transition>
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Configured Servers</h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">MCP servers configured for this client</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 overflow-hidden">
+                    <div x-show="servers.length === 0" class="p-6 text-center text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-server text-4xl mb-2 opacity-50"></i>
+                        <p>No servers configured</p>
+                        <p class="mt-1 text-sm">This client doesn't have any MCP servers configured yet.</p>
+                    </div>
+                    
+                    <div x-show="servers.length > 0" class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-for="server in servers" :key="server.id">
+                            <div class="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <div class="text-sm font-medium text-gray-900 dark:text-white" x-text="server.name"></div>
+                                        <div class="text-sm text-gray-500 dark:text-gray-400" x-text="server.command"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tools tab -->
+        <div x-show="activeTab === 'tools'" x-transition>
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Available Tools</h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Tools provided by MCP servers configured for this client</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 overflow-hidden">
+                    <div x-show="tools.length === 0 && !loadingTools" class="p-6 text-center text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-tools text-4xl mb-2 opacity-50"></i>
+                        <p>No tools available</p>
+                        <p class="mt-1 text-sm">No tools were found in the configured MCP servers.</p>
+                    </div>
+
+                    <div x-show="loadingTools" class="p-6 text-center text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-spinner fa-spin text-4xl mb-2 opacity-50"></i>
+                        <p>Loading tools...</p>
+                    </div>
+
+                    <div x-show="tools.length > 0" class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-for="tool in tools" :key="tool.name">
+                            <div class="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <div class="flex items-start justify-between">
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center mb-2">
+                                            <div class="text-sm font-medium text-gray-900 dark:text-white" x-text="tool.name"></div>
+                                            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" x-text="tool.server_name"></span>
+                                            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                                                  :class="tool.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'"
+                                                  x-text="tool.enabled ? 'Enabled' : 'Disabled'"></span>
+                                        </div>
+                                        <div class="text-sm text-gray-600 dark:text-gray-400 mb-3" x-text="tool.description || 'No description available'"></div>
+                                        <div x-show="tool.inputSchema && tool.inputSchema.properties" class="mb-3">
+                                            <div class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Parameters:</div>
+                                            <div class="text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded p-2 font-mono">
+                                                <template x-for="[paramName, paramSchema] in Object.entries(tool.inputSchema.properties)" :key="paramName">
+                                                    <div class="mb-1">
+                                                        <span class="font-medium" x-text="paramName"></span>
+                                                        <span class="text-gray-500" x-text="paramSchema.type ? `(${paramSchema.type})` : ''"></span>
+                                                        <span x-show="paramSchema.description" class="text-gray-600" x-text="`: ${paramSchema.description}`"></span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center space-x-2">
+                                            <button @click="toggleTool(tool)"
+                                                    :class="tool.enabled ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'"
+                                                    class="px-3 py-1.5 text-xs font-medium text-white rounded transition-colors">
+                                                <i :class="tool.enabled ? 'fas fa-ban' : 'fas fa-check'" class="mr-1"></i>
+                                                <span x-text="tool.enabled ? 'Disable' : 'Enable'"></span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Working Sets tab -->
+        <div x-show="activeTab === 'working-sets'" x-transition>
+            <div x-show="!configInfo || !configInfo.config_exists" class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-6">
+                <div class="flex">
+                    <i class="fas fa-exclamation-triangle text-yellow-400 mr-3"></i>
+                    <div>
+                        <h3 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">Config Not Found</h3>
+                        <p class="mt-1 text-sm text-yellow-700 dark:text-yellow-300">This client's configuration file was not found. Working sets are only available for clients with existing configurations.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div x-show="configInfo && configInfo.config_exists">
+                <!-- Current Active Servers -->
+                <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mb-6">
+                    <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Current Active Servers</h3>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400" x-text="`${currentServers.length} server(s) currently active`"></p>
+                    </div>
+                    <div class="px-6 py-4">
+                        <div x-show="currentServers.length === 0" class="text-sm text-gray-500 dark:text-gray-400">No servers currently active</div>
+                        <ul x-show="currentServers.length > 0" class="list-disc list-inside space-y-1">
+                            <template x-for="server in currentServers" :key="server">
+                                <li class="text-sm text-gray-900 dark:text-gray-200" x-text="server"></li>
+                            </template>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Working Sets -->
+                <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                    <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Working Sets</h3>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Switch between different sets of servers</p>
+                    </div>
+                    <div class="p-6">
+                        <div x-show="workingSets.length === 0" class="text-center text-gray-500 dark:text-gray-400 py-8">
+                            <i class="fas fa-layer-group text-4xl mb-2 opacity-50"></i>
+                            <p>No working sets available</p>
+                            <p class="mt-1 text-sm">Create working set templates in the templates directory.</p>
+                        </div>
+                        
+                        <div x-show="workingSets.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <template x-for="ws in workingSets" :key="ws.id">
+                                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-primary-300 dark:hover:border-primary-600 transition-colors"
+                                     :class="{'ring-2 ring-primary-500': ws.id === currentWorkingSet}">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <div class="flex items-center">
+                                            <span class="text-2xl mr-2" x-text="ws.icon || '🔧'"></span>
+                                            <div>
+                                                <h4 class="text-sm font-medium text-gray-900 dark:text-white" x-text="ws.name"></h4>
+                                                <p class="text-xs text-gray-500 dark:text-gray-400" x-text="ws.category"></p>
+                                            </div>
+                                        </div>
+                                        <span x-show="ws.id === currentWorkingSet" 
+                                              class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                            Active
+                                        </span>
+                                    </div>
+                                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-3" x-text="ws.description"></p>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 mb-3" x-text="`${ws.server_count || 0} server(s)`"></div>
+                                    <div class="flex space-x-2">
+                                        <button @click="previewWorkingSet(ws.id)" 
+                                                class="flex-1 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded">
+                                            Preview
+                                        </button>
+                                        <button @click="activateWorkingSet(ws.id)" 
+                                                :disabled="ws.id === currentWorkingSet"
+                                                :class="ws.id === currentWorkingSet ? 'opacity-50 cursor-not-allowed' : ''"
+                                                class="flex-1 px-3 py-1.5 text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 rounded">
+                                            Activate
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Backups tab -->
+        <div x-show="activeTab === 'backups'" x-transition>
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                        <i class="fas fa-shield-alt mr-2 text-blue-500"></i>
+                        Configuration Backups
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        Automatic backups created before working set switches for safety
+                    </p>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 overflow-hidden">
+                    <div x-show="backups.length === 0 && !loadingBackups" class="p-6 text-center text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-shield-alt text-4xl mb-2 opacity-50"></i>
+                        <p>No backups found</p>
+                        <p class="mt-1 text-sm">Backups are created automatically when switching working sets</p>
+                    </div>
+
+                    <div x-show="loadingBackups" class="p-6 text-center text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-spinner fa-spin text-4xl mb-2 opacity-50"></i>
+                        <p>Loading backups...</p>
+                    </div>
+
+                    <div x-show="backups.length > 0" class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-for="backup in backups" :key="backup.name">
+                            <div class="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center mb-2">
+                                            <div class="text-sm font-medium text-gray-900 dark:text-white" x-text="backup.name"></div>
+                                            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                                <i class="fas fa-check-circle mr-1"></i>
+                                                Available
+                                            </span>
+                                        </div>
+                                        <div class="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                                            Created: <span x-text="new Date(backup.created).toLocaleString()"></span>
+                                        </div>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                                            Size: <span x-text="(backup.size / 1024).toFixed(1) + ' KB'"></span>
+                                        </div>
+                                    </div>
+                                    <div class="flex space-x-2">
+                                        <button @click="restoreBackup(backup.name)"
+                                                class="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded border border-blue-200 dark:border-blue-800">
+                                            <i class="fas fa-undo mr-1"></i>
+                                            Restore
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings tab -->
+            <div x-show="activeTab === 'settings'" x-transition>
+                <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                    <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                                    <i class="fas fa-sliders-h mr-2 text-blue-500"></i>
+                                    Client Settings
+                                </h3>
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    Manage client configuration settings with automatic backups
+                                </p>
+                            </div>
+                            <button @click="discoverSettings()"
+                                    class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <i class="fas fa-search mr-2"></i>
+                                Discover Settings
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-gray-800 overflow-hidden">
+                        <!-- Settings filters -->
+                        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                            <div class="flex flex-col sm:flex-row gap-4">
+                                <div class="flex-1">
+                                    <input x-model="settingsSearch"
+                                           type="text"
+                                           placeholder="Search settings..."
+                                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                                </div>
+                                <div class="sm:w-64">
+                                    <select x-model="selectedCategory"
+                                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                                        <option value="all">All Categories</option>
+                                        <template x-for="[categoryId, category] in Object.entries(settingsCategories)" :key="categoryId">
+                                            <option :value="categoryId" x-text="category.name"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Settings content -->
+                        <div x-show="loadingSettings" class="p-6 text-center text-gray-500 dark:text-gray-400">
+                            <i class="fas fa-spinner fa-spin text-4xl mb-2 opacity-50"></i>
+                            <p>Loading settings...</p>
+                        </div>
+
+                        <div x-show="!loadingSettings && Object.keys(filteredSettings()).length === 0" class="p-6 text-center text-gray-500 dark:text-gray-400">
+                            <i class="fas fa-sliders-h text-4xl mb-2 opacity-50"></i>
+                            <p>No settings found</p>
+                            <p class="mt-1 text-sm">Try discovering settings or check if this client supports configuration.</p>
+                        </div>
+
+                        <div x-show="!loadingSettings && Object.keys(filteredSettings()).length > 0">
+                            <template x-for="[categoryId, settings] in Object.entries(filteredSettings())" :key="categoryId">
+                                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                                    <h4 class="text-md font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
+                                        <i :class="settingsCategories[categoryId]?.icon || 'fas fa-cog'" class="mr-2 text-gray-500"></i>
+                                        <span x-text="settingsCategories[categoryId]?.name || categoryId"></span>
+                                        <span class="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+                                            (<span x-text="settings.length"></span> settings)
+                                        </span>
+                                    </h4>
+
+                                    <div class="space-y-4">
+                                        <template x-for="setting in settings" :key="setting.key">
+                                            <div class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="flex items-center mb-1">
+                                                        <h5 class="text-sm font-medium text-gray-900 dark:text-white" x-text="setting.display_name || setting.key"></h5>
+                                                        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200">
+                                                            <span x-text="setting.type"></span>
+                                                        </span>
+                                                        <span x-show="!setting.editable" class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                                            Read-only
+                                                        </span>
+                                                    </div>
+                                                    <p x-show="setting.description" class="text-xs text-gray-600 dark:text-gray-400" x-text="setting.description"></p>
+                                                </div>
+
+                                                <div class="ml-4 flex items-center space-x-3">
+                                                    <!-- Boolean toggle -->
+                                                    <template x-if="setting.type === 'boolean' && setting.editable">
+                                                        <label class="relative inline-flex items-center cursor-pointer">
+                                                            <input :checked="setting.value"
+                                                                   @change="updateSetting(setting.key, $event.target.checked)"
+                                                                   type="checkbox"
+                                                                   class="sr-only peer">
+                                                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                                        </label>
+                                                    </template>
+
+                                                    <!-- String/Number input -->
+                                                    <template x-if="(setting.type === 'string' || setting.type === 'number') && setting.editable">
+                                                        <input :value="setting.value"
+                                                               @blur="updateSetting(setting.key, $event.target.value)"
+                                                               :type="setting.type === 'number' ? 'number' : 'text'"
+                                                               class="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-white">
+                                                    </template>
+
+                                                    <!-- Array/Object display -->
+                                                    <template x-if="setting.type === 'array' || setting.type === 'object'">
+                                                        <span class="text-xs text-gray-500 dark:text-gray-400 px-2 py-1 bg-gray-100 dark:bg-gray-600 rounded">
+                                                            <span x-text="setting.type === 'array' ? `${setting.value?.length || 0} items` : 'Complex value'"></span>
+                                                        </span>
+                                                    </template>
+
+                                                    <!-- Current value display for non-editable -->
+                                                    <template x-if="!setting.editable || (setting.type !== 'boolean' && setting.type !== 'string' && setting.type !== 'number')">
+                                                        <span class="text-xs text-gray-600 dark:text-gray-400 px-2 py-1 bg-gray-100 dark:bg-gray-600 rounded max-w-xs truncate"
+                                                              :title="JSON.stringify(setting.value)"
+                                                              x-text="typeof setting.value === 'string' ? setting.value : JSON.stringify(setting.value)"></span>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function clientDetail() {
+    return {
+        loading: true,
+        activeTab: 'overview',
+        client: {},
+        servers: [],
+        tools: [],
+        workingSets: [],
+        currentWorkingSet: null,
+        currentServers: [],
+        configInfo: null,
+        previewData: null,
+        loadingTools: false,
+        backups: [],
+        loadingBackups: false,
+        settings: {},
+        loadingSettings: false,
+        settingsCategories: {},
+        selectedCategory: 'all',
+        settingsSearch: '',
+        
+        init() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const tab = urlParams.get('tab');
+            if (tab && ['overview', 'servers', 'tools', 'working-sets', 'backups', 'settings'].includes(tab)) {
+                this.activeTab = tab;
+            }
+            
+            this.loadClient();
+            
+            this.$watch('activeTab', (newTab) => {
+                const url = new URL(window.location);
+                url.searchParams.set('tab', newTab);
+                window.history.pushState({}, '', url);
+                
+                if (newTab === 'servers') {
+                    this.loadServers();
+                } else if (newTab === 'tools') {
+                    this.loadTools();
+                } else if (newTab === 'working-sets') {
+                    this.loadWorkingSets();
+                } else if (newTab === 'backups') {
+                    this.loadBackups();
+                }
+            });
+        },
+        
+        async loadClient() {
+            try {
+                this.loading = true;
+                const clientId = window.location.pathname.split('/').pop();
+                const response = await fetch(`/api/v1/clients/${clientId}`);
+                if (!response.ok) throw new Error('Failed to load client');
+                this.client = await response.json();
+                
+                // Load config info
+                const configResponse = await fetch(`/api/v1/clients/${clientId}/config`);
+                if (configResponse.ok) {
+                    this.configInfo = await configResponse.json();
+                    this.currentServers = this.configInfo.current_servers || [];
+                }
+                
+                if (this.activeTab === 'servers') {
+                    await this.loadServers();
+                } else if (this.activeTab === 'tools') {
+                    await this.loadTools();
+                } else if (this.activeTab === 'working-sets') {
+                    await this.loadWorkingSets();
+                } else if (this.activeTab === 'backups') {
+                    await this.loadBackups();
+                } else if (this.activeTab === 'settings') {
+                    await this.loadSettings();
+                }
+            } catch (error) {
+                console.error('Error loading client:', error);
+                this.showNotification('Failed to load client details', 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        async loadServers() {
+            try {
+                const clientId = window.location.pathname.split('/').pop();
+                const response = await fetch(`/api/v1/clients/${clientId}/servers`);
+                if (!response.ok) throw new Error('Failed to load servers');
+                const data = await response.json();
+                this.servers = data.servers || [];
+            } catch (error) {
+                console.error('Error loading servers:', error);
+            }
+        },
+
+        async loadTools() {
+            try {
+                this.loadingTools = true;
+                const clientId = window.location.pathname.split('/').pop();
+                const response = await fetch(`/api/v1/clients/${clientId}/tools`);
+                if (!response.ok) throw new Error('Failed to load tools');
+                const data = await response.json();
+                this.tools = data.tools || [];
+            } catch (error) {
+                console.error('Error loading tools:', error);
+                this.tools = [];
+            } finally {
+                this.loadingTools = false;
+            }
+        },
+        
+        async loadWorkingSets() {
+            try {
+                // Use global working sets API
+                const response = await fetch(`/api/working-sets/`);
+                if (!response.ok) throw new Error('Failed to load working sets');
+                const data = await response.json();
+                this.workingSets = data || [];
+
+                // Find current working set from the list
+                const current = this.workingSets.find(ws => ws.is_current);
+                this.currentWorkingSet = current ? current.id : null;
+            } catch (error) {
+                console.error('Error loading working sets:', error);
+            }
+        },
+
+        async toggleTool(tool) {
+            try {
+                const clientId = window.location.pathname.split('/').pop();
+                const newEnabled = !tool.enabled;
+
+                const response = await fetch(`/api/v1/clients/${clientId}/tools/${tool.name}/toggle`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ enabled: newEnabled })
+                });
+
+                if (!response.ok) throw new Error('Failed to toggle tool');
+
+                const result = await response.json();
+                tool.enabled = result.enabled;
+
+                this.showNotification(
+                    `Tool "${tool.name}" ${tool.enabled ? 'enabled' : 'disabled'}`,
+                    'success'
+                );
+            } catch (error) {
+                console.error('Error toggling tool:', error);
+                this.showNotification('Failed to toggle tool', 'error');
+            }
+        },
+        
+        async previewWorkingSet(setId) {
+            try {
+                const response = await fetch(`/api/working-sets/${setId}/preview`);
+                if (!response.ok) throw new Error('Failed to preview working set');
+                const preview = await response.json();
+
+                // Show preview in modal or alert
+                const message = `Current: ${preview.current_servers.join(', ') || 'None'}\n` +
+                              `New: ${preview.new_servers.join(', ') || 'None'}\n` +
+                              `Added: ${preview.added_servers.join(', ') || 'None'}\n` +
+                              `Removed: ${preview.removed_servers.join(', ') || 'None'}`;
+                alert(message);
+            } catch (error) {
+                console.error('Error previewing working set:', error);
+                this.showNotification('Failed to preview working set', 'error');
+            }
+        },
+        
+        async activateWorkingSet(setId) {
+            const workingSet = this.workingSets.find(ws => ws.id === setId);
+            const setName = workingSet ? workingSet.name : setId;
+
+            if (!confirm(`Are you sure you want to switch to "${setName}" working set?\n\nA timestamped backup will be created automatically for safety.`)) {
+                return;
+            }
+
+            try {
+                this.showNotification('Switching working set and creating backup...', 'info');
+
+                const response = await fetch(`/api/working-sets/${setId}/switch`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({create_backup: true})
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+
+                const successMessage = `✅ Successfully switched to "${result.working_set_name}"\n` +
+                                     `📦 ${result.servers_count} servers configured\n` +
+                                     `💾 Backup created for safety`;
+
+                this.showNotification(successMessage, 'success');
+                await this.loadWorkingSets();
+                await this.loadClient(); // Reload to get updated servers
+
+            } catch (error) {
+                console.error('Error activating working set:', error);
+
+                // Check if it's a rollback error
+                const errorMsg = error.message || 'Unknown error occurred';
+                if (errorMsg.includes('rolled back') || errorMsg.includes('restored')) {
+                    this.showNotification(`❌ Working set switch failed, but config was automatically restored from backup.`, 'warning');
+                } else {
+                    this.showNotification(`❌ Failed to activate working set: ${errorMsg}`, 'error');
+                }
+            }
+        },
+
+        async loadBackups() {
+            try {
+                this.loadingBackups = true;
+                const response = await fetch('/api/working-sets/backups/list');
+                if (!response.ok) throw new Error('Failed to load backups');
+                this.backups = await response.json();
+            } catch (error) {
+                console.error('Error loading backups:', error);
+                this.showNotification('Failed to load backups', 'error');
+                this.backups = [];
+            } finally {
+                this.loadingBackups = false;
+            }
+        },
+
+        async restoreBackup(backupName) {
+            if (!confirm(`Are you sure you want to restore backup "${backupName}"?\n\nThis will overwrite your current MCP configuration.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/working-sets/backups/${backupName}/restore`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) throw new Error('Failed to restore backup');
+                const result = await response.json();
+
+                this.showNotification(`✅ Backup "${backupName}" restored successfully`, 'success');
+                await this.loadWorkingSets();
+                await this.loadClient();
+                await this.loadBackups();
+
+            } catch (error) {
+                console.error('Error restoring backup:', error);
+                this.showNotification(`❌ Failed to restore backup: ${error.message}`, 'error');
+            }
+        },
+
+        async loadSettings() {
+            try {
+                this.loadingSettings = true;
+                const clientId = window.location.pathname.split('/').pop();
+
+                // Load categories first
+                const categoriesResponse = await fetch('/api/v1/clients/settings/categories');
+                if (categoriesResponse.ok) {
+                    const categoriesData = await categoriesResponse.json();
+                    this.settingsCategories = categoriesData.categories;
+                }
+
+                // Load client settings
+                const settingsResponse = await fetch(`/api/v1/clients/${clientId}/settings`);
+                if (!settingsResponse.ok) {
+                    if (settingsResponse.status === 404) {
+                        this.showNotification('No settings found for this client. Try discovering settings first.', 'warning');
+                        this.settings = {};
+                        return;
+                    }
+                    throw new Error('Failed to load settings');
+                }
+
+                const settingsData = await settingsResponse.json();
+                this.settings = settingsData;
+
+            } catch (error) {
+                console.error('Error loading settings:', error);
+                this.showNotification('Failed to load client settings', 'error');
+                this.settings = {};
+            } finally {
+                this.loadingSettings = false;
+            }
+        },
+
+        async discoverSettings() {
+            try {
+                const clientId = window.location.pathname.split('/').pop();
+                const response = await fetch(`/api/v1/clients/${clientId}/settings/discover`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) throw new Error('Failed to discover settings');
+
+                const result = await response.json();
+                this.showNotification(`✅ Discovered ${result.settings_count} settings (${result.editable_count} editable)`, 'success');
+
+                await this.loadSettings();
+
+            } catch (error) {
+                console.error('Error discovering settings:', error);
+                this.showNotification('Failed to discover settings', 'error');
+            }
+        },
+
+        async updateSetting(settingKey, newValue) {
+            try {
+                const clientId = window.location.pathname.split('/').pop();
+                const response = await fetch(`/api/v1/clients/${clientId}/settings/${settingKey}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        value: newValue,
+                        create_backup: true
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to update setting');
+
+                const result = await response.json();
+                this.showNotification(`✅ Setting "${settingKey}" updated successfully`, 'success');
+
+                // Update the local settings data
+                await this.loadSettings();
+
+            } catch (error) {
+                console.error('Error updating setting:', error);
+                this.showNotification(`❌ Failed to update setting: ${error.message}`, 'error');
+            }
+        },
+
+        filteredSettings() {
+            if (!this.settings || !this.settings.categories) return {};
+
+            const filtered = {};
+
+            for (const [category, settings] of Object.entries(this.settings.categories)) {
+                if (this.selectedCategory !== 'all' && category !== this.selectedCategory) continue;
+
+                const filteredSettings = settings.filter(setting => {
+                    if (!this.settingsSearch) return true;
+                    const searchTerm = this.settingsSearch.toLowerCase();
+                    return setting.key.toLowerCase().includes(searchTerm) ||
+                           (setting.display_name && setting.display_name.toLowerCase().includes(searchTerm)) ||
+                           (setting.description && setting.description.toLowerCase().includes(searchTerm));
+                });
+
+                if (filteredSettings.length > 0) {
+                    filtered[category] = filteredSettings;
+                }
+            }
+
+            return filtered;
+        },
+
+        showNotification(message, type = 'info') {
+            console.log(`[${type}] ${message}`);
+            // TODO: Implement proper notification system
+        }
+    };
+}
+</script>
+{% endblock %}

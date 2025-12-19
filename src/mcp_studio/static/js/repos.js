@@ -75,12 +75,33 @@ async function loadRepos() {
 
         // Start polling for progress immediately
         console.log('Starting progress polling...');
+        let consecutiveErrors = 0;
+        const maxConsecutiveErrors = 5;
+        const scanStartTime = Date.now();
+        const maxScanTime = 15 * 60 * 1000; // 15 minutes max scan time
+
         progressInterval = setInterval(async () => {
+            // Check for overall scan timeout
+            if (Date.now() - scanStartTime > maxScanTime) {
+                console.error('Scan timeout reached, stopping progress monitoring');
+                clearInterval(progressInterval);
+                const activityDiv = document.getElementById('scan-activity');
+                if (activityDiv) {
+                    activityDiv.innerHTML += '<div class="text-yellow-400 font-semibold">⏰ Scan timeout reached (15 minutes). Scan may still be running on server.</div>';
+                }
+                return;
+            }
             try {
                 console.log('Polling progress...');
-                const progressRes = await fetch('/api/v1/repos/progress');
+                const progressRes = await fetch('/api/v1/repos/progress', {
+                    timeout: 5000, // 5 second timeout for progress requests
+                    signal: AbortSignal.timeout(5000)
+                });
                 const progress = await progressRes.json();
                 console.log('Progress received:', progress);
+
+                // Reset error counter on successful response
+                consecutiveErrors = 0;
 
                 if (progress.status === 'scanning') {
                     // Update progress display
@@ -97,9 +118,21 @@ async function loadRepos() {
                     // Update activity log
                     if (progress.activity_log && progress.activity_log.length > 0) {
                         const activityDiv = document.getElementById('scan-activity');
-                        activityDiv.innerHTML = progress.activity_log.slice(-10).map(msg =>
+                        let activityHtml = progress.activity_log.slice(-10).map(msg =>
                             `<div class="text-gray-300">${msg}</div>`
                         ).join('');
+
+                        // Add recent errors if available
+                        if (progress.recent_errors && progress.recent_errors.length > 0) {
+                            activityHtml += '<div class="mt-2 pt-2 border-t border-gray-600">';
+                            activityHtml += '<div class="text-red-400 text-xs font-semibold mb-1">Recent Errors:</div>';
+                            progress.recent_errors.forEach(error => {
+                                activityHtml += `<div class="text-red-300 text-xs">• ${error.repo}: ${error.error.substring(0, 50)}${error.error.length > 50 ? '...' : ''}</div>`;
+                            });
+                            activityHtml += '</div>';
+                        }
+
+                        activityDiv.innerHTML = activityHtml;
                         activityDiv.scrollTop = activityDiv.scrollHeight;
                     }
                 } else if (progress.status === 'complete') {
@@ -117,7 +150,28 @@ async function loadRepos() {
                     updateStats();
                 }
             } catch (e) {
-                console.error('Error polling progress:', e);
+                consecutiveErrors++;
+                console.error(`Error polling progress (${consecutiveErrors}/${maxConsecutiveErrors}):`, e);
+
+                // Show error in activity log if too many consecutive errors
+                if (consecutiveErrors >= 3) {
+                    const activityDiv = document.getElementById('scan-activity');
+                    if (activityDiv) {
+                        const errorMsg = `<div class="text-red-400">⚠️ Progress polling error (${consecutiveErrors}): ${e.message}</div>`;
+                        activityDiv.innerHTML += errorMsg;
+                        activityDiv.scrollTop = activityDiv.scrollHeight;
+                    }
+                }
+
+                // Stop polling if too many consecutive errors
+                if (consecutiveErrors >= maxConsecutiveErrors) {
+                    console.error('Too many consecutive progress polling errors, stopping scan monitoring');
+                    clearInterval(progressInterval);
+                    const activityDiv = document.getElementById('scan-activity');
+                    if (activityDiv) {
+                        activityDiv.innerHTML += '<div class="text-red-400 font-semibold">❌ Progress monitoring stopped due to repeated errors</div>';
+                    }
+                }
             }
         }, 500); // Poll every 500ms
 
@@ -139,19 +193,41 @@ async function loadRepos() {
         updateStats();
     } catch (e) {
         if (progressInterval) clearInterval(progressInterval);
-        stopScanMonitor();
         console.error('Error scanning repositories:', e);
-        // Show error in scan monitor instead of hiding it
+
+        // Show error in scan monitor but keep the UI visible
         const monitorContent = document.getElementById('scan-monitor-content');
-        monitorContent.innerHTML = `
-            <div class="text-red-400 font-semibold">❌ SCAN FAILED</div>
-            <div class="text-red-300 mt-2">${e.message || 'Unknown error occurred'}</div>
-            <div class="text-gray-400 mt-2 text-xs">Check browser console and server logs for details</div>
-        `;
-        document.getElementById('repos-health').innerHTML =
-            '<div class="text-red-400">Error scanning repositories: ' + e.message + '</div>';
-        document.getElementById('repos-detail').innerHTML =
-            '<div class="text-red-400">Error scanning repositories: ' + e.message + '</div>';
+        if (monitorContent) {
+            monitorContent.innerHTML = `
+                <div class="text-red-400 font-semibold">❌ SCAN ERROR DETECTED</div>
+                <div class="text-red-300 mt-2">${e.message || 'Unknown error occurred'}</div>
+                <div class="text-gray-400 mt-2 text-xs">Check browser console and server logs for details</div>
+                <div class="text-yellow-400 mt-2 text-xs">🔄 Scan may still be running in background...</div>
+            `;
+        }
+
+        // Don't replace the entire scan UI - just add error notification
+        const progressDisplay = document.getElementById('scan-progress-display');
+        if (progressDisplay) {
+            // Add error banner but keep existing progress visible
+            const errorBanner = document.createElement('div');
+            errorBanner.className = 'mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg';
+            errorBanner.innerHTML = `
+                <div class="flex items-center gap-2 text-red-400">
+                    <span>⚠️</span>
+                    <span class="font-semibold">Scan Error</span>
+                </div>
+                <div class="text-red-300 text-sm mt-1">${e.message || 'Unknown error occurred'}</div>
+                <div class="text-gray-400 text-xs mt-1">The scan may continue in the background. Check progress above.</div>
+            `;
+            progressDisplay.insertBefore(errorBanner, progressDisplay.firstChild);
+        }
+
+        // Keep scan monitor visible for debugging
+        setTimeout(() => {
+            // Only hide after giving user time to see the error
+            stopScanMonitor();
+        }, 10000); // Keep visible for 10 seconds on error
     }
 }
 

@@ -1,0 +1,39 @@
+[Unit]
+Description=MCP Studio with Watchfiles Crashproofing
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=mcp-studio
+Group=mcp-studio
+WorkingDirectory=/opt/mcp-studio
+Environment=PATH=/opt/mcp-studio/venv/bin
+Environment=MCP_STUDIO_HOST=0.0.0.0
+Environment=MCP_STUDIO_PORT=7787
+Environment=MCP_STUDIO_DEBUG=false
+Environment=MCP_STUDIO_LOG_LEVEL=INFO
+Environment=WATCHFILES_MAX_RESTARTS=20
+Environment=WATCHFILES_RESTART_DELAY=2.0
+Environment=WATCHFILES_HEALTH_CHECK_INTERVAL=60
+Environment=WATCHFILES_NOTIFY_ON_CRASH=true
+ExecStart=/opt/mcp-studio/venv/bin/python watchfiles_runner.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mcp-studio-watchfiles
+
+# Security settings
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/opt/mcp-studio/logs /opt/mcp-studio/data
+ProtectHome=yes
+
+# Resource limits
+MemoryLimit=1G
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

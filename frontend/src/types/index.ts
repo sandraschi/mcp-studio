@@ -22,6 +22,11 @@ export interface Tool {
   examples?: ToolExample[];
   metadata?: Record<string, any>;
   serverId?: string;
+  formattedDocstring?: {
+    html?: string;
+    markdown?: string;
+    parsed?: Record<string, any>;
+  };
 }
 
 export interface ToolExample {

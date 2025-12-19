@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block title %}MCP Clients - MCP Studio{% endblock %}
+
+{% block content %}
+<div x-data="clientsList()" x-init="init()" class="space-y-6">
+    <!-- Page header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">MCP Clients</h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Manage MCP server configurations for different clients
+            </p>
+        </div>
+    </div>
+
+    <!-- Client List -->
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">Detected MCP Clients</h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Clients with MCP configurations found on your system</p>
+        </div>
+        
+        <div class="bg-white dark:bg-gray-800 overflow-hidden">
+            <div x-show="clients.length === 0" class="p-6 text-center text-gray-500 dark:text-gray-400">
+                <i class="fas fa-desktop text-4xl mb-2 opacity-50"></i>
+                <p>No clients found</p>
+                <p class="mt-1 text-sm">No MCP client configurations were detected on your system.</p>
+            </div>
+            
+            <div x-show="clients.length > 0" class="divide-y divide-gray-200 dark:divide-gray-700">
+                <template x-for="client in clients" :key="client.id">
+                    <a :href="`/clients/${client.id}`" class="block hover:bg-gray-50 dark:hover:bg-gray-700">
+                        <div class="px-6 py-4">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-12 w-12 rounded-lg bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
+                                        <i class="fas fa-desktop text-primary-600 dark:text-primary-400 text-xl"></i>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900 dark:text-white" x-text="client.name"></div>
+                                        <div class="text-sm text-gray-500 dark:text-gray-400" x-text="client.short_description"></div>
+                                        <div class="mt-1 flex items-center space-x-4 text-xs text-gray-400 dark:text-gray-500">
+                                            <span x-text="client.client_type"></span>
+                                            <span>•</span>
+                                            <span x-text="client.platform"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="ml-4 flex items-center space-x-4">
+                                    <div class="text-right">
+                                        <div class="text-sm font-medium text-gray-900 dark:text-white" x-text="`${client.server_count || 0} servers`"></div>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400" 
+                                             x-text="client.config_exists ? 'Configured' : 'Not configured'"></div>
+                                    </div>
+                                    <div>
+                                        <span 
+                                            class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                            :class="{
+                                                'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': client.config_exists,
+                                                'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200': !client.config_exists,
+                                            }">
+                                            <span x-text="client.config_exists ? 'Active' : 'Inactive'"></span>
+                                        </span>
+                                    </div>
+                                    <i class="fas fa-chevron-right text-gray-400"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- All Known Clients -->
+    <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+        <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white">All Known MCP Clients</h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Complete list of supported MCP clients</p>
+        </div>
+        
+        <div class="p-6">
+            <div x-show="allClients.length === 0" class="text-center text-gray-500 dark:text-gray-400 py-8">
+                <i class="fas fa-spinner fa-spin text-4xl mb-2 opacity-50"></i>
+                <p>Loading clients...</p>
+            </div>
+            
+            <div x-show="allClients.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <template x-for="client in allClients" :key="client.id">
+                    <a :href="`/clients/${client.id}`" class="block border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md transition-all">
+                        <div class="flex items-start justify-between mb-2">
+                            <h4 class="text-sm font-medium text-gray-900 dark:text-white" x-text="client.name"></h4>
+                            <span 
+                                class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                                :class="{
+                                    'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': client.status === 'Active',
+                                    'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200': client.status !== 'Active',
+                                }">
+                                <span x-text="client.status"></span>
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mb-2" x-text="client.short_description"></p>
+                        <div class="flex items-center space-x-3 text-xs text-gray-500 dark:text-gray-400">
+                            <span x-text="client.client_type"></span>
+                            <span>•</span>
+                            <span x-text="client.platform"></span>
+                        </div>
+                    </a>
+                </template>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function clientsList() {
+    return {
+        loading: true,
+        clients: [],
+        allClients: [],
+        clientsWithConfigs: new Set(),
+        
+        async init() {
+            await Promise.all([
+                this.loadClientsWithConfigs(),
+                this.loadAllClients()
+            ]);
+            this.loading = false;
+        },
+        
+        async loadClientsWithConfigs() {
+            try {
+                // Get clients that have configs by checking each one
+                const response = await fetch('/api/v1/clients/');
+                if (!response.ok) throw new Error('Failed to load clients');
+                const data = await response.json();
+                
+                // Check which clients have configs
+                const clientsWithConfigs = [];
+                for (const client of data.clients) {
+                    try {
+                        const configResponse = await fetch(`/api/v1/clients/${client.id}/config`);
+                        if (configResponse.ok) {
+                            const configInfo = await configResponse.json();
+                            if (configInfo.config_exists) {
+                                clientsWithConfigs.push({
+                                    ...client,
+                                    config_exists: true,
+                                    server_count: configInfo.server_count || 0,
+                                });
+                                this.clientsWithConfigs.add(client.id);
+                            }
+                        }
+                    } catch (e) {
+                        // Client config not found, skip
+                    }
+                }
+                
+                this.clients = clientsWithConfigs;
+            } catch (error) {
+                console.error('Error loading clients with configs:', error);
+            }
+        },
+        
+        async loadAllClients() {
+            try {
+                const response = await fetch('/api/v1/clients/');
+                if (!response.ok) throw new Error('Failed to load all clients');
+                const data = await response.json();
+                this.allClients = data.clients || [];
+            } catch (error) {
+                console.error('Error loading all clients:', error);
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

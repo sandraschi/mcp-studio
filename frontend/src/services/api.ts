@@ -90,6 +90,17 @@ class ApiService {
     });
   }
 
+  // Docstring Formatting
+  async formatDocstring(
+    docstring: string,
+    format: 'html' | 'markdown' = 'html'
+  ): Promise<ApiResponse<{ formatted: string; parsed: Record<string, any> }>> {
+    return this.request<{ formatted: string; parsed: Record<string, any> }>('/tools/format-docstring', {
+      method: 'POST',
+      body: JSON.stringify({ docstring, format }),
+    });
+  }
+
   // Notifications
   async getNotifications(): Promise<ApiResponse<Notification[]>> {
     return this.request<Notification[]>('/notifications');

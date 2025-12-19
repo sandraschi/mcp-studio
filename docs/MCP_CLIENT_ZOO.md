@@ -19,7 +19,7 @@ MCP Studio now supports **ALL known MCP clients** as of 2025! Drop your config f
 | 7 | **LM Studio** | ✅ | `mcpServers` | Local model runner |
 | 8 | **Zed Editor** | ✅ | `mcpServers` | Modern code editor |
 | 9 | **VSCode Generic** | ✅ | `mcpServers` | Generic VSCode MCP config |
-| 10 | **Antigravity IDE** | ⚠️ | `mcpServers` | 🚨 **DATA DESTRUCTION RISK** - Google's AI-powered IDE |
+| 10 | **Antigravity IDE** | ✅ | `mcpServers` | Google's AI-powered IDE (data destruction risk patched) |
 
 ---
 
@@ -247,11 +247,9 @@ C:\Users\{user}\AppData\Roaming\Code\User\mcp_settings.json
 
 **Supported Servers:** 35+ pre-built integrations including databases (BigQuery, Supabase, MongoDB), development tools (GitHub, Heroku, Netlify), and business services (Linear, Notion, Stripe) (JavaScript app with sections on MCP overview, core features, connection setup, custom server config, and supported servers)
 
-🚨 **CRITICAL DATA SAFETY RISK:** Antigravity IDE has **confirmed capability to destroy user data** by completely wiping drives. A user reported their entire D: drive was "nuked" with no recovery possible - deletion was so fast it bypassed Recycle Bin completely. This incident received major media coverage (CNN, NYT, Ars Technica) and went viral on social media.
+✅ **DATA SAFETY UPDATE (Dec 2025):** Previously reported data destruction risk has been **patched by Google**. The drive-wiping vulnerability was resolved in a security update last week. Antigravity IDE now includes proper safety checks and data protection measures.
 
-⚠️ **ADDITIONAL ISSUES:** Rapid update cadence with **zero transparency** - no changelog, no blog posts, no release notes. Latest update adds "idiot proofing" but underlying risks remain.
-
-**BACKUP ALL DATA** before use. **Not recommended for any work involving important data.**
+⚠️ **REMAINING CONCERNS:** Rapid update cadence with limited transparency remains a concern. Regular backups recommended as with any software.
 
 **Windows:**
 ```

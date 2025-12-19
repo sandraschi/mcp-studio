@@ -368,18 +368,51 @@ function startScanMonitor() {
     const monitorContent = document.getElementById('scan-monitor-content');
     monitorContent.innerHTML = '<div>🔄 Connecting to scan monitor...</div>';
 
+    let consecutiveErrors = 0;
+    const maxConsecutiveErrors = 10;
+
     scanMonitorInterval = setInterval(async () => {
         try {
-            const res = await fetch('/api/v1/repos/progress');
+            const res = await fetch('/api/v1/repos/progress', {
+                timeout: 3000,
+                signal: AbortSignal.timeout(3000)
+            });
             const progress = await res.json();
 
-            monitorContent.innerHTML = progress.activity_log && progress.activity_log.length > 0
-                ? progress.activity_log.slice(-15).map(msg => `<div>${msg}</div>`).join('')
-                : '<div>⏳ Waiting for scan data...</div>';
+            // Reset error counter on success
+            consecutiveErrors = 0;
 
+            let monitorHtml = '';
+            if (progress.activity_log && progress.activity_log.length > 0) {
+                monitorHtml = progress.activity_log.slice(-15).map(msg => `<div>${msg}</div>`).join('');
+            } else {
+                monitorHtml = '<div>⏳ Waiting for scan data...</div>';
+            }
+
+            // Add error summary if there are recent errors
+            if (progress.recent_errors && progress.recent_errors.length > 0) {
+                monitorHtml += '<div class="mt-2 pt-2 border-t border-gray-600 text-xs">';
+                monitorHtml += '<div class="text-red-400 font-semibold">Recent Errors:</div>';
+                progress.recent_errors.forEach(error => {
+                    monitorHtml += `<div class="text-red-300">• ${error.repo}: ${error.error.substring(0, 60)}${error.error.length > 60 ? '...' : ''}</div>`;
+                });
+                monitorHtml += '</div>';
+            }
+
+            monitorContent.innerHTML = monitorHtml;
             monitorContent.scrollTop = monitorContent.scrollHeight;
         } catch (e) {
-            monitorContent.innerHTML = '<div class="text-red-400">❌ Monitor connection failed</div>';
+            consecutiveErrors++;
+            console.warn(`Scan monitor error (${consecutiveErrors}/${maxConsecutiveErrors}):`, e);
+
+            if (consecutiveErrors < 3) {
+                monitorContent.innerHTML = `<div class="text-yellow-400">⚠️ Monitor connection issue (${consecutiveErrors})</div>`;
+            } else if (consecutiveErrors < maxConsecutiveErrors) {
+                monitorContent.innerHTML = `<div class="text-red-400">❌ Monitor connection failed (${consecutiveErrors}/${maxConsecutiveErrors})</div><div class="text-gray-400 text-xs">Scan may still be running...</div>`;
+            } else {
+                monitorContent.innerHTML = '<div class="text-red-400">❌ Monitor stopped after repeated failures</div><div class="text-gray-400 text-xs">Check network connection</div>';
+                stopScanMonitor();
+            }
         }
     }, 1000);
 }

@@ -77,7 +77,11 @@ class RepoScannerService:
 
     def get_progress(self) -> Dict[str, Any]:
         """Get current scan progress."""
-        return self.scan_progress
+        progress = self.scan_progress.copy()
+        # Include recent errors if available
+        if hasattr(self, 'recent_errors') and self.recent_errors:
+            progress['recent_errors'] = self.recent_errors[-3:]  # Last 3 errors
+        return progress
 
     def get_results(self) -> List[Dict[str, Any]]:
         """Get results of the last scan."""
@@ -130,15 +134,38 @@ class RepoScannerService:
             # Add initial activity
             self.log_scan(f"Starting scan of {len(dirs)} directories in {repos_dir}...")
 
+            # Set scan timeout (10 minutes)
+            scan_start_time = datetime.now()
+            max_scan_time = 600  # 10 minutes
+
             for i, repo_path in enumerate(dirs):
+                # Check for timeout
+                elapsed = (datetime.now() - scan_start_time).total_seconds()
+                if elapsed > max_scan_time:
+                    self.log_scan(f"Scan timeout reached ({max_scan_time}s). Stopping scan.", is_error=True)
+                    break
                 self.scan_progress["current"] = repo_path.name
                 self.scan_progress["done"] = i + 1
 
                 try:
                     self.log_scan(f"Analyzing {repo_path.name}...")
 
+                    # Add timeout for individual repo analysis (30 seconds)
+                    import asyncio
+                    import concurrent.futures
+
+                    def analyze_with_timeout():
+                        return self.analyze_repo(repo_path)
+
+                    # Run analysis with timeout
+                    try:
+                        with concurrent.futures.ThreadPoolExecutor() as executor:
+                            future = executor.submit(analyze_with_timeout)
+                            info = future.result(timeout=30.0)  # 30 second timeout per repo
+                    except concurrent.futures.TimeoutError:
+                        raise Exception(f"Analysis timeout for {repo_path.name}")
+
                     # analyze_repo returns None if not MCP repo
-                    info = self.analyze_repo(repo_path)
                     if info:
                         results.append(info)
                         mcp_count = self.scan_progress["mcp_repos_found"] + 1
@@ -164,6 +191,24 @@ class RepoScannerService:
                     error_msg = f"[ERROR] {repo_path.name}: {str(e)}"
                     self.log_scan(error_msg, is_error=True)
                     logger.error(f"Error analyzing {repo_path.name}: {e}", exc_info=True)
+
+                    # Increment error count but continue scanning
+                    self.scan_progress["errors"] += 1
+
+                    # Add error to activity log
+                    error_entry = {
+                        "repo": repo_path.name,
+                        "error": str(e),
+                        "timestamp": datetime.now().isoformat()
+                    }
+
+                    # Store last few errors for debugging
+                    if not hasattr(self, 'recent_errors'):
+                        self.recent_errors = []
+                    self.recent_errors.append(error_entry)
+                    if len(self.recent_errors) > 5:
+                        self.recent_errors = self.recent_errors[-5:]
+
                     # Continue scanning other repos instead of failing completely
 
             # Final summary
