@@ -1,5 +1,7 @@
 # MCP Studio
 
+**By FlowEngineer sandraschi**
+
 [![Beta](https://img.shields.io/badge/Status-Beta-orange.svg)](README.md#-beta-status)
 [![FastMCP 2.13.1](https://img.shields.io/badge/FastMCP-2.13.1-green.svg)](https://github.com/jlowin/fastmcp)
 [![CI](https://img.shields.io/badge/CI-Passing-brightgreen.svg)](https://github.com/sandraschi/mcp-studio/actions)

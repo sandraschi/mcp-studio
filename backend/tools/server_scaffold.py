@@ -259,7 +259,7 @@ requires-python = ">=3.11"
 readme = "README.md"
 license = {{text = "{license_type}"}}
 dependencies = [
-    "fastmcp[all]>=2.13.1,<2.14.0",
+    "fastmcp[all]>=2.14.1,<2.15.0",
 ]
 
 [project.optional-dependencies]

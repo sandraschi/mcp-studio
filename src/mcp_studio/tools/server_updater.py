@@ -344,7 +344,7 @@ def _upgrade_fastmcp(repo_path: Path) -> Dict[str, Any]:
             import re
             new_content = re.sub(
                 r'fastmcp.*?(\d+\.\d+\.?\d*)',
-                'fastmcp[all]>=2.13.1,<2.14.0',
+                'fastmcp[all]>=2.14.1,<2.15.0',
                 content,
                 flags=re.IGNORECASE
             )
@@ -359,7 +359,7 @@ def _upgrade_fastmcp(repo_path: Path) -> Dict[str, Any]:
             import re
             new_content = re.sub(
                 r'fastmcp.*?(\d+\.\d+\.?\d*)',
-                'fastmcp[all]>=2.13.1,<2.14.0',
+                'fastmcp[all]>=2.14.1,<2.15.0',
                 content,
                 flags=re.IGNORECASE
             )
