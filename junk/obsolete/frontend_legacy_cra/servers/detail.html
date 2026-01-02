@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block title %}Server Details - MCP Studio{% endblock %}
+
+{% block content %}
+<div x-data="serverDetail()" x-init="init()" class="space-y-6">
+    <!-- Page header with back button -->
+    <div class="flex items-center">
+        <a href="/servers" class="mr-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+                <span x-text="server.name || 'Loading...'"></span>
+                <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
+                      :class="{
+                        'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': server.status === 'online',
+                        'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': server.status === 'error',
+                        'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200': server.status === 'offline',
+                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': server.status === 'starting' || server.status === 'stopping',
+                      }">
+                    <span x-text="server.status || 'unknown'" class="capitalize"></span>
+                </span>
+            </h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400" x-text="server.type || ''"></p>
+        </div>
+        <div class="ml-auto flex space-x-3">
+            <button @click="refreshServer()" class="inline-flex items-center px-3 py-1.5 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                <i class="fas fa-sync-alt mr-1" :class="{'animate-spin': loading}"></i>
+                Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Server details tabs -->
+    <div class="border-b border-gray-200 dark:border-gray-700">
+        <nav class="-mb-px flex space-x-8">
+            <button @click="activeTab = 'overview'" 
+                    :class="activeTab === 'overview' ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                <i class="fas fa-info-circle mr-2"></i>
+                Overview
+            </button>
+            <button @click="activeTab = 'tools'" 
+                    :class="activeTab === 'tools' ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200'"
+                    class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
+                <i class="fas fa-tools mr-2"></i>
+                Tools
+                <span x-show="server.tools > 0" class="ml-1.5 py-0.5 px-1.5 rounded-full text-xs font-medium bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200" x-text="server.tools"></span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- Tab content -->
+    <div>
+        <!-- Overview tab -->
+        <div x-show="activeTab === 'overview'" x-transition>
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Server Information</h3>
+                    <div class="mt-5 border-t border-gray-200 dark:border-gray-700">
+                        <dl class="sm:divide-y sm:divide-gray-200 dark:divide-gray-700">
+                            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Server ID</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-200 sm:mt-0 sm:col-span-2" x-text="server.id || 'N/A'"></dd>
+                            </div>
+                            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Type</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-200 sm:mt-0 sm:col-span-2" x-text="server.type || 'N/A'"></dd>
+                            </div>
+                            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Status</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-200 sm:mt-0 sm:col-span-2">
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" 
+                                          :class="{
+                                            'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': server.status === 'online',
+                                            'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': server.status === 'error',
+                                            'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200': server.status === 'offline',
+                                            'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': server.status === 'starting' || server.status === 'stopping',
+                                          }">
+                                        <span x-text="server.status ? server.status.charAt(0).toUpperCase() + server.status.slice(1) : 'Unknown'"></span>
+                                    </span>
+                                </dd>
+                            </div>
+                            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Last Seen</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-200 sm:mt-0 sm:col-span-2" x-text="formatDateTime(server.last_seen)"></dd>
+                            </div>
+                            <div class="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4">
+                                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Description</dt>
+                                <dd class="mt-1 text-sm text-gray-900 dark:text-gray-200 sm:mt-0 sm:col-span-2" x-text="server.description || 'No description provided'"></dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tools tab -->
+        <div x-show="activeTab === 'tools'" x-transition>
+            <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                <div class="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Available Tools</h3>
+                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Tools provided by this MCP server</p>
+                </div>
+                <div class="bg-white dark:bg-gray-800 overflow-hidden">
+                    <div x-show="tools.length === 0" class="p-6 text-center text-gray-500 dark:text-gray-400">
+                        <i class="fas fa-tools text-4xl mb-2 opacity-50"></i>
+                        <p>No tools found</p>
+                        <p class="mt-1 text-sm">This server doesn't have any tools or is currently offline.</p>
+                    </div>
+                    
+                    <div x-show="tools.length > 0" class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-for="tool in tools" :key="tool.name">
+                            <div class="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center">
+                                        <div class="flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300">
+                                            <i class="fas fa-wrench"></i>
+                                        </div>
+                                        <div class="ml-4">
+                                            <a :href="`/tools/${server.id}/${tool.name}`" class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300" x-text="tool.name"></a>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400" x-text="tool.description || 'No description available'"></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function serverDetail() {
+    return {
+        loading: true,
+        activeTab: 'overview',
+        server: {},
+        tools: [],
+        
+        init() {
+            // Set active tab from URL hash or query parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const tab = urlParams.get('tab');
+            if (tab && ['overview', 'tools'].includes(tab)) {
+                this.activeTab = tab;
+            }
+            
+            // Load server data
+            this.loadServer();
+            
+            // Load tools if on tools tab
+            if (this.activeTab === 'tools') {
+                this.loadTools();
+            }
+            
+            // Watch for tab changes
+            this.$watch('activeTab', (newTab) => {
+                // Update URL without page reload
+                const url = new URL(window.location);
+                url.searchParams.set('tab', newTab);
+                window.history.pushState({}, '', url);
+                
+                // Load data for the selected tab
+                if (newTab === 'tools') {
+                    this.loadTools();
+                }
+            });
+        },
+        
+        async loadServer() {
+            try {
+                this.loading = true;
+                // Simulate API call
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Mock data - replace with actual API call
+                this.server = {
+                    id: '1',
+                    name: 'Local MCP Server',
+                    type: 'Local',
+                    status: 'online',
+                    tools: 8,
+                    description: 'Local development server',
+                    last_seen: new Date()
+                };
+                
+            } catch (error) {
+                console.error('Error loading server:', error);
+                this.showNotification('Failed to load server details', 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        async loadTools() {
+            try {
+                // Simulate API call
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Mock data - replace with actual API call
+                this.tools = [
+                    {
+                        name: 'execute_command',
+                        description: 'Execute a shell command on the server',
+                        version: '1.0.0',
+                        tags: ['system', 'admin']
+                    },
+                    {
+                        name: 'list_files',
+                        description: 'List files in a directory',
+                        version: '1.0.0',
+                        tags: ['filesystem']
+                    },
+                    {
+                        name: 'get_processes',
+                        description: 'Get list of running processes',
+                        version: '1.0.0',
+                        tags: ['system', 'monitoring']
+                    }
+                ];
+                
+            } catch (error) {
+                console.error('Error loading tools:', error);
+                this.showNotification('Failed to load tools', 'error');
+            }
+        },
+        
+        async refreshServer() {
+            await this.loadServer();
+            if (this.activeTab === 'tools') {
+                await this.loadTools();
+            }
+            this.showNotification('Server data refreshed', 'success');
+        },
+        
+        formatDateTime(date) {
+            if (!date) return 'N/A';
+            return new Date(date).toLocaleString();
+        },
+        
+        showNotification(message, type = 'info') {
+            // Implement notification system
+            console.log(`[${type}] ${message}`);
+        }
+    };
+}
+</script>
+{% endblock %}

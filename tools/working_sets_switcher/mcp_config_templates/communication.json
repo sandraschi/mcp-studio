@@ -1,0 +1,54 @@
+﻿{
+  "name": "Communication & Office",
+  "id": "communication",
+  "description": "Focused on communication and office productivity",
+  "icon": "📞",
+  "category": "Productivity",
+  "servers": [
+    {
+      "name": "basic-memory",
+      "required": true,
+      "description": "Universal - note taking"
+    },
+    {
+      "name": "windows_operations",
+      "required": true,
+      "description": "Universal - system operations"
+    },
+    {
+      "name": "filesystem",
+      "required": true,
+      "description": "Universal - file management"
+    },
+    {
+      "name": "fetch",
+      "required": true,
+      "description": "Universal - web requests"
+    },
+    {
+      "name": "microsoft-365",
+      "required": false,
+      "description": "COMMUNICATION - email, calendar, teams"
+    },
+    {
+      "name": "obsidian-plugin-based",
+      "required": false,
+      "description": "PRODUCTIVITY - knowledge base"
+    },
+    {
+      "name": "calibremcp",
+      "required": false,
+      "description": "REFERENCE - book lookup"
+    },
+    {
+      "name": "pywinauto-mcp",
+      "required": false,
+      "description": "AUTOMATION - UI automation"
+    },
+    {
+      "name": "mindmap",
+      "required": false,
+      "description": "VISUALIZATION - mind mapping"
+    }
+  ]
+}

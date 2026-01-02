@@ -1,0 +1,3601 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Studio - Mission Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Toastify for notifications -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        midnight: { 900: '#0a0a0f', 800: '#12121a', 700: '#1a1a25' },
+                        accent: { 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
+                        glow: { cyan: '#22d3ee', purple: '#a855f7', pink: '#ec4899' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        code,
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .glow-border {
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.3), inset 0 0 20px rgba(99, 102, 241, 0.1);
+        }
+
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .tab-active {
+            border-bottom: 2px solid #6366f1;
+            color: #6366f1;
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #6366f1, #a855f7, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Tool docstring formatting */
+        .tool-description {
+            line-height: 1.6;
+        }
+
+        .tool-description code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+        }
+
+        .tool-description strong {
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        .tool-description ul {
+            list-style-type: disc;
+            margin-left: 1.5rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .tool-description li {
+            margin-top: 0.25rem;
+        }
+
+        .tool-description pre {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow-x: auto;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .tool-description pre code {
+            background: transparent;
+            padding: 0;
+        }
+
+        .tool-description-compact {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .tool-description-compact .space-y-4>* {
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+
+<body class="bg-midnight-900 text-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="glass sticky top-0 z-50 border-b border-white/10">
+        <div class="max-w-7xl mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <h1 class="text-2xl font-bold gradient-text">MCP Studio</h1>
+                    <span class="text-xs text-gray-500 mono">v0.1.0</span>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div id="status-indicator" class="flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full bg-green-500 pulse"></span>
+                        <span class="text-gray-400">Ready</span>
+                    </div>
+                    <div class="text-sm text-gray-500">
+                        <span id="repo-count">0</span> repos | <span id="server-count">0</span> servers
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="toggleTheme()" id="theme-toggle"
+                            class="p-2 rounded-lg hover:bg-white/5 transition-colors" title="Toggle theme">
+                            <span id="theme-icon-dark" class="text-xl">🌙</span>
+                            <span id="theme-icon-light" class="text-xl hidden">☀️</span>
+                        </button>
+                        <button onclick="showHelp()" class="p-2 rounded-lg hover:bg-white/5 transition-colors"
+                            title="Help">
+                            <span class="text-xl">❓</span>
+                        </button>
+                        <button onclick="showLogs()" class="p-2 rounded-lg hover:bg-white/5 transition-colors"
+                            title="View logs">
+                            <span class="text-xl">📋</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Tabs -->
+    <div class="border-b border-white/10">
+        <div class="max-w-7xl mx-auto px-6">
+            <nav class="flex gap-8">
+                <button onclick="switchTab('overview')" id="tab-overview"
+                    class="py-4 px-2 text-sm font-medium tab-active">
+📊 Overview
+                </button>
+                <button onclick="switchTab('clients')" id="tab-clients"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+                    🔌 MCP Clients
+                </button>
+                <button onclick="switchTab('repos')" id="tab-repos"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+📁 Repositories
+                </button>
+                <button onclick="switchTab('tools')" id="tab-tools"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+🔧 Tools
+                </button>
+                <button onclick="switchTab('console')" id="tab-console"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+💻 Console
+                </button>
+                <button onclick="switchTab('ai')" id="tab-ai"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+                    🤖 AI Assistant
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <!-- Overview Tab -->
+        <div id="content-overview" class="tab-content">
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="glass rounded-xl p-6 card-hover">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-lg bg-indigo-500/20 flex items-center justify-center text-2xl">🔌
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold" id="stat-clients">0</div>
+                            <div class="text-sm text-gray-400">MCP Clients</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="glass rounded-xl p-6 card-hover">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-lg bg-green-500/20 flex items-center justify-center text-2xl">📁
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold" id="stat-repos">0</div>
+                            <div class="text-sm text-gray-400">MCP Repos</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="glass rounded-xl p-6 card-hover">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-lg bg-purple-500/20 flex items-center justify-center text-2xl">🔧
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold" id="stat-tools">0</div>
+                            <div class="text-sm text-gray-400">Total Tools</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="glass rounded-xl p-6 card-hover">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-lg bg-cyan-500/20 flex items-center justify-center text-2xl">✅
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold" id="stat-sota">0</div>
+                            <div class="text-sm text-gray-400">SOTA Repos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Two Column Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Discovered Clients -->
+                <div class="glass rounded-xl overflow-hidden">
+                    <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                        <h2 class="font-semibold">🔌 Discovered MCP Clients</h2>
+                        <button onclick="loadClients()"
+                            class="text-xs text-indigo-400 hover:text-indigo-300">Refresh</button>
+                    </div>
+                    <div id="clients-list" class="p-4 space-y-3 max-h-96 overflow-y-auto">
+                        <div class="text-gray-500 text-sm">Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Repo Health -->
+                <div class="glass rounded-xl overflow-hidden">
+                    <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                        <h2 class="font-semibold">📊 Repository Health</h2>
+                        <button onclick="loadRepos()"
+                            class="text-xs text-indigo-400 hover:text-indigo-300">Scan</button>
+                    </div>
+                    <div id="repos-health" class="p-4 space-y-3 max-h-96 overflow-y-auto">
+                        <div class="text-gray-500 text-sm">Click "Scan" to analyze repos...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Log -->
+            <div class="mt-8 glass rounded-xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                    <h2 class="font-semibold">📋 Activity Log</h2>
+                    <span class="text-xs text-gray-500" id="log-count">0 entries</span>
+                </div>
+                <div id="activity-log" class="p-4 mono text-xs max-h-48 overflow-y-auto bg-black/30">
+                    <div class="text-gray-500">Waiting for activity...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Clients Tab -->
+        <div id="content-clients" class="tab-content hidden">
+            <div class="glass rounded-xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-white/10">
+                    <h2 class="font-semibold">🔌 MCP Client Configurations</h2>
+                    <p class="text-sm text-gray-400 mt-1">Servers discovered from Claude Desktop, Cursor, Windsurf, etc.
+                    </p>
+                </div>
+                <div id="clients-detail" class="p-6">
+                    <div class="text-gray-500">Loading client configurations...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Repos Tab -->
+        <div id="content-repos" class="tab-content hidden">
+            <!-- BIG SCANNER BUTTON -->
+            <div class="glass rounded-xl overflow-hidden mb-6">
+                <div class="p-8 text-center">
+                    <h2 class="text-3xl font-bold gradient-text mb-4">🔍 MCP Repository Scanner</h2>
+                    <p class="text-gray-400 mb-6">Scan all 95+ MCP repositories for SOTA compliance, tools, and issues</p>
+                    <button onclick="loadRepos()"
+                        class="px-12 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl text-xl font-bold shadow-lg transform hover:scale-105 transition-all duration-200">
+▶️ START REPO SCAN
+                    </button>
+                </div>
+            </div>
+
+            <!-- LIVE SCAN MONITOR -->
+            <div id="scan-monitor-section" class="glass rounded-xl overflow-hidden mb-6 hidden">
+                <div class="px-6 py-4 border-b border-white/10">
+                    <h3 class="font-semibold text-lg">📈 Live Scan Progress</h3>
+                </div>
+                <div class="p-6">
+                    <div class="max-h-96 overflow-y-auto bg-black/30 rounded-lg p-4">
+                        <div id="scan-monitor-content" class="text-sm text-gray-300 font-mono space-y-1">
+                            <div class="text-blue-400">Initializing scan monitor...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass rounded-xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                    <div>
+                        <h2 class="font-semibold">📁 Repository Analysis</h2>
+                        <p class="text-sm text-gray-400 mt-1">Static analysis of MCP repos in /app/repos</p>
+                    </div>
+                    <div class="flex gap-4">
+                        <select id="repo-filter"
+                            class="bg-midnight-800 border border-white/10 rounded px-3 py-1 text-sm">
+                            <option value="all">All</option>
+                            <option value="sota">✅ SOTA</option>
+                            <option value="improvable">⚠️ Improvable</option>
+                            <option value="runt">🐛 Issues</option>
+                        </select>
+                        <button onclick="showScannerCriteria()"
+                            class="px-4 py-1 bg-purple-600/50 hover:bg-purple-600/70 rounded text-sm border border-purple-500/30"
+                            title="View classification criteria">
+📋 Criteria
+                        </button>
+                        <button onclick="loadRepos()"
+                            class="px-4 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">
+🔍 Scan
+                        </button>
+                    </div>
+                </div>
+                <div id="repos-detail" class="p-6">
+                    <div class="text-gray-500">Click "Scan" to analyze repositories...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tools Tab -->
+        <div id="content-tools" class="tab-content hidden">
+            <div class="glass rounded-xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                    <div>
+                        <h2 class="font-semibold">🔧 Tool Explorer</h2>
+                        <p class="text-sm text-gray-400 mt-1">Browse tools from your MCP repos</p>
+                    </div>
+                    <div class="flex gap-4 items-center">
+                        <select id="tools-repo-select" onchange="loadRepoTools()"
+                            class="bg-midnight-800 border border-white/10 rounded-lg px-4 py-2 text-sm min-w-64">
+                            <option value="">Select a repository...</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="tools-detail" class="p-6">
+                    <div class="text-center py-12 text-gray-500">
+                        <div class="text-4xl mb-4">🔧</div>
+                        <div>Select a repository above to explore its tools</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Console Tab -->
+        <div id="content-console" class="tab-content hidden">
+            <div class="glass rounded-xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-white/10">
+                    <h2 class="font-semibold">💻 Execution Console</h2>
+                    <p class="text-sm text-gray-400 mt-1">Execute tools without an LLM - connect to a server first in
+                        the Tools tab</p>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Connected Server</label>
+                            <select id="console-server"
+                                class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
+                                <option value="">Select a connected server...</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">Connect to servers via the Tools tab first</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Tool</label>
+                            <select id="console-tool"
+                                class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
+                                <option value="">Select a tool...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Tool description/schema -->
+                    <div id="tool-schema" class="mt-4 hidden"></div>
+
+                    <div class="mt-6">
+                        <label class="block text-sm font-medium mb-2">Parameters (JSON)</label>
+                        <textarea id="console-params"
+                            class="w-full h-40 bg-midnight-800 border border-white/10 rounded px-3 py-2 mono text-sm"
+                            placeholder='{"key": "value"}'>{}</textarea>
+                    </div>
+                    <div class="mt-4 flex gap-4">
+                        <button onclick="executeToolConsole()"
+                            class="px-6 py-2 bg-green-600 hover:bg-green-500 rounded font-medium">
+                            ▶ Execute Tool
+                        </button>
+                        <button
+                            onclick="document.getElementById('console-result').textContent = 'Ready...'; document.getElementById('console-result').className = 'bg-black/30 rounded p-4 mono text-sm min-h-32 overflow-auto';"
+                            class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded font-medium">
+                            Clear
+                        </button>
+                    </div>
+                    <div class="mt-6">
+                        <label class="block text-sm font-medium mb-2">Result</label>
+                        <pre id="console-result"
+                            class="bg-black/30 rounded p-4 mono text-sm min-h-32 max-h-96 overflow-auto">Ready...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Assistant Tab -->
+        <div id="content-ai" class="tab-content hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left: Chat Interface -->
+                <div class="lg:col-span-2 glass rounded-xl overflow-hidden flex flex-col"
+                    style="height: 90vh; min-height: 800px;">
+                    <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                        <div class="flex-1">
+                            <h2 class="font-semibold flex items-center gap-2">
+                                🤖 AI Assistant
+                                <span id="ai-status" class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400">Not
+                                    Connected</span>
+                            </h2>
+                            <div class="flex items-center gap-3 mt-2">
+                                <p class="text-sm text-gray-400">Powered by Ollama</p>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500">Personality:</label>
+                                    <select id="ai-preprompt"
+                                        class="bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs"
+                                        onchange="updatePreprompt()">
+                                        <option value="">⏳ Loading...</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="clearAIChat()"
+                                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-medium"
+                                title="Clear chat">
+                                🗑️ Clear
+                            </button>
+                            <button onclick="connectAI()" id="ai-connect-btn"
+                                class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-medium">
+                                🔌 Connect to LLM
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Chat Messages -->
+                    <div id="ai-chat" class="flex-1 p-4 overflow-y-auto space-y-4">
+                        <div class="text-center text-gray-500 py-8">
+                            <div class="text-4xl mb-4">🧠</div>
+                            <div>Connect to local-llm-mcp to start chatting</div>
+                            <div class="text-sm mt-2">The AI can analyze your MCP repos, suggest improvements, and help
+                                with tool design</div>
+                        </div>
+                    </div>
+
+                    <!-- Input Area -->
+                    <div class="p-4 border-t border-white/10">
+                        <div class="flex gap-2">
+                            <textarea id="ai-input"
+                                class="flex-1 bg-midnight-800 border border-white/10 rounded-lg px-4 py-3 text-sm resize-none"
+                                rows="2" placeholder="Ask about your MCP servers, tools, or get suggestions..."
+                                onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendAIMessage();}"></textarea>
+                            <button onclick="sendAIMessage()"
+                                class="px-6 bg-purple-600 hover:bg-purple-500 rounded-lg font-medium">
+                                Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Quick Actions & Context -->
+                <div class="space-y-6">
+                    <!-- Tools Panel -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10">
+                            <h3 class="font-semibold text-sm">🤖 AI Tools</h3>
+                        </div>
+                        <div class="p-4 space-y-3">
+                            <div>
+                                <label class="text-xs text-gray-400 flex items-center gap-2">
+                                    <input type="checkbox" id="ai-include-repos" class="rounded"> Include repo list
+                                </label>
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400">📄 Read file/folder</label>
+                                <input id="ai-file-path" type="text" placeholder="repo-name/src/main.py"
+                                    class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs">
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400">🌐 Web search</label>
+                                <input id="ai-web-search" type="text" placeholder="FastMCP best practices"
+                                    class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Preprompt Manager -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10">
+                            <h3 class="font-semibold text-sm">💬 Preprompt Manager</h3>
+                        </div>
+                        <div class="p-4 space-y-3">
+                            <!-- AI Refine -->
+                            <div>
+                                <label class="text-xs text-gray-400 mb-1 block">🤖 AI Refine (Generate)</label>
+                                <div class="flex gap-2">
+                                    <input id="ai-refine-text" type="text"
+                                        placeholder="coin collector, chef, detective..."
+                                        class="flex-1 bg-midnight-800 border border-white/10 rounded px-2 py-1.5 text-xs">
+                                    <button onclick="aiRefinePreprompt()"
+                                        class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded text-xs font-medium whitespace-nowrap">
+                                        Generate
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Import MD File -->
+                            <div>
+                                <label class="text-xs text-gray-400 mb-1 block">📄 Import .md File</label>
+                                <input id="preprompt-file-upload" type="file" accept=".md,.txt"
+                                    onchange="importPrepromptFile(this)"
+                                    class="w-full text-xs bg-midnight-800 border border-white/10 rounded px-2 py-1.5 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-purple-600 file:text-white hover:file:bg-purple-500">
+                            </div>
+
+                            <!-- Library Browser -->
+                            <div>
+                                <button onclick="togglePrepromptLibrary()"
+                                    class="w-full text-left p-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium">
+📚 Browse Library
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Prompts -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10">
+                            <h3 class="font-semibold text-sm">⚡ Quick Prompts</h3>
+                        </div>
+                        <div class="p-4 space-y-2">
+                            <button
+                                onclick="setAIPrompt('Analyze my MCP zoo and identify repos that need the most improvement', true)"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+🔍 Analyze repos
+                            </button>
+                            <button
+                                onclick="setAIPrompt('Suggest which tools could be combined into portmanteau patterns', true)"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                                🔧 Suggest portmanteaus
+                            </button>
+                            <button
+                                onclick="setAIPrompt('Review tool naming conventions and suggest improvements', true)"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+🔍 Review naming
+                            </button>
+                            <button onclick="askWithWebSearch('FastMCP 2.x best practices and patterns')"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+🌐 FastMCP best practices
+                            </button>
+                            <button
+                                onclick="setAIPrompt('Generate a summary of all my MCP servers and their capabilities', true)"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+📊 Zoo summary
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Context -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10">
+                            <h3 class="font-semibold text-sm">📋 Context</h3>
+                        </div>
+                        <div class="p-4 text-sm text-gray-400 space-y-2">
+                            <div class="flex justify-between">
+                                <span>Repos scanned:</span>
+                                <span id="ai-context-repos" class="text-white">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Total tools:</span>
+                                <span id="ai-context-tools" class="text-white">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>SOTA repos:</span>
+                                <span id="ai-context-sota" class="text-green-400">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Issues:</span>
+                                <span id="ai-context-runts" class="text-red-400">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Model Settings -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+                            <h3 class="font-semibold text-sm">🧠 Model</h3>
+                            <button onclick="loadOllamaModels()" class="text-xs text-purple-400 hover:text-purple-300">🔄
+                                Refresh</button>
+                        </div>
+                        <div class="p-4 space-y-3">
+                            <div>
+                                <label class="text-xs text-gray-400">Ollama Model</label>
+                                <select id="ai-model"
+                                    class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-3 py-2 text-sm">
+                                    <option value="">Loading models...</option>
+                                </select>
+                            </div>
+                            <div id="ai-model-info" class="text-xs text-gray-500">
+                                Click Refresh to load available Ollama models
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Detail Modal -->
+    <div id="modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4"
+        onclick="if(event.target.id==='modal'){closeModal();}">
+        <div class="glass rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                <h2 id="modal-title" class="font-semibold text-lg">Details</h2>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            <div id="modal-content" class="p-6 overflow-y-auto max-h-[70vh]">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════════
+        // DOCSTRING FORMATTER - Makes tool docstrings human-readable
+        // ═══════════════════════════════════════════════════════════════════
+
+        function formatDocstring(docstring) {
+            if (!docstring || docstring.trim() === '') {
+                return '<div class="text-gray-500 italic">No description available</div>';
+            }
+
+            // Clean up the docstring
+            let text = docstring.trim();
+
+            // Split into sections
+            const sections = {
+                brief: '',
+                detailed: '',
+                args: '',
+                returns: '',
+                examples: '',
+                usage: '',
+                raises: '',
+                notes: '',
+                seeAlso: ''
+            };
+
+            // Extract brief description (first line or paragraph)
+            const lines = text.split('\\n');
+            let currentSection = 'brief';
+            let currentContent = [];
+            let inCodeBlock = false;
+
+            for (let i = 0; i < lines.length; i++) {
+                const originalLine = lines[i];
+                const trimmed = originalLine.trim();
+
+                // Skip empty lines at start
+                if (i === 0 && trimmed === '') continue;
+
+                // Detect code blocks (preserve original line including leading spaces)
+                if (trimmed.startsWith('```')) {
+                    inCodeBlock = !inCodeBlock;
+                    currentContent.push(originalLine);
+                    continue;
+                }
+
+                // If in code block, preserve line as-is
+                if (inCodeBlock) {
+                    currentContent.push(originalLine);
+                    continue;
+                }
+
+                const line = trimmed;
+
+                // Detect section headers (case-insensitive)
+                const sectionPatterns = {
+                    'args': /^(Args|Parameters|Arguments):/i,
+                    'returns': /^(Returns?|Return):/i,
+                    'examples': /^(Examples?|Example):/i,
+                    'usage': /^(Usage|When to use):/i,
+                    'raises': /^(Raises?|Exceptions?):/i,
+                    'notes': /^(Notes?|Note):/i,
+                    'seeAlso': /^(See Also|See|Related):/i
+                };
+
+                let sectionFound = false;
+                for (const [section, pattern] of Object.entries(sectionPatterns)) {
+                    if (pattern.test(line)) {
+                        // Save previous section
+                        if (currentSection !== 'brief' && currentContent.length > 0) {
+                            sections[currentSection] = currentContent.join('\\n').trim();
+                        } else if (currentSection === 'brief' && currentContent.length > 0) {
+                            sections.brief = currentContent.join('\\n').trim();
+                            sections.detailed = '';
+                        }
+                        // Start new section
+                        currentSection = section;
+                        currentContent = [];
+                        sectionFound = true;
+                        break;
+                    }
+                }
+
+                if (!sectionFound) {
+                    // First non-empty line after brief becomes detailed description
+                    if (currentSection === 'brief' && line && sections.brief && !sections.detailed) {
+                        sections.detailed = line;
+                        currentContent = [line];
+                    } else {
+                        currentContent.push(line);
+                    }
+                }
+            }
+
+            // Save last section
+            if (currentContent.length > 0) {
+                if (currentSection === 'brief') {
+                    sections.brief = currentContent.join('\\n').trim();
+                } else {
+                    sections[currentSection] = currentContent.join('\\n').trim();
+                }
+            }
+
+            // If no sections found, treat entire docstring as brief
+            if (!sections.brief && !sections.args && !sections.returns) {
+                sections.brief = text;
+            }
+
+            // Build HTML
+            let html = '<div class="space-y-4">';
+
+            // Brief description
+            if (sections.brief) {
+                html += `<div class="text-base text-gray-200 leading-relaxed">${formatText(sections.brief)}</div>`;
+            }
+
+            // Detailed description
+            if (sections.detailed) {
+                html += `<div class="text-sm text-gray-300 mt-2 leading-relaxed">${formatText(sections.detailed)}</div>`;
+            }
+
+            // Usage section
+            if (sections.usage) {
+                html += `<div class="mt-4 pt-3 border-t border-white/10">
+                    <div class="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-2">Usage</div>
+                    <div class="text-sm text-gray-300 leading-relaxed">${formatText(sections.usage)}</div>
+                </div>`;
+            }
+
+            // Args section
+            if (sections.args) {
+                html += `<div class="mt-4 pt-3 border-t border-white/10">
+                    <div class="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-2">Parameters</div>
+                    <div class="text-sm text-gray-300 space-y-2">${formatArgs(sections.args)}</div>
+                </div>`;
+            }
+
+            // Returns section
+            if (sections.returns) {
+                html += `<div class="mt-4 pt-3 border-t border-white/10">
+                    <div class="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-2">Returns</div>
+                    <div class="text-sm text-gray-300 leading-relaxed">${formatText(sections.returns)}</div>
+                </div>`;
+            }
+
+            // Examples section
+            if (sections.examples) {
+                html += `<div class="mt-4 pt-3 border-t border-white/10">
+                    <div class="text-xs font-semibold text-indigo-400 uppercase tracking-wide mb-2">Examples</div>
+                    <div class="text-sm text-gray-300">${formatExamples(sections.examples)}</div>
+                </div>`;
+            }
+
+            // Raises section
+            if (sections.raises) {
+                html += `<div class="mt-4 pt-3 border-t border-white/10">
+                    <div class="text-xs font-semibold text-yellow-400 uppercase tracking-wide mb-2">Raises</div>
+                    <div class="text-sm text-gray-300">${formatText(sections.raises)}</div>
+                </div>`;
+            }
+
+            // Notes section
+            if (sections.notes) {
+                html += `<div class="mt-4 pt-3 border-t border-white/10">
+                    <div class="text-xs font-semibold text-blue-400 uppercase tracking-wide mb-2">Notes</div>
+                    <div class="text-sm text-gray-300">${formatText(sections.notes)}</div>
+                </div>`;
+            }
+
+            // See Also section
+            if (sections.seeAlso) {
+                html += `<div class="mt-4 pt-3 border-t border-white/10">
+                    <div class="text-xs font-semibold text-purple-400 uppercase tracking-wide mb-2">See Also</div>
+                    <div class="text-sm text-gray-300">${formatText(sections.seeAlso)}</div>
+                </div>`;
+            }
+
+            html += '</div>';
+            return html;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatText(text) {
+            if (!text) return '';
+
+            // Handle code blocks first (before escaping HTML)
+            const codeBlockRegex = /```(\\w+)?\\n([\\s\\S]*?)```/g;
+            const codeBlocks = [];
+            let codeBlockIndex = 0;
+            let processed = text.replace(codeBlockRegex, (match, lang, code) => {
+                const placeholder = `__CODE_BLOCK_${codeBlockIndex}__`;
+                codeBlocks.push({ lang: lang || '', code: code.trim() });
+                codeBlockIndex++;
+                return placeholder;
+            });
+
+            // Convert markdown-style formatting
+            let formatted = escapeHtml(processed);
+
+            // Restore code blocks with proper formatting
+            codeBlocks.forEach((block, idx) => {
+                const placeholder = `__CODE_BLOCK_${idx}__`;
+                formatted = formatted.replace(placeholder,
+                    `<pre class="bg-black/40 p-3 rounded text-xs text-gray-300 font-mono overflow-x-auto border border-white/10 my-2"><code>${escapeHtml(block.code)}</code></pre>`
+                );
+            });
+
+            // Convert **bold** to <strong>
+            formatted = formatted.replace(/\\*\\*(.+?)\\*\\*/g, '<strong class="text-white font-semibold">$1</strong>');
+
+            // Convert *italic* to <em>
+            formatted = formatted.replace(/(?<!\\*)\\*(?!\\*)([^*]+?)\\*(?!\\*)/g, '<em class="text-gray-300">$1</em>');
+
+            // Convert `code` to <code> (inline code, not in code blocks)
+            formatted = formatted.replace(/`([^`\\n]+)`/g, '<code class="bg-black/30 px-1 py-0.5 rounded text-indigo-300 font-mono text-xs">$1</code>');
+
+            // Convert bullet points (properly handle lists)
+            const lines = formatted.split('<br>');
+            let inList = false;
+            let listItems = [];
+            let result = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const bulletMatch = line.match(/^([-*]|\\d+\\.)\\s+(.+)$/);
+
+                if (bulletMatch) {
+                    if (!inList) {
+                        if (listItems.length > 0) {
+                            result.push(listItems.join(''));
+                            listItems = [];
+                        }
+                        inList = true;
+                    }
+                    listItems.push(`<li class="ml-4 mb-1">${bulletMatch[2]}</li>`);
+                } else {
+                    if (inList) {
+                        result.push(`<ul class="list-disc space-y-1 my-2 ml-4">${listItems.join('')}</ul>`);
+                        listItems = [];
+                        inList = false;
+                    }
+                    if (line.trim()) {
+                        result.push(line);
+                    }
+                }
+            }
+
+            if (inList && listItems.length > 0) {
+                result.push(`<ul class="list-disc space-y-1 my-2 ml-4">${listItems.join('')}</ul>`);
+            }
+
+            formatted = result.length > 0 ? result.join('<br>') : formatted;
+
+            // Convert line breaks (but preserve existing HTML)
+            if (!formatted.includes('<pre>') && !formatted.includes('<ul>')) {
+                formatted = formatted.replace(/\\n/g, '<br>');
+            }
+
+            return formatted;
+        }
+
+        function formatArgs(argsText) {
+            if (!argsText) return '';
+
+            const lines = argsText.split('\\n');
+            let html = '';
+            let currentParam = null;
+            let paramDetails = [];
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+
+                // Check if this is a parameter name (supports various formats):
+                // - name: description
+                // - name (type): description
+                // - name (type, optional): description
+                const paramMatch = trimmed.match(/^(\\w+)(?:\\s*\\(([^)]+)\\))?:\\s*(.+)$/);
+                if (paramMatch) {
+                    // Save previous param
+                    if (currentParam) {
+                        const typeInfo = currentParam.type ? `<span class="text-purple-400 text-xs">(${currentParam.type})</span>` : '';
+                        html += `<div class="mb-3 pb-2 border-b border-white/5">
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-indigo-300 font-semibold">${currentParam.name}</span>
+                                ${typeInfo}
+                            </div>
+                            <div class="text-gray-400 text-xs ml-4 mt-1">${formatText(currentParam.desc)}</div>
+                            ${paramDetails.length > 0 ? `<ul class="text-xs text-gray-500 ml-6 mt-1 space-y-1 list-disc">${paramDetails.map(d => `<li>${formatText(d)}</li>`).join('')}</ul>` : ''}
+                        </div>`;
+                    }
+                    // Start new param
+                    currentParam = {
+                        name: paramMatch[1],
+                        type: paramMatch[2] || null,
+                        desc: paramMatch[3]
+                    };
+                    paramDetails = [];
+                } else if (trimmed.match(/^[-*]\\s+/) && currentParam) {
+                    // Detail line for current param (bullet point)
+                    paramDetails.push(trimmed.replace(/^[-*]\\s+/, ''));
+                } else if (trimmed.match(/^\\s{4,}/) && currentParam) {
+                    // Indented continuation line
+                    currentParam.desc += ' ' + trimmed.trim();
+                } else if (currentParam && !trimmed.match(/^\\w+:/)) {
+                    // Continuation of param description (not a new param)
+                    currentParam.desc += ' ' + trimmed;
+                }
+            }
+
+            // Save last param
+            if (currentParam) {
+                const typeInfo = currentParam.type ? `<span class="text-purple-400 text-xs">(${currentParam.type})</span>` : '';
+                html += `<div class="mb-3 pb-2 border-b border-white/5">
+                    <div class="flex items-center gap-2">
+                        <span class="font-mono text-indigo-300 font-semibold">${currentParam.name}</span>
+                        ${typeInfo}
+                    </div>
+                    <div class="text-gray-400 text-xs ml-4 mt-1">${formatText(currentParam.desc)}</div>
+                    ${paramDetails.length > 0 ? `<ul class="text-xs text-gray-500 ml-6 mt-1 space-y-1 list-disc">${paramDetails.map(d => `<li>${formatText(d)}</li>`).join('')}</ul>` : ''}
+                </div>`;
+            }
+
+            return html || formatText(argsText);
+        }
+
+        function formatExamples(examplesText) {
+            if (!examplesText) return '';
+
+            // Check if it's already a code block
+            const codeBlockMatch = examplesText.match(/```(\\w+)?\\n([\\s\\S]*?)```/);
+            if (codeBlockMatch) {
+                return `<pre class="bg-black/40 p-3 rounded text-xs text-gray-300 font-mono overflow-x-auto border border-white/10 my-2"><code>${escapeHtml(codeBlockMatch[2].trim())}</code></pre>`;
+            }
+
+            // Split by example headers (e.g., "Example 1:", "Basic usage:", etc.)
+            const parts = examplesText.split(/(?:^|\\n)([A-Z][^:\\n]+:)/gm);
+            let html = '<div class="space-y-4">';
+            let hasStructured = false;
+
+            for (let i = 0; i < parts.length; i += 2) {
+                if (i + 1 < parts.length && parts[i + 2]) {
+                    const title = parts[i + 1].replace(':', '').trim();
+                    const code = parts[i + 2].trim();
+
+                    if (code) {
+                        hasStructured = true;
+                        html += `<div class="mb-4">
+                            <div class="text-xs font-semibold text-green-400 mb-2">${escapeHtml(title)}</div>
+                            <pre class="bg-black/40 p-3 rounded text-xs text-gray-300 font-mono overflow-x-auto border border-white/10"><code>${escapeHtml(code)}</code></pre>
+                        </div>`;
+                    }
+                }
+            }
+
+            // If no structured examples, check for plain code or format as text
+            if (!hasStructured) {
+                const trimmed = examplesText.trim();
+                // If it looks like code (has indentation, keywords, etc.), format as code block
+                if (trimmed.match(/^(def |class |import |from |\\s{4,})/m)) {
+                    html = `<pre class="bg-black/40 p-3 rounded text-xs text-gray-300 font-mono overflow-x-auto border border-white/10"><code>${escapeHtml(trimmed)}</code></pre>`;
+                } else {
+                    // Format as regular text with markdown support
+                    html = formatText(trimmed);
+                }
+            } else {
+                html += '</div>';
+            }
+
+            return html;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // END DOCSTRING FORMATTER
+        // ═══════════════════════════════════════════════════════════════════
+
+        // State
+        let clientsData = {};
+        let reposData = [];
+
+        // Tab switching
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('[id^="tab-"]').forEach(el => {
+                el.classList.remove('tab-active');
+                el.classList.add('text-gray-400');
+            });
+            document.getElementById('content-' + tabId).classList.remove('hidden');
+            document.getElementById('tab-' + tabId).classList.add('tab-active');
+            document.getElementById('tab-' + tabId).classList.remove('text-gray-400');
+        }
+
+        // Load clients
+        async function loadClients() {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+
+                const res = await fetch('/api/v1/clients/', { signal: controller.signal });
+                clearTimeout(timeoutId);
+
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+
+                const responseData = await res.json();
+                clientsData = responseData.clients || [];
+                renderClients();
+                updateStats();
+            } catch (e) {
+                console.error('Failed to load clients:', e);
+                // Show error in UI but don't block
+                document.getElementById('clients-list').innerHTML = `
+                    <div class="p-4 text-center text-gray-500">
+                        <p>⚠️ Failed to load clients</p>
+                        <p class="text-xs mt-2">${e.message || 'Connection timeout'}</p>
+                        <button onclick="loadClients()" class="mt-3 text-xs text-indigo-400 hover:text-indigo-300">Retry</button>
+                    </div>
+                `;
+            }
+        }
+
+        function renderClients() {
+            const list = document.getElementById('clients-list');
+            const detail = document.getElementById('clients-detail');
+
+            if (!clientsData || clientsData.length === 0) {
+                list.innerHTML = '<div class="text-gray-500 text-sm">No MCP clients found</div>';
+                detail.innerHTML = '<div class="text-gray-500">No MCP client configurations found</div>';
+                return;
+            }
+
+            // Compact list for overview
+            let listHtml = '';
+            for (const client of clientsData) {
+                const icon = client.id.includes('claude') ? '🟣' : client.id.includes('cursor') ? '🔵' : client.id.includes('zed') ? '⚡' : client.id.includes('windsurf') ? '🌊' : '🟢';
+                const installedBadge = client.installed ? '<span class="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full">Installed</span>' : '<span class="text-xs bg-gray-500/20 text-gray-400 px-2 py-1 rounded-full">Not Found</span>';
+                const serverCount = client.server_count > 0 ? `<span class="text-xs text-indigo-400">${client.server_count} servers</span>` : '';
+
+                listHtml += `
+                    <div class="flex items-center justify-between p-3 bg-white/5 rounded-lg hover:bg-white/10">
+                        <div class="flex items-center gap-3 flex-1 cursor-pointer" onclick="switchTab('clients'); setTimeout(() => document.getElementById('clients-detail').scrollIntoView({behavior: 'smooth', block: 'start'}), 100);">
+                            <span class="text-lg">${icon}</span>
+                            <div>
+                                <div class="font-medium">${client.name}</div>
+                                <div class="text-xs text-gray-400">${client.platform} • ${client.client_type}</div>
+                                <div class="flex gap-2 mt-1">
+                                    ${installedBadge}
+                                    ${serverCount}
+                                </div>
+                            </div>
+                        </div>
+                        <button class="text-gray-400 hover:text-indigo-400 transition-colors px-2 py-1 rounded hover:bg-white/5" onclick="event.stopPropagation(); window.location.href='/clients/${client.id}'" title="View client details">
+                            →
+                        </button>
+                    </div>
+                `;
+            }
+            list.innerHTML = listHtml;
+
+            // Detailed view - Client Information
+            let detailHtml = '<div class="space-y-6">';
+            for (const client of clientsData) {
+                const icon = client.id.includes('claude') ? '🟣' : client.id.includes('cursor') ? '🔵' : client.id.includes('zed') ? '⚡' : client.id.includes('windsurf') ? '🌊' : '🟢';
+                detailHtml += `
+                    <div class="border border-white/10 rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 bg-white/5 flex items-center gap-3">
+                            <span class="text-xl">${icon}</span>
+                            <div>
+                                <div class="font-medium">${client.name}</div>
+                                <div class="text-xs text-gray-400">${client.platform} • ${client.client_type}</div>
+                            </div>
+                        </div>
+                        <div class="p-4">
+                            <p class="text-sm text-gray-300 mb-3">${client.short_description}</p>
+                            <div class="flex gap-2 mb-3">
+                                ${client.installed ? '<span class="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full">✅ Installed</span>' : '<span class="text-xs bg-gray-500/20 text-gray-400 px-2 py-1 rounded-full">❌ Not Found</span>'}
+                                ${client.server_count > 0 ? `<span class="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-1 rounded-full">🔧 ${client.server_count} servers configured</span>` : '<span class="text-xs bg-orange-500/20 text-orange-400 px-2 py-1 rounded-full">⚠️ No servers configured</span>'}
+                            </div>
+                            ${client.homepage ? `<p class="text-xs text-blue-400"><a href="${client.homepage}" target="_blank" class="hover:text-blue-300">🌐 Homepage</a></p>` : ''}
+                            ${client.documentation ? `<p class="text-xs text-blue-400"><a href="${client.documentation}" target="_blank" class="hover:text-blue-300">📚 Documentation</a></p>` : ''}
+                            ${client.github ? `<p class="text-xs text-blue-400"><a href="${client.github}" target="_blank" class="hover:text-blue-300">🐙 GitHub</a></p>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            detailHtml += '</div>';
+            detail.innerHTML = detailHtml;
+        }
+
+        // Client information database
+        const clientInfo = {
+            'claude-desktop': {
+                name: 'Claude Desktop',
+                description: 'Official desktop application from Anthropic for interacting with Claude AI.',
+                website: 'https://claude.ai/download',
+                configLocation: 'Config file contains MCP server definitions used by Claude Desktop.',
+                icon: '🟣',
+                developer: 'Anthropic'
+            },
+            'cursor': {
+                name: 'Cursor IDE',
+                description: 'AI-first code editor built on VS Code, designed for pair programming with AI.',
+                website: 'https://cursor.sh',
+                configLocation: 'Uses Cline extension settings or .cursor/mcp.json for MCP server configuration.',
+                icon: '🔵',
+                developer: 'Cursor'
+            },
+            'windsurf-ide': {
+                name: 'Windsurf IDE',
+                description: 'AI-powered code editor from Codeium, built for modern development workflows.',
+                website: 'https://codeium.com/windsurf',
+                configLocation: 'MCP servers configured in Windsurf settings or mcp_config.json.',
+                icon: '🟢',
+                developer: 'Codeium'
+            },
+            'zed-ide': {
+                name: 'Zed Editor',
+                description: 'High-performance, multiplayer code editor written in Rust with AI capabilities.',
+                website: 'https://zed.dev',
+                configLocation: 'MCP servers configured in settings.json under mcpServers key.',
+                icon: '⚡',
+                developer: 'Zed Industries'
+            },
+            'antigravity-ide': {
+                name: 'Antigravity IDE',
+                description: 'AI-powered IDE from Google with integrated MCP server support.',
+                website: 'https://antigravity.google',
+                configLocation: 'MCP servers managed through the IDE UI, stored in mcp_config.json.',
+                icon: '▶️',
+                developer: 'Google'
+            },
+            'cline': {
+                name: 'Cline (VSCode Extension)',
+                description: 'VSCode extension for Claude AI, formerly known as Claude Dev.',
+                website: 'https://marketplace.visualstudio.com/items?itemName=saoudrizwan.claude-dev',
+                configLocation: 'MCP servers configured in VSCode globalStorage settings.',
+                icon: '💜',
+                developer: 'Saoud Rizwan'
+            }
+        };
+
+        function showClientInfo(clientId) {
+            // Find client in the array
+            const client = clientsData ? clientsData.find(c => c.id === clientId) : null;
+
+            if (!client) {
+                // Fallback to hardcoded info if client not found
+                const info = clientInfo[clientId] || {
+                    name: clientId.replace('-', ' ').replace(/\\b\\w/g, l => l.toUpperCase()),
+                    description: 'MCP client application.',
+                    website: '',
+                    configLocation: 'Configuration file location varies.',
+                    icon: '🔌',
+                    developer: 'Unknown'
+                };
+
+                const modal = document.getElementById('modal');
+                const modalTitle = document.getElementById('modal-title');
+                const modalContent = document.getElementById('modal-content');
+
+                modalTitle.innerHTML = `${info.icon} ${info.name}`;
+                modalContent.innerHTML = `
+                    <div class="space-y-4">
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-400 mb-2">Description</h3>
+                            <p class="text-sm text-gray-300">${info.description}</p>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-400 mb-2">Developer</h3>
+                            <p class="text-sm text-gray-300">${info.developer}</p>
+                        </div>
+                        ${info.website ? `
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-400 mb-2">Website</h3>
+                            <a href="${info.website}" target="_blank" class="text-sm text-blue-400 hover:text-blue-300">${info.website}</a>
+                        </div>
+                        ` : ''}
+                        <div>
+                            <h3 class="text-sm font-semibold text-gray-400 mb-2">Configuration</h3>
+                            <p class="text-sm text-gray-300">${info.configLocation}</p>
+                        </div>
+                    </div>
+                `;
+                modal.classList.remove('hidden');
+                return;
+            }
+
+            // Use client data from API
+            const icon = client.id.includes('claude') ? '🟣' : client.id.includes('cursor') ? '🔵' : client.id.includes('zed') ? '⚡' : client.id.includes('windsurf') ? '🌊' : '🟢';
+
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+
+            modalTitle.innerHTML = `${icon} ${client.name}`;
+            modalContent.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-400 mb-2">Description</h3>
+                        <p class="text-sm text-gray-300">${client.short_description}</p>
+                        ${client.full_description ? `<p class="text-sm text-gray-400 mt-2">${client.full_description}</p>` : ''}
+                    </div>
+
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-400 mb-2">Platform & Type</h3>
+                        <p class="text-sm text-gray-300">${client.platform} • ${client.client_type}</p>
+                    </div>
+                    
+                    ${client.homepage ? `
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-400 mb-2">Homepage</h3>
+                        <a href="${client.homepage}" target="_blank" class="text-sm text-blue-400 hover:text-blue-300 underline">🌐 ${client.homepage}</a>
+                    </div>
+                    ` : ''}
+
+                    ${client.documentation ? `
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-400 mb-2">Documentation</h3>
+                        <a href="${client.documentation}" target="_blank" class="text-sm text-blue-400 hover:text-blue-300 underline">📚 Documentation</a>
+                    </div>
+                    ` : ''}
+
+                    ${client.github ? `
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-400 mb-2">GitHub</h3>
+                        <a href="${client.github}" target="_blank" class="text-sm text-blue-400 hover:text-blue-300 underline">🐙 GitHub Repository</a>
+                    </div>
+                    ` : ''}
+
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-400 mb-2">Client Details</h3>
+                        <div class="text-xs text-gray-300 space-y-1">
+                            <p><strong>ID:</strong> <code class="bg-black/30 px-1 py-0.5 rounded">${client.id}</code></p>
+                            <p><strong>Platform:</strong> ${client.platform}</p>
+                            <p><strong>Type:</strong> ${client.client_type}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            modal.classList.remove('hidden');
+        }
+
+        async function showAddServerForm(clientName) {
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+
+            // Load available servers from repos
+            let availableServers = [];
+            try {
+                const res = await fetch('/api/v1/mcp/servers');
+                availableServers = await res.json();
+            } catch (e) {
+                console.error('Error loading available servers:', e);
+            }
+
+            modalTitle.innerHTML = `➕ Add MCP Server to ${clientName}`;
+            modalContent.innerHTML = `
+                <form id="add-server-form" class="space-y-4">
+                    ${availableServers.length > 0 ? `
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Select from Scanned Repos</label>
+                        <select id="server-template" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm" onchange="fillServerFromTemplate()">
+                            <option value="">-- Choose a server from repos --</option>
+                            ${availableServers.map(s => {
+                let methodIcon = '🐍';
+                let methodLabel = 'Python';
+                if (s.has_mcpb) {
+                    methodIcon = '📁';
+                    methodLabel = 'MCPB';
+                } else if (s.has_npm) {
+                    methodIcon = '📁';
+                    methodLabel = 'npm/npx';
+                }
+                const sourceIcon = s.source && s.source.includes('MCPB') ? '📁' : s.source && s.source.includes('npm') ? '📁' : s.source === 'README.md' ? '📖' : s.source === 'pyproject.toml' ? '📁' : '🔍';
+                const sourceLabel = s.source || 'inferred';
+                return `
+                                <option value="${s.id}" 
+                                    data-command="${s.command}" 
+                                    data-args="${JSON.stringify(s.args)}" 
+                                    data-cwd="${s.cwd || ''}" 
+                                    data-env="${JSON.stringify(s.env || {})}" 
+                                    data-name="${s.name}" 
+                                    data-type="${s.type || 'stdio'}" 
+                                    data-url="${s.url || ''}"
+                                    data-has-mcpb="${s.has_mcpb || false}"
+                                    data-has-npm="${s.has_npm || false}"
+                                    data-repo="${s.repo}">
+                                    ${methodIcon} ${s.name} (${s.repo}) - ${s.tools} tools [${methodLabel}]
+                                </option>
+                            `}).join('')}
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Select a server. MCPB 📁 is preferred, then npm/npx 📁, then Python 🐍. README configs may be outdated.</p>
+                        <div id="installation-hints" class="mt-2 text-xs text-gray-400 hidden"></div>
+                    </div>
+                    <div class="border-t border-white/10 pt-4">
+                        <p class="text-sm text-gray-400 mb-3">Or enter manually:</p>
+                    </div>
+                    ` : `
+                    <div class="bg-yellow-600/20 border border-yellow-600/50 rounded-lg p-3 mb-4">
+                        <p class="text-sm text-yellow-300 mb-2">⚠️ No servers found from repos</p>
+                        <p class="text-xs text-yellow-400/80">Scan your repositories first to auto-fill server configurations. Go to the <strong>Repos</strong> tab and click "Scan" to discover available MCP servers.</p>
+                    </div>
+                    `}
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Server ID</label>
+                        <input type="text" id="server-id" required class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm" placeholder="my-server-name">
+                        <p class="text-xs text-gray-500 mt-1">Unique identifier (lowercase, hyphens)</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Name</label>
+                        <input type="text" id="server-name" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm" placeholder="My Server Name">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Command</label>
+                        <input type="text" id="server-command" required class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono" placeholder="python">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Arguments (one per line)</label>
+                        <textarea id="server-args" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono" rows="3" placeholder="-m&#10;my_module"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Working Directory (optional)</label>
+                        <input type="text" id="server-cwd" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono" placeholder="/path/to/directory">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Type</label>
+                        <select id="server-type" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm">
+                            <option value="stdio">stdio (default)</option>
+                            <option value="http">http</option>
+                        </select>
+                    </div>
+                    <div id="server-url-container" class="hidden">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">URL (for http type)</label>
+                        <input type="text" id="server-url" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono" placeholder="http://localhost:8000">
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">
+                            Add Server
+                        </button>
+                        <button type="button" onclick="closeModal(); setTimeout(() => showClientInfo('${clientName}'), 100)" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            `;
+
+            // Function to fill form from template
+            window.fillServerFromTemplate = function () {
+                const select = document.getElementById('server-template');
+                const option = select.options[select.selectedIndex];
+                if (!option || !option.value) {
+                    document.getElementById('installation-hints').classList.add('hidden');
+                    return;
+                }
+
+                const command = option.dataset.command;
+                const args = JSON.parse(option.dataset.args || '[]');
+                const cwd = option.dataset.cwd;
+                const env = JSON.parse(option.dataset.env || '{}');
+                const name = option.dataset.name;
+                const type = option.dataset.type || 'stdio';
+                const url = option.dataset.url || '';
+                const hasMcpb = option.dataset.hasMcpb === 'true';
+                const hasNpm = option.dataset.hasNpm === 'true';
+                const repo = option.dataset.repo;
+
+                // Show installation hints
+                const hintsDiv = document.getElementById('installation-hints');
+                hintsDiv.classList.remove('hidden');
+
+                let hintsHtml = '<div class="bg-blue-600/20 border border-blue-600/50 rounded p-2 space-y-1">';
+                hintsHtml += '<p class="font-semibold text-blue-300">Installation Methods (in order):</p>';
+
+                if (hasMcpb) {
+                    hintsHtml += '<p class="text-blue-200">1. 📁 <strong>MCPB (Recommended)</strong>: Open Claude Desktop → Settings → Developer → Add MCP Server → Paste path to manifest.json</p>';
+                }
+                if (hasNpm) {
+                    hintsHtml += '<p class="text-blue-200">2. 📦 <strong>npm/npx</strong>: Use the auto-filled command below (if repo supports it)</p>';
+                }
+                hintsHtml += '<p class="text-blue-200">3. 📋 <strong>JSON Snippet</strong>: Add the config below to your client config file</p>';
+                hintsHtml += '<p class="text-blue-200">4. 🐍 <strong>Python</strong>: Clone repo and use Python setup (last resort)</p>';
+                hintsHtml += '</div>';
+
+                hintsDiv.innerHTML = hintsHtml;
+
+                document.getElementById('server-id').value = option.value;
+                if (document.getElementById('server-name')) {
+                    document.getElementById('server-name').value = name;
+                }
+                document.getElementById('server-command').value = command;
+                document.getElementById('server-args').value = args.join('\\n');
+                if (cwd) {
+                    document.getElementById('server-cwd').value = cwd;
+                }
+                if (document.getElementById('server-type')) {
+                    document.getElementById('server-type').value = type;
+                    // Show/hide URL field
+                    const urlContainer = document.getElementById('server-url-container');
+                    if (type === 'http') {
+                        urlContainer.classList.remove('hidden');
+                        if (url) {
+                            document.getElementById('server-url').value = url;
+                        }
+                    } else {
+                        urlContainer.classList.add('hidden');
+                    }
+                }
+            };
+
+            // Show/hide URL field based on type
+            document.getElementById('server-type').addEventListener('change', (e) => {
+                const urlContainer = document.getElementById('server-url-container');
+                if (e.target.value === 'http') {
+                    urlContainer.classList.remove('hidden');
+                } else {
+                    urlContainer.classList.add('hidden');
+                }
+            });
+
+            document.getElementById('add-server-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = {
+                    id: document.getElementById('server-id').value.trim(),
+                    name: document.getElementById('server-name').value.trim(),
+                    command: document.getElementById('server-command').value.trim(),
+                    args: document.getElementById('server-args').value.split('\\n').filter(a => a.trim()),
+                    cwd: document.getElementById('server-cwd').value.trim() || undefined,
+                    type: document.getElementById('server-type').value,
+                    url: document.getElementById('server-url').value.trim() || undefined
+                };
+
+                try {
+                    const res = await fetch(`/api/v1/clients/${clientName}/servers`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+
+                    if (res.ok) {
+                        await loadClients();
+                        closeModal();
+                        setTimeout(() => showClientInfo(clientName), 100);
+                    } else {
+                        const error = await res.json();
+                        alert(`Error: ${error.detail || 'Failed to add server'}`);
+                    }
+                } catch (e) {
+                    alert(`Error: ${e.message}`);
+                }
+            });
+        }
+
+        async function editServer(clientName, serverId) {
+            const clientData = clientsData[clientName];
+            const server = clientData.servers.find(s => s.id === serverId);
+            if (!server) return;
+
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+
+            modalTitle.innerHTML = `✏️ Edit Server: ${server.name}`;
+            modalContent.innerHTML = `
+                <form id="edit-server-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Server ID</label>
+                        <input type="text" id="server-id" value="${server.id}" readonly class="w-full bg-black/50 border border-white/10 rounded px-3 py-2 text-sm" disabled>
+                        <p class="text-xs text-gray-500 mt-1">ID cannot be changed</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Command</label>
+                        <input type="text" id="server-command" value="${server.command || ''}" required class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Arguments (one per line)</label>
+                        <textarea id="server-args" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono" rows="3">${(server.args || []).join('\\n')}</textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Working Directory (optional)</label>
+                        <input type="text" id="server-cwd" value="${server.cwd || ''}" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Type</label>
+                        <select id="server-type" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm">
+                            <option value="stdio" ${!server.type || server.type === 'stdio' ? 'selected' : ''}>stdio</option>
+                            <option value="http" ${server.type === 'http' ? 'selected' : ''}>http</option>
+                        </select>
+                    </div>
+                    <div id="server-url-container" class="${server.type === 'http' ? '' : 'hidden'}">
+                        <label class="block text-sm font-medium text-gray-400 mb-1">URL (for http type)</label>
+                        <input type="text" id="server-url" value="${server.url || ''}" class="w-full bg-black/30 border border-white/10 rounded px-3 py-2 text-sm mono">
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">
+                            Save Changes
+                        </button>
+                        <button type="button" onclick="closeModal(); setTimeout(() => showClientInfo('${clientName}'), 100)" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-sm">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            `;
+
+            document.getElementById('server-type').addEventListener('change', (e) => {
+                const urlContainer = document.getElementById('server-url-container');
+                if (e.target.value === 'http') {
+                    urlContainer.classList.remove('hidden');
+                } else {
+                    urlContainer.classList.add('hidden');
+                }
+            });
+
+            document.getElementById('edit-server-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = {
+                    command: document.getElementById('server-command').value.trim(),
+                    args: document.getElementById('server-args').value.split('\\n').filter(a => a.trim()),
+                    cwd: document.getElementById('server-cwd').value.trim() || undefined,
+                    type: document.getElementById('server-type').value,
+                    url: document.getElementById('server-url').value.trim() || undefined
+                };
+
+                try {
+                    const res = await fetch(`/api/v1/clients/${clientName}/servers/${serverId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+
+                    if (res.ok) {
+                        await loadClients();
+                        closeModal();
+                        setTimeout(() => showClientInfo(clientName), 100);
+                    } else {
+                        const error = await res.json();
+                        alert(`Error: ${error.detail || 'Failed to update server'}`);
+                    }
+                } catch (e) {
+                    alert(`Error: ${e.message}`);
+                }
+            });
+        }
+
+        async function deleteServer(clientName, serverId) {
+            if (!confirm(`Delete server "${serverId}" from ${clientName}?`)) return;
+
+            try {
+                const res = await fetch(`/api/clients/${clientName}/servers/${serverId}`, {
+                    method: 'DELETE'
+                });
+
+                if (res.ok) {
+                    await loadClients();
+                    closeModal();
+                    setTimeout(() => showClientInfo(clientName), 100);
+                } else {
+                    const error = await res.json();
+                    alert(`Error: ${error.detail || 'Failed to delete server'}`);
+                }
+            } catch (e) {
+                alert(`Error: ${e.message}`);
+            }
+        }
+
+        // Toggle scan monitor visibility
+        function toggleScanMonitor() {
+            const monitor = document.getElementById('scan-monitor-section');
+            const isVisible = !monitor.classList.contains('hidden');
+
+            if (isVisible) {
+                monitor.classList.add('hidden');
+                stopScanMonitor();
+            } else {
+                monitor.classList.remove('hidden');
+                startScanMonitor();
+            }
+        }
+
+        let scanMonitorInterval;
+        function startScanMonitor() {
+            const contentDiv = document.getElementById('scan-monitor-content');
+
+            scanMonitorInterval = setInterval(async () => {
+                try {
+                    const response = await fetch('/api/v1/repos/progress');
+                    const progress = await response.json();
+
+                    let html = `<div class="text-blue-400 font-semibold">Status: ${progress.status || 'unknown'}</div>`;
+
+                    if (progress.total > 0) {
+                        const percent = ((progress.done || 0) / progress.total * 100).toFixed(1);
+                        html += `<div>Progress: ${progress.done || 0}/${progress.total} (${percent}%)</div>`;
+                    }
+
+                    if (progress.current) {
+                        html += `<div class="text-yellow-400">Current: ${progress.current}</div>`;
+                    }
+
+                    html += `<div>Found: ${progress.mcp_repos_found || 0} | Skipped: ${progress.skipped || 0} | Errors: ${progress.errors || 0}</div>`;
+
+                    if (progress.activity_log && progress.activity_log.length > 0) {
+                        html += `<div class="mt-2 text-gray-400">--- Recent Activity ---</div>`;
+                        progress.activity_log.slice(-8).forEach(msg => {
+                            html += `<div>${msg}</div>`;
+                        });
+                    }
+
+                    contentDiv.innerHTML = html;
+
+                    // Auto-scroll to bottom
+                    contentDiv.scrollTop = contentDiv.scrollHeight;
+
+                } catch (e) {
+                    contentDiv.innerHTML = `<div class="text-red-400">Error connecting to scan monitor: ${e.message}</div>`;
+                }
+            }, 1000); // Update every second
+        }
+
+        function stopScanMonitor() {
+            if (scanMonitorInterval) {
+                clearInterval(scanMonitorInterval);
+                scanMonitorInterval = null;
+            }
+        }
+
+        // Show scanner criteria modal
+        function showScannerCriteria() {
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+
+            modalTitle.textContent = '📋 Repository Classification Criteria';
+            modalContent.innerHTML = `
+                <div class="space-y-6">
+                    <div class="text-sm text-gray-300 leading-relaxed">
+                        <p>Repositories are classified into three categories based on code quality, structure, and best practices:</p>
+                    </div>
+                    
+                    <!-- SOTA -->
+                    <div class="border-l-4 border-green-500 pl-4">
+                        <h3 class="text-lg font-semibold text-green-400 mb-2">✅ SOTA (State of the Art)</h3>
+                        <p class="text-sm text-gray-300 mb-3">Repositories with no issues - following all best practices.</p>
+                        <p class="text-xs text-gray-400 italic">No "runt_reasons" found during analysis.</p>
+                    </div>
+                    
+                    <!-- Improvable -->
+                    <div class="border-l-4 border-yellow-500 pl-4">
+                        <h3 class="text-lg font-semibold text-yellow-400 mb-2">⚠️ Improvable</h3>
+                        <p class="text-sm text-gray-300 mb-3">Repositories with minor issues that should be addressed, but not critical.</p>
+                        <p class="text-xs text-gray-400 italic">Has "runt_reasons" but "is_runt" is false.</p>
+                    </div>
+                    
+                    <!-- Runt -->
+                    <div class="border-l-4 border-red-500 pl-4">
+                        <h3 class="text-lg font-semibold text-red-400 mb-2">🐛 Runt</h3>
+                        <p class="text-sm text-gray-300 mb-3">Repositories with critical issues that need immediate attention.</p>
+                        <p class="text-xs text-gray-400 italic mb-4">"is_runt" is true due to critical issues.</p>
+                        
+                        <div class="bg-red-500/10 border border-red-500/30 rounded p-3 mt-3">
+                            <h4 class="text-sm font-semibold text-red-300 mb-2">Critical Issues (Marks as Runt):</h4>
+                            <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside">
+                                <li>FastMCP version &lt; 2.10.0 (ancient version)</li>
+                                <li>No CI/CD workflows (for repos with ≥10 tools)</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- All Criteria -->
+                    <div class="border-t border-white/10 pt-4">
+                        <h3 class="text-lg font-semibold mb-3">📊 All Checked Criteria</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">FastMCP Version</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li><span class="text-red-400">Critical:</span> Version &lt; 2.10.0 → Runt</li>
+                                    <li><span class="text-yellow-400">Warning:</span> Version &lt; 2.12.0 → Recommendation</li>
+                                    <li><span class="text-green-400">Good:</span> Version ≥ 2.13.1 (latest)</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">Tool Organization</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li>≥20 tools without portmanteau pattern → Issue</li>
+                                    <li>Tools split between server.py and tools/ → Issue</li>
+                                    <li>Multiple server files found → Issue</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">CI/CD & Testing</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li><span class="text-red-400">Critical:</span> No CI/CD (≥10 tools) → Runt</li>
+                                    <li>No tests/ directory (≥10 tools) → Issue</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">Project Structure</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li>No src/ directory → Issue</li>
+                                    <li>No tests/ directory (≥10 tools) → Issue</li>
+                                    <li>No scripts/ directory → Recommendation</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">Packaging & Distribution</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li>No manifest.json (≥5 tools) → Issue</li>
+                                    <li>Uses deprecated DXT instead of MCPB → Issue</li>
+                                    <li>Uses setup.py without pyproject.toml → Issue</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">Documentation</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li>No README → Issue</li>
+                                    <li>No LICENSE file → Issue</li>
+                                    <li>No .cursorrules → Issue</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">Version Control</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li>No git repository → Issue</li>
+                                    <li>No git remote configured → Issue</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <h4 class="text-sm font-semibold text-indigo-400 mb-2">Code Quality</h4>
+                                <ul class="text-xs text-gray-300 space-y-1 list-disc list-inside ml-4">
+                                    <li>&gt;3 print() calls in server (should use logging) → Issue</li>
+                                    <li>Monolithic server.py &gt;1000 lines → Issue</li>
+                                    <li>Missing proper docstrings (Args/Returns) → Issue</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-indigo-500/10 border border-indigo-500/30 rounded p-3 mt-4">
+                        <p class="text-xs text-gray-300">
+                            <strong class="text-indigo-300">Note:</strong> Issues are cumulative. A repository can have multiple issues, 
+                            but only critical issues (FastMCP version, CI/CD) will mark it as a Runt. 
+                            Multiple non-critical issues will mark it as Improvable.
+                        </p>
+                    </div>
+                </div>
+            `;
+            modal.classList.remove('hidden');
+        }
+
+        // Load repos with progress tracking
+        async function loadRepos() {
+            // Show progress UI
+            const progressHtml = `
+                <div class="p-4 space-y-3">
+                    <div class="text-sm font-semibold text-indigo-400 mb-3">Scanning Repositories...</div>
+                    <div id="scan-progress-display" class="space-y-2">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-gray-400">Current:</span>
+                            <span id="scan-current" class="text-gray-300 font-mono">-</span>
+                        </div>
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-gray-400">Progress:</span>
+                            <span id="scan-progress" class="text-gray-300">0 / 0</span>
+                        </div>
+                        <div class="w-full bg-black/30 rounded-full h-2">
+                            <div id="scan-progress-bar" class="bg-indigo-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 mt-3 text-xs">
+                            <div class="bg-green-500/10 p-2 rounded text-center">
+                                <div id="scan-found" class="text-green-400 font-bold">0</div>
+                                <div class="text-gray-500">MCP Repos</div>
+                            </div>
+                            <div class="bg-gray-500/10 p-2 rounded text-center">
+                                <div id="scan-skipped" class="text-gray-400 font-bold">0</div>
+                                <div class="text-gray-500">Skipped</div>
+                            </div>
+                            <div class="bg-red-500/10 p-2 rounded text-center">
+                                <div id="scan-errors" class="text-red-400 font-bold">0</div>
+                                <div class="text-gray-500">Errors</div>
+                            </div>
+                        </div>
+                          <div class="mt-3 max-h-32 overflow-y-auto bg-black/20 rounded p-2">
+                            <div id="scan-activity" class="text-xs text-gray-400 font-mono space-y-1">
+                                <div>Waiting for scan to start...</div>
+                            </div>
+                          </div>
+                          <div class="mt-4">
+                            <button onclick="toggleScanMonitor()" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs">
+                              📊 Live Monitor
+                            </button>
+                            <div id="scan-monitor" class="hidden mt-2 max-h-48 overflow-y-auto bg-black/30 rounded p-3">
+                              <div class="text-xs font-semibold text-blue-400 mb-2">🔄 Live Scan Progress</div>
+                              <div id="scan-monitor-content" class="text-xs text-gray-300 font-mono space-y-1">
+                                <div>Connecting to scan monitor...</div>
+                              </div>
+                            </div>
+                          </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('repos-health').innerHTML = progressHtml;
+            document.getElementById('repos-detail').innerHTML = progressHtml;
+
+                // Start the scan first, then poll for progress
+            let progressInterval;
+            try {
+                console.log('Starting repository scan...');
+                // Auto-show scan monitor section
+                document.getElementById('scan-monitor-section').classList.remove('hidden');
+                startScanMonitor();
+
+                const scanPromise = fetch('/api/v1/repos/run_scan/', { method: 'POST' });
+
+                // Start polling for progress immediately
+                progressInterval = setInterval(async () => {
+                    try {
+                        const progressRes = await fetch('/api/v1/repos/progress');
+                        const progress = await progressRes.json();
+
+                        if (progress.status === 'scanning') {
+                            // Update progress display
+                            document.getElementById('scan-current').textContent = progress.current || '-';
+                            document.getElementById('scan-progress').textContent = `${progress.done || 0} / ${progress.total || 0}`;
+
+                            const percent = progress.total > 0 ? ((progress.done || 0) / progress.total) * 100 : 0;
+                            document.getElementById('scan-progress-bar').style.width = percent + '%';
+
+                            document.getElementById('scan-found').textContent = progress.mcp_repos_found || 0;
+                            document.getElementById('scan-skipped').textContent = progress.skipped || 0;
+                            document.getElementById('scan-errors').textContent = progress.errors || 0;
+
+                            // Update activity log
+                            if (progress.activity_log && progress.activity_log.length > 0) {
+                                const activityDiv = document.getElementById('scan-activity');
+                                activityDiv.innerHTML = progress.activity_log.slice(-10).map(msg =>
+                                    `<div class="text-gray-300">${msg}</div>`
+                                ).join('');
+                                activityDiv.scrollTop = activityDiv.scrollHeight;
+                            }
+                        } else if (progress.status === 'complete') {
+                            // Scan finished, clear interval and load results
+                            clearInterval(progressInterval);
+                            document.getElementById('scan-progress-display').innerHTML =
+                                `<div class="text-green-400 text-sm font-semibold">Scan complete! Loading results...</div>`;
+
+                            // Fetch final results
+                            const res = await fetch('/api/v1/repos');
+                            const data = await res.json();
+                            reposData = data.data || []; // Only set to array if data exists
+                            renderRepos();
+                            populateRepoSelector();
+                            updateStats();
+                            loadLogs();
+                        }
+                    } catch (e) {
+                        console.error('Error polling progress:', e);
+                    }
+                }, 500); // Poll every 500ms
+
+                // Wait for scan to complete
+                const res = await scanPromise;
+                const data = await res.json();
+                reposData = data.data || []; // Only set to array if data exists
+
+                // Clear interval after scan completes
+                clearInterval(progressInterval);
+                stopScanMonitor();
+                // Keep scan monitor visible for a bit to show completion
+                setTimeout(() => {
+                    document.getElementById('scan-monitor-section').classList.add('hidden');
+                }, 5000);
+
+                renderRepos();
+                populateRepoSelector();
+                updateStats();
+                loadLogs();
+            } catch (e) {
+                if (progressInterval) clearInterval(progressInterval);
+                stopScanMonitor();
+                console.error('Error scanning repositories:', e);
+                // Show error in scan monitor instead of hiding it
+                const monitorContent = document.getElementById('scan-monitor-content');
+                monitorContent.innerHTML = `
+                    <div class="text-red-400 font-semibold">❌ SCAN FAILED</div>
+                    <div class="text-red-300 mt-2">${e.message || 'Unknown error occurred'}</div>
+                    <div class="text-gray-400 mt-2 text-xs">Check browser console and server logs for details</div>
+                `;
+                document.getElementById('repos-health').innerHTML =
+                    '<div class="text-red-400">Error scanning repositories: ' + e.message + '</div>';
+                document.getElementById('repos-detail').innerHTML =
+                    '<div class="text-red-400">Error scanning repositories: ' + e.message + '</div>';
+            }
+        }
+
+        function renderRepos() {
+            const health = document.getElementById('repos-health');
+            const detail = document.getElementById('repos-detail');
+            const filter = document.getElementById('repo-filter').value;
+
+            // Ensure reposData is always an array
+            if (!Array.isArray(reposData)) {
+                reposData = [];
+            }
+
+            let filtered = reposData;
+            if (filter !== 'all') {
+                filtered = reposData.filter(r => r.status === filter);
+            }
+
+            // Health summary for overview
+            const sota = reposData.filter(r => r.status === 'sota').length;
+            const improvable = reposData.filter(r => r.status === 'improvable').length;
+            const runts = reposData.filter(r => r.status === 'runt').length;
+
+            health.innerHTML = `
+                <div class="grid grid-cols-3 gap-3 mb-4">
+                    <div class="p-3 bg-green-500/10 rounded-lg text-center">
+                        <div class="text-2xl font-bold text-green-400">${sota}</div>
+                        <div class="text-xs text-gray-400">✅ SOTA</div>
+                    </div>
+                    <div class="p-3 bg-yellow-500/10 rounded-lg text-center">
+                        <div class="text-2xl font-bold text-yellow-400">${improvable}</div>
+                        <div class="text-xs text-gray-400">⚠️ Improvable</div>
+                    </div>
+                    <div class="p-3 bg-red-500/10 rounded-lg text-center">
+                        <div class="text-2xl font-bold text-red-400">${runts}</div>
+                        <div class="text-xs text-gray-400">🐛 Issues</div>
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    ${reposData.slice(0, 8).map(r => `
+                        <div class="flex items-center justify-between p-2 bg-white/5 rounded cursor-pointer hover:bg-white/10" onclick="showRepoDetail('${r.name}')">
+                            <div class="flex items-center gap-2">
+                                <span>${r.zoo_emoji}</span>
+                                <span>${r.status_emoji}</span>
+                                <span class="font-medium">${r.name}</span>
+                            </div>
+                            <span class="text-xs text-gray-400">${r.tools} tools</span>
+                        </div>
+                    `).join('')}
+                    ${reposData.length > 8 ? '<div class="text-center text-xs text-gray-500 pt-2">+' + (reposData.length - 8) + ' more...</div>' : ''}
+                </div>
+            `;
+
+            // Detailed grid
+            detail.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    ${filtered.map(r => `
+                        <div class="p-4 bg-white/5 rounded-xl hover:bg-white/10 cursor-pointer transition-all" onclick="showRepoDetail('${r.name}')">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="text-xl">${r.zoo_emoji}</span>
+                                <span class="text-xl">${r.status_emoji}</span>
+                                <span class="font-semibold truncate">${r.name}</span>
+                            </div>
+                            <div class="text-xs text-gray-400 mb-2">FastMCP ${r.fastmcp_version || '?'}</div>
+                            <div class="flex gap-2 text-xs">
+                                <span class="px-2 py-0.5 bg-indigo-500/20 rounded">${r.tools} tools</span>
+                                <span class="px-2 py-0.5 bg-purple-500/20 rounded">${r.zoo_class}</span>
+                            </div>
+                            ${r.issues.length > 0 ? '<div class="mt-2 text-xs text-red-400">' + r.issues.length + ' issues</div>' : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function showRepoDetail(name) {
+            const repo = reposData.find(r => r.name === name);
+            if (!repo) return;
+
+            document.getElementById('modal-title').textContent = repo.zoo_emoji + ' ' + repo.name;
+            document.getElementById('modal-content').innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex items-center gap-4">
+                        <span class="text-4xl">${repo.zoo_emoji}</span>
+                        <div>
+                            <div class="text-xl font-bold">${repo.name}</div>
+                            <div class="text-sm text-gray-400">${repo.path}</div>
+                        </div>
+                        <span class="ml-auto px-3 py-1 rounded ${repo.status === 'sota' ? 'bg-green-500/20 text-green-400' : repo.status === 'improvable' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}">
+                            ${repo.status_emoji} ${repo.status_label}
+                        </span>
+                    </div>
+                    
+                    <div class="grid grid-cols-4 gap-4">
+                        <div class="p-3 bg-white/5 rounded text-center">
+                            <div class="text-xl font-bold">${repo.fastmcp_version || '?'}</div>
+                            <div class="text-xs text-gray-400">FastMCP</div>
+                        </div>
+                        <div class="p-3 bg-white/5 rounded text-center">
+                            <div class="text-xl font-bold">${repo.tools}</div>
+                            <div class="text-xs text-gray-400">Tools</div>
+                        </div>
+                        <div class="p-3 bg-white/5 rounded text-center">
+                            <div class="text-xl font-bold">${repo.portmanteau_ops}</div>
+                            <div class="text-xs text-gray-400">Operations</div>
+                        </div>
+                        <div class="p-3 bg-white/5 rounded text-center">
+                            <div class="text-xl font-bold">${repo.cicd_count}</div>
+                            <div class="text-xs text-gray-400">CI/CD</div>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 flex-wrap">
+                        <span class="px-2 py-1 rounded text-xs ${repo.has_src ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">${repo.has_src ? '✓' : '✗'} src/</span>
+                        <span class="px-2 py-1 rounded text-xs ${repo.has_tests ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">${repo.has_tests ? '✓' : '✗'} tests/</span>
+                        <span class="px-2 py-1 rounded text-xs ${repo.has_scripts ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">${repo.has_scripts ? '✓' : '✗'} scripts/</span>
+                        <span class="px-2 py-1 rounded text-xs ${repo.has_cicd ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">${repo.has_cicd ? '✓' : '✗'} CI/CD</span>
+                    </div>
+
+                    ${repo.issues.length > 0 ? `
+                        <div>
+                            <h3 class="font-semibold mb-2 text-red-400">🚨 Issues</h3>
+                            <ul class="space-y-1">
+                                ${repo.issues.map(i => '<li class="text-sm text-gray-300">• ' + i + '</li>').join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+
+                    ${repo.recommendations.length > 0 ? `
+                        <div>
+                            <h3 class="font-semibold mb-2 text-indigo-400">💡 Recommendations</h3>
+                            <ul class="space-y-1">
+                                ${repo.recommendations.map(r => '<li class="text-sm text-gray-300">→ ' + r + '</li>').join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        async function connectServer(client, serverId) {
+            try {
+                const res = await fetch('/api/v1/mcp/servers/' + client + '/' + serverId + '/connect', { method: 'POST' });
+                const data = await res.json();
+                alert('Connected! Status: ' + data.status);
+            } catch (e) {
+                alert('Connection failed: ' + e.message);
+            }
+        }
+
+        async function loadLogs() {
+            try {
+                const res = await fetch('/api/logs');
+                const data = await res.json();
+                const log = document.getElementById('activity-log');
+                document.getElementById('log-count').textContent = data.logs.length + ' entries';
+                log.innerHTML = data.logs.map(l => '<div class="text-gray-300">' + l + '</div>').join('') || '<div class="text-gray-500">No activity</div>';
+                log.scrollTop = log.scrollHeight;
+            } catch (e) {
+                console.error('Error loading logs:', e);
+            }
+        }
+
+        function updateStats() {
+            const clientCount = clientsData ? clientsData.length : 0;
+            const toolCount = reposData.reduce((acc, r) => acc + r.tools, 0);
+            const sotaCount = reposData.filter(r => r.status === 'sota').length;
+
+            document.getElementById('stat-clients').textContent = clientCount;
+            document.getElementById('stat-repos').textContent = reposData.length;
+            document.getElementById('stat-tools').textContent = toolCount;
+            document.getElementById('stat-sota').textContent = sotaCount;
+            document.getElementById('repo-count').textContent = reposData.length;
+            document.getElementById('server-count').textContent = clientCount;
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+        }
+
+        // Populate repo selector for Tools tab
+        function populateRepoSelector() {
+            const select = document.getElementById('tools-repo-select');
+            if (!select || reposData.length === 0) return;
+
+            select.innerHTML = '<option value="">Select a repository...</option>' +
+                reposData.map(r => `<option value="${r.name}">${r.zoo_emoji} ${r.name} (${r.tools} tools)</option>`).join('');
+        }
+
+        // Load tools for selected repo
+        async function loadRepoTools() {
+            const select = document.getElementById('tools-repo-select');
+            const detail = document.getElementById('tools-detail');
+            const repoName = select.value;
+
+            if (!repoName) {
+                detail.innerHTML = `
+                    <div class="text-center py-12 text-gray-500">
+                        <div class="text-4xl mb-4">🔧</div>
+                        <div>Select a repository above to explore its tools</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const repo = reposData.find(r => r.name === repoName);
+            if (!repo) return;
+
+            detail.innerHTML = `
+                <div class="mb-6">
+                    <div class="flex items-center gap-3 mb-4">
+                        <span class="text-3xl">${repo.zoo_emoji}</span>
+                        <div>
+                            <h3 class="text-xl font-bold">${repo.name}</h3>
+                            <p class="text-sm text-gray-400">${repo.path}</p>
+                        </div>
+                        <span class="ml-auto px-3 py-1 rounded ${repo.status === 'sota' ? 'bg-green-500/20 text-green-400' : repo.status === 'improvable' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}">
+                            ${repo.status_emoji} ${repo.status_label}
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-4 gap-4 mb-6">
+                        <div class="p-3 bg-white/5 rounded-lg text-center">
+                            <div class="text-xl font-bold">${repo.fastmcp_version || '?'}</div>
+                            <div class="text-xs text-gray-400">FastMCP</div>
+                        </div>
+                        <div class="p-3 bg-white/5 rounded-lg text-center">
+                            <div class="text-xl font-bold">${repo.portmanteau_tools}</div>
+                            <div class="text-xs text-gray-400">Portmanteaus</div>
+                        </div>
+                        <div class="p-3 bg-white/5 rounded-lg text-center">
+                            <div class="text-xl font-bold">${repo.portmanteau_ops}</div>
+                            <div class="text-xs text-gray-400">Operations</div>
+                        </div>
+                        <div class="p-3 bg-white/5 rounded-lg text-center">
+                            <div class="text-xl font-bold">${repo.individual_tools}</div>
+                            <div class="text-xs text-gray-400">Individual</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="border-t border-white/10 pt-6">
+                    <h4 class="font-semibold mb-4">📊 Tool Summary</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="p-4 bg-indigo-500/10 rounded-lg">
+                            <div class="text-2xl font-bold text-indigo-400">${repo.tools}</div>
+                            <div class="text-sm text-gray-400">Total Tools Detected</div>
+                            <div class="text-xs text-gray-500 mt-2">From static analysis of @app.tool decorators</div>
+                        </div>
+                        <div class="p-4 bg-purple-500/10 rounded-lg">
+                            <div class="text-2xl font-bold text-purple-400">${repo.portmanteau_ops || 0}</div>
+                            <div class="text-sm text-gray-400">Portmanteau Operations</div>
+                            <div class="text-xs text-gray-500 mt-2">Actions within consolidated tools</div>
+                        </div>
+                    </div>
+                    <div class="mt-6 flex gap-4 items-center">
+                        <button onclick="connectRepo('${repo.name}')" 
+                                class="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded font-medium">
+                            🔌 Connect Live
+                        </button>
+                        <div id="repo-connection-status-${repo.name}" class="text-sm text-gray-400"></div>
+                    </div>
+                    <div id="repo-live-tools-${repo.name}" class="mt-6 hidden">
+                        <h4 class="font-semibold mb-4">🔴 Live Tools</h4>
+                        <div id="live-tools-list-${repo.name}" class="space-y-2"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function connectRepo(repoName) {
+            const statusDiv = document.getElementById('repo-connection-status-' + repoName);
+            const liveToolsDiv = document.getElementById('repo-live-tools-' + repoName);
+            const toolsList = document.getElementById('live-tools-list-' + repoName);
+
+            statusDiv.textContent = 'Connecting...';
+            statusDiv.className = 'text-sm text-yellow-400';
+
+            try {
+                const res = await fetch('/api/v1/repos/repo/' + repoName, { method: 'GET' });
+                const data = await res.json();
+
+                if (data.status === 'connected') {
+                    statusDiv.textContent = '✅ Connected (' + data.tools.length + ' tools)';
+                    statusDiv.className = 'text-sm text-green-400';
+
+                    liveToolsDiv.classList.remove('hidden');
+                    toolsList.innerHTML = data.tools.map(tool => `
+                        <div class="p-3 bg-white/5 rounded-lg">
+                            <div class="font-medium">${tool.name}</div>
+                            <div class="text-sm text-gray-400 mt-1 tool-description-compact">${formatDocstring(tool.description)}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    statusDiv.textContent = '❌ Error: ' + (data.error || data.status);
+                    statusDiv.className = 'text-sm text-red-400';
+                }
+            } catch (e) {
+                statusDiv.textContent = '❌ Failed: ' + e.message;
+                statusDiv.className = 'text-sm text-red-400';
+            }
+        }
+
+        // Filter change
+        document.getElementById('repo-filter').addEventListener('change', renderRepos);
+
+        // Close modal on escape
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+        // ═══════════════════════════════════════════════════════════════════
+        // CONSOLE TAB - Tool Execution
+        // ═══════════════════════════════════════════════════════════════════
+
+        let consoleServers = [];
+        let consoleSelectedServer = null;
+        let consoleSelectedTool = null;
+
+        async function loadConsoleServers() {
+            try {
+                const res = await fetch('/api/connections');
+                const data = await res.json();
+                consoleServers = data.connections || [];
+                renderConsoleServers();
+            } catch (e) {
+                console.error('Error loading connections:', e);
+            }
+        }
+
+        function renderConsoleServers() {
+            const select = document.getElementById('console-server');
+            select.innerHTML = '<option value="">Select a connected server...</option>' +
+                consoleServers.map(s => `<option value="${s.id}">${s.name} (${s.tool_count} tools)</option>`).join('');
+        }
+
+        function onServerSelect() {
+            const select = document.getElementById('console-server');
+            const serverId = select.value;
+            const toolSelect = document.getElementById('console-tool');
+
+            if (!serverId) {
+                consoleSelectedServer = null;
+                toolSelect.innerHTML = '<option value="">Select a tool...</option>';
+                document.getElementById('tool-schema').classList.add('hidden');
+                return;
+            }
+
+            consoleSelectedServer = consoleServers.find(s => s.id === serverId);
+            if (!consoleSelectedServer) return;
+
+            toolSelect.innerHTML = '<option value="">Select a tool...</option>' +
+                consoleSelectedServer.tools.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+        }
+
+        function onToolSelect() {
+            const toolSelect = document.getElementById('console-tool');
+            const toolName = toolSelect.value;
+            const schemaDiv = document.getElementById('tool-schema');
+            const paramsInput = document.getElementById('console-params');
+
+            if (!toolName || !consoleSelectedServer) {
+                consoleSelectedTool = null;
+                schemaDiv.classList.add('hidden');
+                return;
+            }
+
+            consoleSelectedTool = consoleSelectedServer.tools.find(t => t.name === toolName);
+            if (!consoleSelectedTool) return;
+
+            // Show tool description and schema with formatted docstring
+            const formattedDescription = formatDocstring(consoleSelectedTool.description);
+            schemaDiv.innerHTML = `
+                <div class="p-4 bg-white/5 rounded-lg mb-4">
+                    <div class="font-semibold text-indigo-400 mb-3 text-lg">${consoleSelectedTool.name}</div>
+                    <div class="tool-description">${formattedDescription}</div>
+                </div>
+            `;
+            schemaDiv.classList.remove('hidden');
+
+            // Pre-populate params with schema hint
+            if (consoleSelectedTool.inputSchema && consoleSelectedTool.inputSchema.properties) {
+                const example = {};
+                for (const [key, prop] of Object.entries(consoleSelectedTool.inputSchema.properties)) {
+                    if (prop.type === 'string') example[key] = '';
+                    else if (prop.type === 'boolean') example[key] = false;
+                    else if (prop.type === 'number' || prop.type === 'integer') example[key] = 0;
+                    else example[key] = null;
+                }
+                paramsInput.value = JSON.stringify(example, null, 2);
+            } else {
+                paramsInput.value = '{}';
+            }
+        }
+
+        async function executeToolConsole() {
+            if (!consoleSelectedServer || !consoleSelectedTool) {
+                alert('Please select a server and tool first');
+                return;
+            }
+
+            const paramsInput = document.getElementById('console-params');
+            const resultDiv = document.getElementById('console-result');
+
+            let params = {};
+            try {
+                params = JSON.parse(paramsInput.value || '{}');
+            } catch (e) {
+                resultDiv.textContent = 'Error: Invalid JSON in parameters';
+                resultDiv.className = 'bg-red-900/30 rounded p-4 mono text-sm min-h-32 overflow-auto text-red-300';
+                return;
+            }
+
+            resultDiv.textContent = 'Executing...';
+            resultDiv.className = 'bg-black/30 rounded p-4 mono text-sm min-h-32 overflow-auto';
+
+            try {
+                const repoName = consoleSelectedServer.id.replace('repo:', '');
+                const res = await fetch('/api/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        repo_name: repoName,
+                        tool_name: consoleSelectedTool.name,
+                        parameters: params
+                    })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    resultDiv.textContent = JSON.stringify(data, null, 2);
+                    resultDiv.className = 'bg-green-900/30 rounded p-4 mono text-sm min-h-32 overflow-auto text-green-300';
+                } else {
+                    resultDiv.textContent = 'Error: ' + (data.detail || JSON.stringify(data));
+                    resultDiv.className = 'bg-red-900/30 rounded p-4 mono text-sm min-h-32 overflow-auto text-red-300';
+                }
+            } catch (e) {
+                resultDiv.textContent = 'Error: ' + e.message;
+                resultDiv.className = 'bg-red-900/30 rounded p-4 mono text-sm min-h-32 overflow-auto text-red-300';
+            }
+        }
+
+        // Wire up console selects
+        document.getElementById('console-server').addEventListener('change', onServerSelect);
+        document.getElementById('console-tool').addEventListener('change', onToolSelect);
+
+        // ═══════════════════════════════════════════════════════════════════
+        // AI ASSISTANT TAB
+        // ═══════════════════════════════════════════════════════════════════
+
+        let aiConnected = false;
+        let aiMessages = [];
+        let currentPreprompt = 'MCP Developer';  // Track current preprompt
+
+        // Toast notification helper
+        function showToast(message, type = 'success') {
+            const backgrounds = {
+                'success': 'linear-gradient(to right, #10b981, #059669)',
+                'error': 'linear-gradient(to right, #ef4444, #dc2626)',
+                'info': 'linear-gradient(to right, #3b82f6, #2563eb)',
+                'warning': 'linear-gradient(to right, #f59e0b, #d97706)'
+            };
+
+            Toastify({
+                text: message,
+                duration: 3000,
+                gravity: "top",
+                position: "right",
+                style: {
+                    background: backgrounds[type] || backgrounds['info']
+                }
+            }).showToast();
+        }
+
+        async function loadOllamaModels() {
+            const select = document.getElementById('ai-model');
+            const info = document.getElementById('ai-model-info');
+
+            select.innerHTML = '<option value="">Loading...</option>';
+            info.textContent = 'Fetching from Ollama...';
+
+            try {
+                const res = await fetch('/api/ollama/models');
+                const data = await res.json();
+
+                if (data.error) {
+                    select.innerHTML = '<option value="">❌ ' + data.error + '</option>';
+                    info.textContent = 'Make sure Ollama is running (ollama serve)';
+                    return;
+                }
+
+                if (data.models.length === 0) {
+                    select.innerHTML = '<option value="">No models found</option>';
+                    info.textContent = 'Run "ollama pull llama3.2" to download a model';
+                    return;
+                }
+
+                select.innerHTML = data.models.map(m =>
+                    `<option value="${m.name}">${m.name} (${m.size})</option>`
+                ).join('');
+
+                info.innerHTML = `<span class="text-green-400">${data.count} models available</span>`;
+            } catch (e) {
+                select.innerHTML = '<option value="">❌ Connection failed</option>';
+                info.textContent = 'Cannot connect to Ollama. Check OLLAMA_URL configuration.';
+            }
+        }
+
+        async function connectAI() {
+            const statusEl = document.getElementById('ai-status');
+            const btnEl = document.getElementById('ai-connect-btn');
+            const chatEl = document.getElementById('ai-chat');
+            const modelSelect = document.getElementById('ai-model');
+
+            statusEl.textContent = 'Checking Ollama...';
+            statusEl.className = 'text-xs px-2 py-0.5 rounded bg-yellow-600 text-yellow-100';
+            btnEl.disabled = true;
+
+            try {
+                // Check Ollama is running
+                const res = await fetch('/api/ollama/models');
+                const data = await res.json();
+
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                if (data.models.length === 0) {
+                    throw new Error('No models loaded in Ollama');
+                }
+
+                aiConnected = true;
+                const selectedModel = modelSelect.value || data.models[0].name;
+                currentPreprompt = document.getElementById('ai-preprompt').value;
+
+                showToast(`Connected with ${currentPreprompt}`, 'success');
+
+                // Get personality-specific welcome message
+                const welcomeMessages = {
+                    'Long John Silver, Pirate': `Ahoy, matey! ☠️ Long John Silver here, connected to Ollama's treasure chest o' ${data.count} models! We be sailin' with <strong>${selectedModel}</strong> as our trusty vessel. Let me navigate yer MCP seas and chart a course through yer code! What mysteries shall we unravel today, sailor?`,
+                    'Coin Col': `*Jingle jingle* 🪙 Greetings, fellow collector! I've accessed the vault of ${data.count} Ollama models, and we're minting solutions with <strong>${selectedModel}</strong>. Each query is a precious coin to be examined and valued. What treasures shall we appraise in your MCP collection today?`,
+                    'Butterfly Fancier': `Oh what a lovely garden! 🦋 I've fluttered into Ollama's meadow of ${data.count} models, and we're using the beautiful <strong>${selectedModel}</strong> butterfly! Your MCP servers are like flowers waiting to bloom. What delicate patterns shall we admire together?`,
+                    'Code Pirate': `Arr! 🏴‍☠️ This scurvy pirate has commandeered Ollama's fleet o' ${data.count} models! We be plunderin' code with <strong>${selectedModel}</strong> as our flagship. Let's make yer MCP servers seaworthy! What code barnacles need scrapin'?`,
+                    'Zen Master': `*Breathes calmly* 🧘 I have connected to the flow of ${data.count} Ollama models. We walk the path with <strong>${selectedModel}</strong>. Your MCP servers are like ripples in a pond - let us observe them with mindfulness. What wisdom do you seek?`,
+                    'Aussie Coder': `G'day mate! 🦘 Just connected to Ollama's ripper collection of ${data.count} models! We're using <strong>${selectedModel}</strong> and she's a beaut! Ready to have a squiz at your MCP servers. What needs sortin' out, mate?`,
+                    'MCP Developer': `Connected to Ollama with ${data.count} models! Using <strong>${selectedModel}</strong>. I can help you analyze your MCP zoo, suggest improvements, and answer questions about your servers. What would you like to know?`
+                };
+
+                const welcomeMsg = welcomeMessages[currentPreprompt] || welcomeMessages['MCP Developer'];
+
+                statusEl.textContent = `Ready (${data.count} models • ${currentPreprompt})`;
+                statusEl.className = 'text-xs px-2 py-0.5 rounded bg-green-600 text-green-100';
+                btnEl.textContent = '✓ Connected';
+                btnEl.className = 'px-4 py-2 bg-green-600 rounded text-sm font-medium cursor-default';
+
+                chatEl.innerHTML = `
+                    <div class="flex gap-3">
+                        <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-sm">🤖</div>
+                        <div class="flex-1 bg-white/5 rounded-lg p-4">
+                            <div class="font-medium text-purple-400 mb-1">AI Assistant • ${currentPreprompt}</div>
+                            <div class="text-gray-300">${welcomeMsg}</div>
+                        </div>
+                    </div>
+                `;
+
+                updateAIContext();
+            } catch (e) {
+                statusEl.textContent = 'Error: ' + e.message;
+                statusEl.className = 'text-xs px-2 py-0.5 rounded bg-red-600 text-red-100';
+                btnEl.disabled = false;
+            }
+        }
+
+        function updateAIContext() {
+            document.getElementById('ai-context-repos').textContent = reposData.length;
+            document.getElementById('ai-context-tools').textContent = reposData.reduce((acc, r) => acc + r.tools, 0);
+            document.getElementById('ai-context-sota').textContent = reposData.filter(r => r.status === 'sota').length;
+            document.getElementById('ai-context-runts').textContent = reposData.filter(r => r.status === 'runt').length; // Issues count
+        }
+
+        function setAIPrompt(text, includeRepos = false) {
+            document.getElementById('ai-input').value = text;
+            document.getElementById('ai-include-repos').checked = includeRepos;
+        }
+
+        function askWithWebSearch(searchQuery) {
+            document.getElementById('ai-web-search').value = searchQuery;
+            document.getElementById('ai-input').value = 'Based on the web search results, summarize the key points and how they apply to my MCP projects.';
+        }
+
+        function updatePreprompt() {
+            currentPreprompt = document.getElementById('ai-preprompt').value;
+            console.log('Preprompt changed to:', currentPreprompt);
+            showToast(`Switched to: ${currentPreprompt}`, 'info');
+
+            // Update chat header if connected
+            if (aiConnected) {
+                const headerEl = document.querySelector('#ai-chat').previousElementSibling;
+                if (headerEl) {
+                    const titleEl = headerEl.querySelector('h2');
+                    if (titleEl) {
+                        titleEl.innerHTML = `
+                            🤖 AI Assistant
+                            <span class="text-xs px-2 py-0.5 rounded bg-green-600 text-green-100">Ready (with ${currentPreprompt})</span>
+                        `;
+                    }
+                }
+            }
+        }
+
+        async function loadPrepromptsFromDB() {
+            try {
+                console.log('Loading preprompts from database...');
+                const res = await fetch('/api/ai/preprompts');
+
+                if (!res.ok) {
+                    console.error('API returned error:', res.status);
+                    return;
+                }
+
+                const data = await res.json();
+                console.log('Preprompts loaded:', data);
+
+                if (data.preprompts && data.preprompts.length > 0) {
+                    const dropdown = document.getElementById('ai-preprompt');
+                    if (!dropdown) {
+                        console.error('Dropdown element not found!');
+                        return;
+                    }
+
+                    dropdown.innerHTML = '';
+
+                    // Reverse to show newest first
+                    data.preprompts.reverse().forEach(p => {
+                        const option = document.createElement('option');
+                        option.value = p.name;  // Use name as value for lookup
+                        option.textContent = `${p.emoji} ${p.name}`;
+                        dropdown.appendChild(option);
+                    });
+
+                    console.log(`✓ Loaded ${data.preprompts.length} preprompts`);
+                } else {
+                    console.warn('No preprompts found in database');
+                }
+            } catch (e) {
+                console.error('Failed to load preprompts:', e);
+                alert('⚠️ Failed to load preprompts from database');
+            }
+        }
+
+        async function aiRefinePreprompt() {
+            const text = document.getElementById('ai-refine-text').value.trim();
+            if (!text) {
+                showToast('Please enter a personality concept (e.g., "coin collector")', 'warning');
+                return;
+            }
+
+            const modelId = document.getElementById('ai-model').value;
+
+            // Show loading
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            btn.className = 'px-3 py-1.5 bg-yellow-600 rounded text-xs font-medium whitespace-nowrap animate-pulse';
+
+            showToast(`🤖 AI generating "${text}" personality... (30-60s)`, 'info');
+
+            try {
+                const res = await fetch('/api/preprompts/ai-refine', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: text,
+                        model_id: modelId
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast(`✨ Generated "${data.emoji} ${data.name}" preprompt!`, 'success');
+                    document.getElementById('ai-refine-text').value = '';
+                    await loadPrepromptsFromDB();
+
+                    // Auto-select the new preprompt
+                    const dropdown = document.getElementById('ai-preprompt');
+                    dropdown.value = data.name;
+                    currentPreprompt = data.name;
+                } else {
+                    showToast('❌ ' + (data.error || 'Generation failed'), 'error');
+                }
+            } catch (e) {
+                showToast('❌ Error: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Generate';
+                btn.className = 'px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded text-xs font-medium whitespace-nowrap';
+            }
+        }
+
+        async function importPrepromptFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            showToast(`[FILE] Importing ${file.name}...`, 'info');
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const content = e.target.result;
+
+                try {
+                    const res = await fetch('/api/preprompts/import', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            content: content,
+                            filename: file.name
+                        })
+                    });
+
+                    const data = await res.json();
+
+                    if (data.success) {
+                        showToast(`✅ Imported "${data.emoji} ${data.name}"!`, 'success');
+                        await loadPrepromptsFromDB();
+
+                        // Auto-select the imported preprompt
+                        const dropdown = document.getElementById('ai-preprompt');
+                        dropdown.value = data.name;
+                        currentPreprompt = data.name;
+                    } else {
+                        showToast('❌ ' + (data.error || 'Import failed'), 'error');
+                    }
+                } catch (e) {
+                    showToast('❌ Error: ' + e.message, 'error');
+                }
+
+                input.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        async function togglePrepromptLibrary() {
+            const modal = document.getElementById('library-modal');
+            modal.classList.remove('hidden');
+            await loadPrepromptLibrary();
+        }
+
+        function closePrepromptLibrary() {
+            document.getElementById('library-modal').classList.add('hidden');
+        }
+
+        async function loadPrepromptLibrary() {
+            const contentEl = document.getElementById('library-content');
+            contentEl.innerHTML = '<div class="text-center text-gray-500 py-8"><div class="text-4xl mb-4">⏳</div><div>Loading...</div></div>';
+
+            try {
+                // Load preprompts and usage stats in parallel
+                const [prepsRes, statsRes] = await Promise.all([
+                    fetch('/api/ai/preprompts'),
+                    fetch('/api/preprompts/stats/usage')
+                ]);
+
+                const prepsData = await prepsRes.json();
+                const statsData = await statsRes.json();
+
+                if (!prepsData.preprompts || prepsData.preprompts.length === 0) {
+                    contentEl.innerHTML = '<div class="text-center text-gray-500 py-8"><div class="text-4xl mb-4">📭</div><div>No preprompts found</div></div>';
+                    return;
+                }
+
+                // Merge usage stats with preprompts
+                const statsMap = {};
+                if (statsData.stats) {
+                    statsData.stats.forEach(s => {
+                        statsMap[s.id] = s;
+                    });
+                }
+
+                prepsData.preprompts.forEach(p => {
+                    p.usage_count = statsMap[p.id]?.usage_count || 0;
+                    p.last_used = statsMap[p.id]?.last_used || null;
+                });
+
+                // Store for filtering
+                window.allPreprompts = prepsData.preprompts;
+                document.getElementById('library-count').textContent = prepsData.preprompts.length;
+
+                displayLibraryPreprompts(prepsData.preprompts);
+            } catch (e) {
+                contentEl.innerHTML = `<div class="text-center text-red-500 py-8"><div class="text-4xl mb-4">❌</div><div>Error: ${e.message}</div></div>`;
+            }
+        }
+
+        function displayLibraryPreprompts(preprompts) {
+            const contentEl = document.getElementById('library-content');
+            contentEl.innerHTML = '';
+
+            preprompts.forEach(p => {
+                const sourceColors = {
+                    'builtin': 'bg-blue-600',
+                    'ai_generated': 'bg-purple-600',
+                    'imported': 'bg-green-600',
+                    'user': 'bg-yellow-600'
+                };
+
+                const card = document.createElement('div');
+                card.className = 'glass rounded-lg p-4 hover:bg-white/10 transition';
+                card.innerHTML = `
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="text-2xl" title="${p.prompt_text.substring(0, 200)}...">${p.emoji}</span>
+                                <h3 class="font-semibold text-lg" title="${p.prompt_text.substring(0, 200)}...">${p.name}</h3>
+                                <span class="text-xs px-2 py-0.5 rounded ${sourceColors[p.source] || 'bg-gray-600'}">${p.source}</span>
+                                ${p.usage_count > 0 ? `<span class="text-xs px-2 py-0.5 rounded bg-green-600 text-green-100" title="Times used">📊 ${p.usage_count}</span>` : ''}
+                            </div>
+                            <p class="text-sm text-gray-400 line-clamp-2" title="${p.prompt_text.substring(0, 200)}...">${p.prompt_text.substring(0, 150)}...</p>
+                            <div class="flex gap-4 mt-2 text-xs text-gray-500">
+                                <span title="Created date">📅 ${new Date(p.created_at).toLocaleDateString()}</span>
+                                <span title="Author">✍️ ${p.author}</span>
+                                <span title="Character count">📏 ${p.prompt_text.length} chars</span>
+                                ${p.last_used ? `<span title="Last used">⏰ ${new Date(p.last_used).toLocaleDateString()}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="flex gap-2 ml-4">
+                            <button onclick="viewPrepromptFull('${p.id}')" 
+                                    class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 rounded text-xs" title="View full text">
+                                👁️
+                            </button>
+                            <button onclick="editPreprompt('${p.id}')" 
+                                    class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded text-xs" title="Edit">
+                                ✏️
+                            </button>
+                            <button onclick="exportPreprompt('${p.id}', '${p.name}')" 
+                                    class="px-3 py-1.5 bg-green-600 hover:bg-green-500 rounded text-xs" title="Export">
+                                💾
+                            </button>
+                            ${p.source !== 'builtin' ? `
+                            <button onclick="deletePreprompt('${p.id}', '${p.name}')" 
+                                    class="px-3 py-1.5 bg-red-600 hover:bg-red-500 rounded text-xs" title="Delete">
+                                🗑️
+                            </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+                contentEl.appendChild(card);
+            });
+        }
+
+        function filterLibrary() {
+            if (!window.allPreprompts) return;
+
+            const searchText = document.getElementById('library-search').value.toLowerCase();
+            const sourceFilter = document.getElementById('library-filter').value;
+
+            const filtered = window.allPreprompts.filter(p => {
+                const matchesSearch = !searchText ||
+                    p.name.toLowerCase().includes(searchText) ||
+                    p.prompt_text.toLowerCase().includes(searchText);
+                const matchesSource = !sourceFilter || p.source === sourceFilter;
+                return matchesSearch && matchesSource;
+            });
+
+            displayLibraryPreprompts(filtered);
+        }
+
+        async function viewPrepromptFull(id) {
+            try {
+                const res = await fetch(`/api/preprompts/${id}`);
+                const prep = await res.json();
+
+                if (prep.error) {
+                    showToast('Error loading preprompt', 'error');
+                    return;
+                }
+
+                // Show in modal with full text
+                alert(`${prep.emoji} ${prep.name}\\n\\n${prep.prompt_text}\\n\\nSource: ${prep.source}\\nCreated: ${new Date(prep.created_at).toLocaleString()}`);
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function editPreprompt(id) {
+            try {
+                const res = await fetch(`/api/preprompts/${id}`);
+                const prep = await res.json();
+
+                if (prep.error) {
+                    showToast('Error loading preprompt', 'error');
+                    return;
+                }
+
+                // Open editor modal with data
+                document.getElementById('edit-name').value = prep.name;
+                document.getElementById('edit-emoji').value = prep.emoji;
+                document.getElementById('edit-source').value = prep.source;
+                document.getElementById('edit-prompt').value = prep.prompt_text;
+                document.getElementById('editor-modal').dataset.editId = id;
+                updateCharCount();
+
+                document.getElementById('editor-modal').classList.remove('hidden');
+                closePrepromptLibrary();
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        function closeEditor() {
+            document.getElementById('editor-modal').classList.add('hidden');
+        }
+
+        function updateCharCount() {
+            const text = document.getElementById('edit-prompt').value;
+            const count = text.length;
+            const words = text.split(/\\s+/).filter(w => w.length > 0).length;
+            document.getElementById('edit-char-count').textContent = `(${count} chars, ${words} words)`;
+        }
+
+        async function saveEditedPreprompt() {
+            const id = document.getElementById('editor-modal').dataset.editId;
+            const name = document.getElementById('edit-name').value.trim();
+            const emoji = document.getElementById('edit-emoji').value.trim();
+            const prompt_text = document.getElementById('edit-prompt').value.trim();
+
+            if (!name || !prompt_text) {
+                showToast('Name and prompt text are required', 'warning');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/preprompts/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, emoji, prompt_text })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast(`✅ Updated "${emoji} ${name}"`, 'success');
+                    closeEditor();
+                    await loadPrepromptsFromDB();
+                    await togglePrepromptLibrary();
+                } else {
+                    showToast('Error: ' + (data.error || 'Update failed'), 'error');
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function exportPreprompt(id, name) {
+            try {
+                const res = await fetch(`/api/preprompts/${id}`);
+                const prep = await res.json();
+
+                if (prep.error) {
+                    showToast('Error loading preprompt', 'error');
+                    return;
+                }
+
+                // Create markdown file
+                const markdown = `# ${prep.emoji} ${prep.name}
+
+**Source**: ${prep.source}  
+**Created**: ${new Date(prep.created_at).toLocaleString()}  
+**Author**: ${prep.author}
+
+---
+
+${prep.prompt_text}
+`;
+
+                // Download
+                const blob = new Blob([markdown], { type: 'text/markdown' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${prep.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.md`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                showToast(`📥 Exported "${prep.name}.md"`, 'success');
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        async function deletePreprompt(id, name) {
+            if (!confirm(`Delete "${name}"?\\n\\nThis can be undone via database.`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/preprompts/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast(`🗑️ Deleted "${name}"`, 'success');
+                    await loadPrepromptsFromDB();
+                    await loadPrepromptLibrary();
+                } else {
+                    showToast('Error: ' + (data.error || 'Delete failed'), 'error');
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        function clearAIChat() {
+            const chatEl = document.getElementById('ai-chat');
+            chatEl.innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <div class="text-4xl mb-4">🧠</div>
+                    <div>Chat cleared</div>
+                    <div class="text-sm mt-2">Start a new conversation with the AI</div>
+                </div>
+            `;
+            aiMessages = [];
+        }
+
+        function addChatMessage(role, content) {
+            const chatEl = document.getElementById('ai-chat');
+            const isUser = role === 'user';
+
+            const msgHtml = `
+                <div class="flex gap-3 ${isUser ? 'justify-end' : ''}">
+                    ${isUser ? '' : '<div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-sm">🤖</div>'}
+                    <div class="flex-1 ${isUser ? 'max-w-[80%]' : ''} ${isUser ? 'bg-indigo-600' : 'bg-white/5'} rounded-lg p-4">
+                        ${isUser ? '' : '<div class="font-medium text-purple-400 mb-1">AI Assistant</div>'}
+                        <div class="text-gray-${isUser ? '100' : '300'} whitespace-pre-wrap">${content}</div>
+                    </div>
+                    ${isUser ? '<div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm">👤</div>' : ''}
+                </div>
+            `;
+
+            chatEl.insertAdjacentHTML('beforeend', msgHtml);
+            chatEl.scrollTop = chatEl.scrollHeight;
+        }
+
+        async function sendAIMessage() {
+            if (!aiConnected) {
+                alert('Please connect to Ollama first');
+                return;
+            }
+
+            const input = document.getElementById('ai-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Get tool options
+            const includeRepos = document.getElementById('ai-include-repos').checked;
+            const filePath = document.getElementById('ai-file-path').value.trim();
+            const webSearch = document.getElementById('ai-web-search').value.trim();
+
+            // Show what tools are being used
+            let toolsUsed = [];
+            if (includeRepos) toolsUsed.push('[FILE] repos');
+            if (filePath) toolsUsed.push('📄 ' + filePath);
+            if (webSearch) toolsUsed.push('🌐 ' + webSearch);
+
+            const userMsg = toolsUsed.length > 0
+                ? message + '\\n\\n<span class="text-xs text-gray-500">Tools: ' + toolsUsed.join(', ') + '</span>'
+                : message;
+
+            input.value = '';
+            document.getElementById('ai-file-path').value = '';
+            document.getElementById('ai-web-search').value = '';
+            document.getElementById('ai-include-repos').checked = false;
+
+            addChatMessage('user', userMsg);
+
+            // Add thinking indicator with preprompt info
+            const chatEl = document.getElementById('ai-chat');
+            const thinkingId = 'thinking-' + Date.now();
+            const thinkingText = toolsUsed.length > 0
+                ? 'Gathering context... (' + toolsUsed.join(', ') + ')'
+                : 'Thinking...';
+            chatEl.insertAdjacentHTML('beforeend', `
+                <div id="${thinkingId}" class="flex gap-3">
+                    <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-sm animate-pulse">🤖</div>
+                    <div class="flex-1 bg-white/5 rounded-lg p-4">
+                        <div class="font-medium text-purple-400 mb-1">AI Assistant • ${currentPreprompt}</div>
+                        <div class="text-gray-400 flex items-center gap-2">
+                            <span class="animate-pulse">●</span> ${thinkingText}
+                        </div>
+                        <div class="mt-2">
+                            <div class="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                                <div class="bg-purple-600 h-full animate-[pulse_1s_ease-in-out_infinite]" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `);
+            chatEl.scrollTop = chatEl.scrollHeight;
+
+            try {
+                // Build context about the MCP zoo
+                const context = buildZooContext();
+                const fullPrompt = context + '\\n\\nUser question: ' + message;
+
+                const modelId = document.getElementById('ai-model').value;
+                const preprompt = document.getElementById('ai-preprompt').value;
+
+                const res = await fetch('/api/ai/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model_id: modelId,
+                        message: fullPrompt,
+                        include_repo_context: includeRepos,
+                        file_path: filePath || null,
+                        web_search: webSearch || null,
+                        preprompt: preprompt
+                    })
+                });
+
+                const data = await res.json();
+
+                // Log preprompt usage for debugging
+                if (data.preprompt_used) {
+                    console.log('✓ Response used preprompt:', data.preprompt_used, '(Found:', data.preprompt_found, ')');
+                }
+
+                // Remove thinking indicator
+                document.getElementById(thinkingId)?.remove();
+
+                if (data.response) {
+                    addChatMessage('assistant', data.response);
+                    // Show subtle confirmation
+                    if (data.preprompt_used && data.preprompt_found) {
+                        console.log(`✅ Chat successfully used "${data.preprompt_used}" personality`);
+                    }
+                } else if (data.error) {
+                    addChatMessage('assistant', '❌ Error: ' + data.error);
+                    showToast('Chat error: ' + data.error, 'error');
+                } else {
+                    addChatMessage('assistant', JSON.stringify(data, null, 2));
+                }
+            } catch (e) {
+                document.getElementById(thinkingId)?.remove();
+                addChatMessage('assistant', '❌ Error: ' + e.message);
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        function buildZooContext() {
+            if (reposData.length === 0) return 'No MCP repositories have been scanned yet.';
+
+            const sota = reposData.filter(r => r.status === 'sota');
+            const improvable = reposData.filter(r => r.status === 'improvable');
+            const runts = reposData.filter(r => r.status === 'runt'); // Still called runts for backward compatibility
+            const totalTools = reposData.reduce((acc, r) => acc + r.tools, 0);
+
+            let context = `You are an AI assistant helping analyze an MCP (Model Context Protocol) server zoo.
+
+MCP ZOO SUMMARY:
+- Total repositories: ${reposData.length}
+- Total tools: ${totalTools}
+- SOTA (excellent): ${sota.length} repos
+- Improvable: ${improvable.length} repos
+- Runts (need work): ${runts.length} repos
+
+SOTA REPOS: ${sota.map(r => r.name + ' (' + r.tools + ' tools)').join(', ') || 'none'}
+
+REPOS WITH ISSUES (need improvement): ${runts.map(r => r.name + ' - issues: ' + r.issues.join(', ')).join('; ') || 'none'}
+
+TOP REPOS BY TOOLS:
+${reposData.sort((a, b) => b.tools - a.tools).slice(0, 10).map(r => '- ' + r.name + ': ' + r.tools + ' tools, FastMCP ' + (r.fastmcp_version || '?') + ', status: ' + r.status).join('\\n')}
+
+Please provide helpful, specific advice about MCP server development, tool design, and best practices.`;
+
+            return context;
+        }
+
+        // Theme toggle
+        function toggleTheme() {
+            const html = document.documentElement;
+            const darkIcon = document.getElementById('theme-icon-dark');
+            const lightIcon = document.getElementById('theme-icon-light');
+
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                darkIcon.classList.add('hidden');
+                lightIcon.classList.remove('hidden');
+                localStorage.theme = 'light';
+            } else {
+                html.classList.add('dark');
+                darkIcon.classList.remove('hidden');
+                lightIcon.classList.add('hidden');
+                localStorage.theme = 'dark';
+            }
+        }
+
+        // Help modal
+        function showHelp() {
+            const helpContent = `
+                <div class="space-y-4">
+                    <h3 class="text-xl font-bold gradient-text">MCP MCP Studio Help</h3>
+                    
+                    <div class="space-y-3">
+                        <div>
+                            <h4 class="font-semibold text-white mb-2">📊 Overview Tab</h4>
+                            <p class="text-sm text-gray-400">View system statistics, discovered clients, and MCP repositories.</p>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-semibold text-white mb-2">🔌 MCP Clients Tab</h4>
+                            <p class="text-sm text-gray-400">Manage MCP client configurations (Claude Desktop, Cursor, etc.)</p>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-semibold text-white mb-2">📁 Repositories Tab</h4>
+                            <p class="text-sm text-gray-400">Scan and analyze MCP server repositories for SOTA compliance.</p>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-semibold text-white mb-2">🔧 Tools Tab</h4>
+                            <p class="text-sm text-gray-400">Browse all available MCP tools across discovered servers.</p>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-semibold text-white mb-2">[CONSOLE] Console Tab</h4>
+                            <p class="text-sm text-gray-400">Execute MCP tools directly with parameter inputs.</p>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-semibold text-white mb-2">🤖 AI Assistant Tab</h4>
+                            <p class="text-sm text-gray-400">Chat with AI about your MCP servers using Ollama.</p>
+                        </div>
+                        
+                        <div class="pt-3 border-t border-white/10">
+                            <h4 class="font-semibold text-white mb-2">⌨️ Keyboard Shortcuts</h4>
+                            <ul class="text-sm text-gray-400 space-y-1">
+                                <li><code class="bg-black/30 px-2 py-0.5 rounded">Ctrl+B</code> - Browse preprompt library</li>
+                                <li><code class="bg-black/30 px-2 py-0.5 rounded">Ctrl+K</code> - Focus preprompt dropdown</li>
+                                <li><code class="bg-black/30 px-2 py-0.5 rounded">Ctrl+L</code> - Clear AI chat</li>
+                                <li><code class="bg-black/30 px-2 py-0.5 rounded">Ctrl+Enter</code> - Send AI message</li>
+                                <li><code class="bg-black/30 px-2 py-0.5 rounded">Escape</code> - Close modals</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('modal-content').innerHTML = helpContent;
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        // SOTA Logger Modal
+        function showLogs() {
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalContent = document.getElementById('modal-content');
+
+            modalTitle.innerHTML = '📋 SOTA Logger - State of the Art Logging';
+            modalContent.innerHTML = `
+                <div class="space-y-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <span class="text-2xl">▶️</span>
+                            <div>
+                                <h3 class="font-semibold text-lg">SOTA Logger</h3>
+                                <p class="text-sm text-gray-400">State-of-the-art logging with real-time monitoring</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="clearLogs()" class="px-3 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded text-sm border border-red-500/30" title="Clear all logs">
+                                🗑️ Clear
+                            </button>
+                            <button onclick="refreshLogs()" class="px-3 py-1 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded text-sm border border-blue-500/30" title="Refresh logs">
+                                🔄 Refresh
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-4">
+                        <div class="flex-1">
+                            <input type="text" id="log-search" placeholder="🔍 Search logs..." class="w-full px-3 py-2 bg-white/5 border border-white/10 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" onkeyup="filterLogs()">
+                        </div>
+                        <select id="log-level-filter" onchange="filterLogs()" class="px-3 py-2 bg-white/5 border border-white/10 rounded text-sm">
+                            <option value="all">All Levels</option>
+                            <option value="error">Errors Only</option>
+                            <option value="warning">Warnings+</option>
+                            <option value="info">Info+</option>
+                            <option value="debug">Debug+</option>
+                        </select>
+                        <select id="log-source-filter" onchange="filterLogs()" class="px-3 py-2 bg-white/5 border border-white/10 rounded text-sm">
+                            <option value="all">All Sources</option>
+                            <option value="api">API</option>
+                            <option value="ui">UI</option>
+                            <option value="scanner">Scanner</option>
+                            <option value="discovery">Discovery</option>
+                        </select>
+                    </div>
+
+                    <div class="bg-black/20 rounded-lg border border-white/10">
+                        <div class="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+                            <h4 class="font-semibold text-sm">📊 Log Stream</h4>
+                            <div class="flex items-center gap-2 text-xs text-gray-500">
+                                <span id="log-count">0</span> entries
+                                <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Live"></span>
+                            </div>
+                        </div>
+                        <div id="log-container" class="max-h-96 overflow-y-auto p-4 space-y-1 font-mono text-xs">
+                            <div class="text-center text-gray-500 py-8">
+                                <div class="text-lg mb-2">▶️</div>
+                                <div>Loading SOTA logs...</div>
+                                <div class="text-xs mt-2">Real-time logging with advanced filtering</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-red-500/10 border border-red-500/20 rounded p-3 text-center">
+                            <div class="text-red-400 text-lg font-bold" id="error-count">0</div>
+                            <div class="text-red-400/80 text-xs">Errors</div>
+                        </div>
+                        <div class="bg-yellow-500/10 border border-yellow-500/20 rounded p-3 text-center">
+                            <div class="text-yellow-400 text-lg font-bold" id="warning-count">0</div>
+                            <div class="text-yellow-400/80 text-xs">Warnings</div>
+                        </div>
+                        <div class="bg-blue-500/10 border border-blue-500/20 rounded p-3 text-center">
+                            <div class="text-blue-400 text-lg font-bold" id="info-count">0</div>
+                            <div class="text-blue-400/80 text-xs">Info</div>
+                        </div>
+                        <div class="bg-green-500/10 border border-green-500/20 rounded p-3 text-center">
+                            <div class="text-green-400 text-lg font-bold" id="debug-count">0</div>
+                            <div class="text-green-400/80 text-xs">Debug</div>
+                        </div>
+                    </div>
+
+                    <div class="text-xs text-gray-500 text-center">
+▶️ SOTA Logger - Advanced logging with real-time monitoring, intelligent filtering, and performance analytics
+                    </div>
+                </div>
+            `;
+
+            modal.classList.remove('hidden');
+
+            // Load initial logs
+            loadLoggerData();
+        }
+
+        async function loadLoggerData() {
+            try {
+                const response = await fetch('/api/logs/recent');
+                const data = await response.json();
+                renderLogs(data.logs || []);
+            } catch (e) {
+                console.error('Failed to load logs:', e);
+                document.getElementById('log-container').innerHTML = `
+                    <div class="text-center text-red-400 py-8">
+                        <div class="text-lg mb-2">❌</div>
+                        <div>Failed to load logs</div>
+                        <div class="text-xs mt-2">${e.message}</div>
+                    </div>
+                `;
+            }
+        }
+
+        function renderLogs(logs) {
+            const container = document.getElementById('log-container');
+            const searchTerm = document.getElementById('log-search').value.toLowerCase();
+            const levelFilter = document.getElementById('log-level-filter').value;
+            const sourceFilter = document.getElementById('log-source-filter').value;
+
+            let filteredLogs = logs;
+
+            // Apply filters
+            if (searchTerm) {
+                filteredLogs = filteredLogs.filter(log =>
+                    log.message.toLowerCase().includes(searchTerm) ||
+                    log.source.toLowerCase().includes(searchTerm)
+                );
+            }
+
+            if (levelFilter !== 'all') {
+                filteredLogs = filteredLogs.filter(log => log.level === levelFilter);
+            }
+
+            if (sourceFilter !== 'all') {
+                filteredLogs = filteredLogs.filter(log => log.source === sourceFilter);
+            }
+
+            // Update counts
+            const counts = { error: 0, warning: 0, info: 0, debug: 0 };
+            logs.forEach(log => {
+                if (counts[log.level] !== undefined) counts[log.level]++;
+            });
+
+            document.getElementById('error-count').textContent = counts.error;
+            document.getElementById('warning-count').textContent = counts.warning;
+            document.getElementById('info-count').textContent = counts.info;
+            document.getElementById('debug-count').textContent = counts.debug;
+            document.getElementById('log-count').textContent = filteredLogs.length;
+
+            if (filteredLogs.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-gray-500 py-8">
+                        <div class="text-lg mb-2">🔍</div>
+                        <div>No logs match current filters</div>
+                        <div class="text-xs mt-2">Try adjusting search or filter criteria</div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = filteredLogs.map(log => {
+                const levelColors = {
+                    error: 'text-red-400 bg-red-500/10',
+                    warning: 'text-yellow-400 bg-yellow-500/10',
+                    info: 'text-blue-400 bg-blue-500/10',
+                    debug: 'text-green-400 bg-green-500/10'
+                };
+
+                const levelIcon = {
+                    error: '❌',
+                    warning: '⚠️',
+                    info: 'ℹ️',
+                    debug: '🐛'
+                };
+
+                return `
+                    <div class="flex items-start gap-3 p-2 rounded hover:bg-white/5 ${levelColors[log.level] || 'text-gray-400'}">
+                        <div class="flex-shrink-0 text-xs mt-0.5">${levelIcon[log.level] || '[REVIEW]'}</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-xs font-semibold uppercase tracking-wide">${log.level}</span>
+                                <span class="text-xs text-gray-500">${log.source}</span>
+                                <span class="text-xs text-gray-600">${new Date(log.timestamp).toLocaleTimeString()}</span>
+                            </div>
+                            <div class="text-sm break-words">${log.message}</div>
+                            ${log.details ? `<div class="text-xs text-gray-500 mt-1 font-mono">${log.details}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function filterLogs() {
+            // Re-render with current filters
+            const container = document.getElementById('log-container');
+            if (container.querySelector('.text-center')) {
+                loadLoggerData(); // Reload if showing "no logs" message
+            } else {
+                // For now, just reload - in a real implementation we'd cache the logs
+                loadLoggerData();
+            }
+        }
+
+        function clearLogs() {
+            if (confirm('🗑️ Clear all logs? This action cannot be undone.')) {
+                fetch('/api/logs/clear', { method: 'POST' })
+                    .then(() => {
+                        showToast('🗑️ Logs cleared', 'success');
+                        loadLoggerData();
+                    })
+                    .catch(e => showToast('❌ Failed to clear logs: ' + e.message, 'error'));
+            }
+        }
+
+        function refreshLogs() {
+            loadLoggerData();
+            showToast('🔄 Logs refreshed', 'info');
+        }
+
+        // Initialize theme from localStorage or system preference
+        const html = document.documentElement;
+        const darkIcon = document.getElementById('theme-icon-dark');
+        const lightIcon = document.getElementById('theme-icon-light');
+
+        // Check for saved user preference, if any, on load
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            html.classList.add('dark');
+            if (darkIcon) darkIcon.classList.remove('hidden');
+            if (lightIcon) lightIcon.classList.add('hidden');
+        } else {
+            html.classList.remove('dark');
+            if (darkIcon) darkIcon.classList.add('hidden');
+            if (lightIcon) lightIcon.classList.remove('hidden');
+        }
+
+        // Initial load - wrapped in timeout to prevent blocking page load
+        setTimeout(() => {
+            loadClients().catch(e => console.error('Failed to load clients:', e));
+            loadOllamaModels().catch(e => console.error('Failed to load Ollama models:', e));
+            loadPrepromptsFromDB().catch(e => console.error('Failed to load preprompts:', e));
+        }, 100);
+
+        // Periodic updates - DISABLED to prevent looping/hanging
+        // These endpoints don't exist and cause continuous 404 requests
+        // setTimeout(() => {
+        //     setInterval(() => loadLogs().catch(e => console.error('Failed to load logs:', e)), 5000);
+        //     setInterval(() => loadConsoleServers().catch(e => console.error('Failed to load console servers:', e)), 3000);
+        //     setInterval(() => updateAIContext().catch(e => console.error('Failed to update AI context:', e)), 5000);
+        // }, 1000);
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+Enter: Send message
+            if (e.ctrlKey && e.key === 'Enter' && document.getElementById('ai-input') === document.activeElement) {
+                sendAIMessage();
+            }
+            // Ctrl+L: Clear chat
+            if (e.ctrlKey && e.key === 'l') {
+                e.preventDefault();
+                clearAIChat();
+            }
+            // Ctrl+K: Focus preprompt dropdown
+            if (e.ctrlKey && e.key === 'k') {
+                e.preventDefault();
+                document.getElementById('ai-preprompt').focus();
+            }
+            // Ctrl+G: Focus AI Refine input
+            if (e.ctrlKey && e.key === 'g') {
+                e.preventDefault();
+                document.getElementById('ai-refine-text').focus();
+            }
+            // Ctrl+B: Browse library
+            if (e.ctrlKey && e.key === 'b') {
+                e.preventDefault();
+                togglePrepromptLibrary();
+            }
+            // Escape: Close modals
+            if (e.key === 'Escape') {
+                closePrepromptLibrary();
+                closeEditor();
+            }
+        });
+
+        showToast('⌨️ Keyboard shortcuts ready! Ctrl+B=Library, Ctrl+K=Preprompt, Ctrl+L=Clear', 'info');
+    </script>
+
+    <!-- Preprompt Library Browser Modal -->
+    <div id="library-modal"
+        class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center z-50"
+        onclick="if(event.target.id==='library-modal'){closePrepromptLibrary();}">
+        <div class="glass rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col m-4"
+            onclick="event.stopPropagation()">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-semibold">📚 Preprompt Library</h2>
+                    <p class="text-sm text-gray-400 mt-1"><span id="library-count">0</span> personalities</p>
+                </div>
+                <div class="flex gap-2 items-center">
+                    <input id="library-search" type="text" placeholder="Search..."
+                        class="bg-midnight-800 border border-white/10 rounded px-3 py-1.5 text-sm w-48"
+                        oninput="filterLibrary()">
+                    <select id="library-filter"
+                        class="bg-midnight-800 border border-white/10 rounded px-3 py-1.5 text-sm"
+                        onchange="filterLibrary()">
+                        <option value="">All Sources</option>
+                        <option value="builtin">Built-in</option>
+                        <option value="ai_generated">AI Generated</option>
+                        <option value="imported">Imported</option>
+                        <option value="user">User Created</option>
+                    </select>
+                    <button onclick="closePrepromptLibrary()"
+                        class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                        ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Content -->
+            <div id="library-content" class="flex-1 overflow-y-auto p-6 space-y-3">
+                <div class="text-center text-gray-500 py-8">
+                    <div class="text-4xl mb-4">⏳</div>
+                    <div>Loading preprompts...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preprompt Editor Modal -->
+    <div id="editor-modal"
+        class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center z-50"
+        onclick="if(event.target.id==='editor-modal'){closeEditor();}">
+        <div class="glass rounded-xl w-full max-w-3xl m-4" onclick="event.stopPropagation()">
+            <div class="px-6 py-4 border-b border-white/10">
+                <h2 class="text-xl font-semibold">✏️ Edit Preprompt</h2>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="text-sm text-gray-400 block mb-2">Name</label>
+                    <input id="edit-name" type="text"
+                        class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
+                </div>
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="text-sm text-gray-400 block mb-2">Emoji</label>
+                        <input id="edit-emoji" type="text" maxlength="2"
+                            class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2 text-2xl text-center">
+                    </div>
+                    <div class="flex-1">
+                        <label class="text-sm text-gray-400 block mb-2">Source</label>
+                        <input id="edit-source" type="text" readonly
+                            class="w-full bg-midnight-700 border border-white/10 rounded px-3 py-2 text-gray-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-sm text-gray-400 block mb-2">Preprompt Text <span id="edit-char-count"
+                            class="text-xs text-gray-500"></span></label>
+                    <textarea id="edit-prompt" rows="10"
+                        class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2 font-mono text-sm"
+                        oninput="updateCharCount()"></textarea>
+                </div>
+                <div class="flex gap-2 justify-end">
+                    <button onclick="closeEditor()"
+                        class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">Cancel</button>
+                    <button onclick="saveEditedPreprompt()"
+                        class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

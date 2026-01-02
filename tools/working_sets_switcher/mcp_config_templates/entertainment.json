@@ -1,0 +1,34 @@
+﻿{
+  "name": "Media Consumption",
+  "id": "media_consumption",
+  "description": "Focused tools for media consumption and personal entertainment",
+  "icon": "📺",
+  "category": "Media",
+  "servers": [
+    {
+      "name": "plex-mcp",
+      "required": true,
+      "description": "MEDIA - stream movies, TV shows, music from your server"
+    },
+    {
+      "name": "calibre-mcp",
+      "required": true,
+      "description": "MEDIA - manage and read your ebook library"
+    },
+    {
+      "name": "immich-mcp",
+      "required": true,
+      "description": "MEDIA - browse and organize your photo collection"
+    },
+    {
+      "name": "basic-memory",
+      "required": false,
+      "description": "NOTES - remember viewing preferences and recommendations"
+    },
+    {
+      "name": "filesystem",
+      "required": false,
+      "description": "FILES - access local media files"
+    }
+  ]
+}

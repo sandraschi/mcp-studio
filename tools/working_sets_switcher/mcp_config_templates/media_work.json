@@ -1,0 +1,59 @@
+﻿{
+  "name": "Media & Creative Work",
+  "id": "media_work", 
+  "description": "Creative tools for media production and management",
+  "icon": "🎨",
+  "category": "Creative",
+  "servers": [
+    {
+      "name": "basic-memory",
+      "required": true,
+      "description": "Universal - project notes"
+    },
+    {
+      "name": "windows_operations",
+      "required": true,
+      "description": "Universal - system operations"
+    },
+    {
+      "name": "filesystem",
+      "required": true,
+      "description": "Universal - file management"
+    },
+    {
+      "name": "fetch",
+      "required": true,
+      "description": "Universal - web requests"
+    },
+    {
+      "name": "blender",
+      "required": false,
+      "description": "MEDIA - 3D modeling, animation"
+    },
+    {
+      "name": "immich",
+      "required": false,
+      "description": "MEDIA - photo management"
+    },
+    {
+      "name": "calibremcp",
+      "required": false,
+      "description": "MEDIA - ebook library"
+    },
+    {
+      "name": "plexmcp",
+      "required": false,
+      "description": "MEDIA - media server management"
+    },
+    {
+      "name": "microsoft-365",
+      "required": false,
+      "description": "PRODUCTIVITY - office docs"
+    },
+    {
+      "name": "obsidian-plugin-based",
+      "required": false,
+      "description": "PRODUCTIVITY - creative notes"
+    }
+  ]
+}

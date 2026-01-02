@@ -1,0 +1,59 @@
+﻿{
+  "name": "Automation & Testing",
+  "id": "automation",
+  "description": "System automation and virtualization tools",
+  "icon": "🤖",
+  "category": "Automation",
+  "servers": [
+    {
+      "name": "basic-memory",
+      "required": true,
+      "description": "Universal - automation scripts memory"
+    },
+    {
+      "name": "windows_operations",
+      "required": true,
+      "description": "AUTOMATION - system control"
+    },
+    {
+      "name": "filesystem",
+      "required": true,
+      "description": "Universal - file operations"
+    },
+    {
+      "name": "fetch",
+      "required": true,
+      "description": "Universal - API testing"
+    },
+    {
+      "name": "pywinauto-mcp",
+      "required": false,
+      "description": "AUTOMATION - UI automation"
+    },
+    {
+      "name": "playwright",
+      "required": false,
+      "description": "AUTOMATION - browser automation"
+    },
+    {
+      "name": "vboxmcp",
+      "required": false,
+      "description": "VIRTUALIZATION - VM management"
+    },
+    {
+      "name": "docker-mcp",
+      "required": false,
+      "description": "VIRTUALIZATION - containers"
+    },
+    {
+      "name": "github",
+      "required": false,
+      "description": "DEV - automation workflows"
+    },
+    {
+      "name": "mindmap",
+      "required": false,
+      "description": "VISUALIZATION - process mapping"
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+﻿{
+  "name": "Development Work",
+  "id": "dev_work",
+  "description": "Full development environment with coding tools, version control, and testing",
+  "icon": "🛠️",
+  "category": "Development",
+  "servers": [
+    {
+      "name": "basic-memory",
+      "required": true,
+      "description": "Universal - note taking, project memory"
+    },
+    {
+      "name": "windows_operations", 
+      "required": true,
+      "description": "Universal - system operations"
+    },
+    {
+      "name": "filesystem",
+      "required": true, 
+      "description": "Universal - file management"
+    },
+    {
+      "name": "fetch",
+      "required": true,
+      "description": "Universal - web requests"
+    },
+    {
+      "name": "github",
+      "required": false,
+      "description": "DEV - version control, issues, PRs"
+    },
+    {
+      "name": "docker-mcp",
+      "required": false, 
+      "description": "DEV - containerization"
+    },
+    {
+      "name": "playwright",
+      "required": false,
+      "description": "DEV - browser automation, testing"
+    },
+    {
+      "name": "Context7",
+      "required": false,
+      "description": "DEV - documentation lookup"
+    },
+    {
+      "name": "microsoft-365",
+      "required": false,
+      "description": "PRODUCTIVITY - office docs, email"
+    },
+    {
+      "name": "obsidian-plugin-based",
+      "required": false,
+      "description": "PRODUCTIVITY - knowledge management"
+    }
+  ]
+}

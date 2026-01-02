@@ -1,0 +1,265 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Server, Tool } from '../../types';
+import { ToolExplorer } from './ToolExplorer';
+import { ServerManager } from '../servers/ServerManager';
+import { useServers } from '../../contexts/ServerContext';
+import { useToast } from '../ui/Toast/ToastProvider';
+
+// Simple icon components with className support
+const ServerIcon = ({ className = '' }: { className?: string }) => (
+  <span className={className}>🖥️</span>
+);
+
+const CogIcon = ({ className = '' }: { className?: string }) => (
+  <span className={className}>⚙️</span>
+);
+
+const PlusIcon = ({ className = '' }: { className?: string }) => (
+  <span className={className}>➕</span>
+);
+
+const BoltIcon = ({ className = '' }: { className?: string }) => (
+  <span className={className}>⚡</span>
+);
+
+type ToolExecutionResult = {
+  success: boolean;
+  data?: any;
+  error?: string;
+  executionTime: number;
+  timestamp: string;
+};
+
+export const ToolConsole: React.FC = () => {
+  const { 
+    servers, 
+    loading: serversLoading, 
+    error, 
+    refreshServers, 
+    executeTool: safeExecuteTool
+  } = useServers();
+  
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState<'explorer' | 'servers'>('explorer');
+  const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [executionResult, setExecutionResult] = useState<ToolExecutionResult | null>(null);
+  
+  const selectedServer = selectedServerId 
+    ? servers.find(server => server.id === selectedServerId) 
+    : null;
+    
+  // Ensure we have a safe execute function
+  const executeToolWrapper = useCallback(async (toolId: string, parameters: Record<string, any>) => {
+    if (!selectedServer) {
+      throw new Error('No server selected');
+    }
+    
+    setIsExecuting(true);
+    try {
+      const startTime = Date.now();
+      const result = await safeExecuteTool(selectedServer.id, toolId, parameters);
+      const executionTime = Date.now() - startTime;
+      
+      const executionResult: ToolExecutionResult = {
+        success: true,
+        data: result,
+        executionTime,
+        timestamp: new Date().toISOString()
+      };
+      
+      setExecutionResult(executionResult);
+      return executionResult;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to execute tool';
+      toast({
+        title: 'Execution Failed',
+        description: errorMessage,
+        variant: 'destructive',
+        duration: 5000
+      });
+      
+      const errorResult: ToolExecutionResult = {
+        success: false,
+        error: errorMessage,
+        executionTime: 0,
+        timestamp: new Date().toISOString()
+      };
+      
+      setExecutionResult(errorResult);
+      throw error;
+    } finally {
+      setIsExecuting(false);
+    }
+  }, [selectedServer, safeExecuteTool, toast]);
+
+  // Select first server by default
+  useEffect(() => {
+    if (servers.length > 0 && !selectedServerId) {
+      setSelectedServerId(servers[0].id);
+    }
+  }, [servers, selectedServerId]);
+
+  // Handle server selection change
+  const handleServerChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedServerId(e.target.value || null);
+  };
+
+  // Handle server refresh
+  const handleRefresh = async () => {
+    try {
+      await refreshServers();
+      toast({
+        title: 'Servers Refreshed',
+        description: 'Server list has been updated.',
+        variant: 'default',
+        duration: 3000
+      });
+    } catch (error) {
+      console.error('Failed to refresh servers:', error);
+      toast({
+        title: 'Refresh Failed',
+        description: 'Failed to refresh server list.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between px-4">
+          <div className="flex space-x-4">
+            <button
+              onClick={() => setActiveTab('explorer')}
+              className={`px-4 py-2 ${
+                activeTab === 'explorer' 
+                  ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-300' 
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+              }`}
+            >
+              <div className="flex items-center">
+                <BoltIcon className="-ml-0.5 mr-1.5 h-4 w-4" />
+                Tool Explorer
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('servers')}
+              className={`px-4 py-2 ${
+                activeTab === 'servers' 
+                  ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-300' 
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+              }`}
+            >
+              <div className="flex items-center">
+                <ServerIcon className="-ml-0.5 mr-1.5 h-4 w-4" />
+                Server Manager
+              </div>
+            </button>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            {activeTab === 'explorer' && selectedServer && (
+              <div className="flex items-center">
+                <select
+                  value={selectedServerId || ''}
+                  onChange={handleServerChange}
+                  className="block w-64 rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                >
+                  {servers.map((server) => (
+                    <option key={server.id} value={server.id}>
+                      {server.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleRefresh}
+                  className="ml-2 rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-500 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                  disabled={serversLoading}
+                >
+                  <svg
+                    className={`h-5 w-5 ${serversLoading ? 'animate-spin' : ''}`}
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-auto">
+        {activeTab === 'explorer' ? (
+          <div className="p-4">
+            {selectedServer ? (
+              <ToolExplorer 
+                server={selectedServer}
+                tools={selectedServer.tools || []}
+                loading={serversLoading || isExecuting}
+                onExecuteTool={executeToolWrapper}
+              />
+            ) : (
+              <div className="flex h-64 items-center justify-center rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700">
+                <div className="text-center">
+                  <ServerIcon className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                    No server selected
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Select a server from the server manager to get started.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-4">
+            <ServerManager onServerSelect={(serverId) => {
+              setSelectedServerId(serverId);
+              setActiveTab('explorer');
+            }} />
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div className="rounded-md bg-red-50 p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg
+                className="h-5 w-5 text-red-400"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                Error loading servers
+              </h3>
+              <div className="mt-2 text-sm text-red-700 dark:text-red-300">
+                {error}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
