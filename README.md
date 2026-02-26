@@ -94,7 +94,7 @@ Scan `D:/Dev/repos` and instantly identify which MCP repos need work:
 - Ruff linting configuration
 - Test harness (unit/integration, pytest, coverage)
 - Help & status tools
-- DXT packaging
+- Packaging & Distribution
 - Proper docstrings
 - Logging vs print statements
 - Error handling quality
@@ -201,7 +201,7 @@ One-click switching between focused MCP server configurations for different work
 - **Stdio Transport**: Bidirectional communication over stdin/stdout
 - **Type Safety**: Pydantic validation for tool parameters
 - **Async-First**: Built on Python asyncio
-- **MCPB Packaging**: Tool distribution support (experimental)
+- **MCPB Packaging**: Tool distribution support
 - **MCP Studio Tools**: Server lifecycle management tools
 - **Tool Discovery**: Connect to multiple MCP servers
 
@@ -217,6 +217,17 @@ One-click switching between focused MCP server configurations for different work
 - **UI**: Template-based interface with Tailwind CSS
 - **Interactive Components**: Basic forms and navigation
 
+## 📦 Packaging & Distribution
+
+This repository is SOTA 2026 compliant and uses the officially validated `@anthropic-ai/mcpb` workflow for distribution.
+
+### Pack Extension
+To generate a `.mcpb` distribution bundle with complete source code and automated build exclusions:
+```bash
+# SOTA 2026 standard pack command
+mcpb pack . dist/mcp-studio.mcpb
+```
+
 ## 🎯 **Use Cases**
 
 ### **For Developers** 👨‍💻
@@ -231,8 +242,28 @@ One-click switching between focused MCP server configurations for different work
 - **System Administration**: Monitor and manage MCP infrastructure
 - **Configuration Management**: Safely manage complex MCP configurations
 
-## 📦 **Installation**
+## 🚀 Installation
 
+### Prerequisites
+- [uv](https://docs.astral.sh/uv/) installed (RECOMMENDED)
+- Python 3.12+
+
+### 📦 Quick Start
+Run immediately via `uvx`:
+```bash
+uvx mcp-studio
+```
+
+### 🎯 Claude Desktop Integration
+Add to your `claude_desktop_config.json`:
+```json
+"mcpServers": {
+  "mcp-studio": {
+    "command": "uv",
+    "args": ["--directory", "D:/Dev/repos/mcp-studio", "run", "mcp-studio"]
+  }
+}
+```
 ### **Prerequisites**
 - Python 3.10+
 - Node.js 18+ (for some MCP servers)
@@ -286,7 +317,7 @@ docker compose up -d
 - Windows/Linux/Mac specific configuration
 - Troubleshooting guide
 
-**Important**: Only the web dashboard is containerized. MCP server mode should NEVER be containerized (see [Containerization Guidelines](docs/mcp-technical/CONTAINERIZATION_GUIDELINES.md)).
+**Important**: Only the web dashboard is containerized. MCP server mode should NEVER be containerized.
 
 **Beta Note**: Docker deployment is experimental. Test thoroughly before using in production.
 
@@ -510,7 +541,7 @@ Built on **FastMCP 2.13.1** and **FastAPI** for reliable performance and develop
 The **Working Sets** feature helps organize MCP servers into focused configurations for different workflows.
 
 ### **🚀 Future-Ready**
-Designed for the rapidly evolving AI landscape with support for **DXT packaging**, **authentication**, and **enterprise deployment**.
+Designed for the rapidly evolving AI landscape with support for **MCPB packaging**, **authentication**, and **enterprise deployment**.
 
 ## 📄 **License**
 

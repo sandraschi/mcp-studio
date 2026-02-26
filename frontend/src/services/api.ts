@@ -125,6 +125,11 @@ class ApiService {
       method: 'POST',
     });
   }
+
+  // Ecosystem Discovery
+  async getEcosystemApps(): Promise<ApiResponse<any[]>> {
+    return this.request<any[]>('/ecosystem/apps');
+  }
 }
 
 export const api = new ApiService();

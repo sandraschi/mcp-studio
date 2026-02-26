@@ -59,9 +59,9 @@ class Settings(BaseSettings if BaseSettings != object else object):
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = True
     
-    # Server
+    # Server (reservoir port 10724 per WEBAPP_PORTS.md)
     HOST: str = "0.0.0.0"  # Bind to all interfaces
-    PORT: int = 7787
+    PORT: int = 10724
     RELOAD: bool = True
     WORKERS: int = 1
     
@@ -73,8 +73,8 @@ class Settings(BaseSettings if BaseSettings != object else object):
     SECRET_KEY: str = "mcp-studio-dev-key-change-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     
-    # CORS
-    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:7787", "http://127.0.0.1:7787", "http://127.0.0.1:3000"]
+    # CORS (frontend 10725, backend 10724)
+    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:10724", "http://localhost:10725", "http://127.0.0.1:10724", "http://127.0.0.1:10725"]
     
     # Database
     DATABASE_URL: str = "sqlite:///./mcp-studio.db"

@@ -1,3 +1,4 @@
+name: mcp-studio
 version: '3.8'
 
 services:
@@ -22,12 +23,12 @@ services:
     networks:
       - mcp-studio-network
 
-  mcp-studio:
+  mcp-studio-frontend:
     build:
       context: ..
       dockerfile: mcp-studio-docker/Dockerfile
     image: mcp-studio:latest
-    container_name: mcp-studio
+    container_name: mcp-studio-frontend
     # Temporary debugging access
     ports:
       - "8330:8001"
@@ -55,16 +56,16 @@ services:
     labels:
       - "traefik.enable=true"
       # Router Config (Change 'mcp-studio.localhost' to your actual domain)
-      - "traefik.http.routers.mcp-studio.rule=Host(`mcp-studio.localhost`)"
-      - "traefik.http.routers.mcp-studio.entrypoints=web"
-      - "traefik.http.routers.mcp-studio.middlewares=oidc-auth"
+      - "traefik.http.routers.mcp-studio-frontend.rule=Host(`mcp-studio.localhost`)"
+      - "traefik.http.routers.mcp-studio-frontend.entrypoints=web"
+      - "traefik.http.routers.mcp-studio-frontend.middlewares=oidc-auth"
       # Middleware Config (OIDC)
       - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc.Issuer=${OIDC_ISSUER:-https://accounts.google.com}"
       - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc.ClientID=${OIDC_CLIENT_ID:-changeme}"
       - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc.ClientSecret=${OIDC_CLIENT_SECRET:-changeme}"
       - "traefik.http.middlewares.oidc-auth.plugin.traefik-oidc.BaseUrl=${OIDC_BASE_URL:-http://mcp-studio.localhost}"
       # Service Config
-      - "traefik.http.services.mcp-studio.loadbalancer.server.port=8001"
+      - "traefik.http.services.mcp-studio-frontend.loadbalancer.server.port=8001"
 
 networks:
   mcp-studio-network:

@@ -43,7 +43,6 @@ export interface ToolCategory {
   icon?: string;
   count?: number;
 }
-}
 
 export interface ToolParameter {
   name: string;
@@ -110,8 +109,8 @@ export interface UiState {
   sidebarOpen: boolean;
   currentView: 'dashboard' | 'servers' | 'tools' | 'settings' | 'explore';
   selectedServerId: string | null;
-  selectedTool: { 
-    serverId: string; 
+  selectedTool: {
+    serverId: string;
     toolId: string;
     tab?: 'test' | 'documentation' | 'history';
   } | null;
@@ -192,4 +191,12 @@ export interface ToolExecutionEvent {
   status: 'pending' | 'running' | 'completed' | 'failed';
   result?: any;
   error?: string;
+}
+
+export interface ToolExecutionResult {
+  stdout?: string;
+  stderr?: string;
+  result?: any;
+  status?: string;
+  execution_time?: number;
 }

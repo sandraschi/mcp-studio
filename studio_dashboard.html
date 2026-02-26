@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Studio - Mission Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Toastify for notifications -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        midnight: { 900: '#0a0a0f', 800: '#12121a', 700: '#1a1a25' },
+                        accent: { 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' },
+                        glow: { cyan: '#22d3ee', purple: '#a855f7', pink: '#ec4899' }
+                    }
+                }
+            }
+        }
+    </script>    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+
+<body class="bg-midnight-900 text-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="glass sticky top-0 z-50 border-b border-white/10">
+        <div class="max-w-7xl mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <h1 class="text-2xl font-bold gradient-text">MCP Studio</h1>
+                    <span class="text-xs text-gray-500 mono">v0.1.0</span>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div id="status-indicator" class="flex items-center gap-2 text-sm">
+                        <span class="w-2 h-2 rounded-full bg-green-500 pulse"></span>
+                        <span class="text-gray-400">Ready</span>
+                    </div>
+                    <div class="text-sm text-gray-500">
+                        <span id="repo-count">0</span> repos | <span id="server-count">0</span> servers
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="toggleTheme()" id="theme-toggle"
+                            class="p-2 rounded-lg hover:bg-white/5 transition-colors" title="Toggle theme">
+                            <span id="theme-icon-dark" class="text-xl">🌙</span>
+                            <span id="theme-icon-light" class="text-xl hidden">☀️</span>
+                        </button>
+                        <button onclick="showHelp()" class="p-2 rounded-lg hover:bg-white/5 transition-colors"
+                            title="Help">
+                            <span class="text-xl">❓</span>
+                        </button>
+                        <button onclick="showLogs()" class="p-2 rounded-lg hover:bg-white/5 transition-colors"
+                            title="View logs">
+                            <span class="text-xl">📋</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Tabs -->
+    <div class="border-b border-white/10">
+        <div class="max-w-7xl mx-auto px-6">
+            <nav class="flex gap-8">
+                <button onclick="switchTab('overview')" id="tab-overview"
+                    class="py-4 px-2 text-sm font-medium tab-active">
+                    📊 Overview
+                </button>
+                <button onclick="switchTab('clients')" id="tab-clients"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+                    🔌 MCP Clients
+                </button>
+                <button onclick="switchTab('repos')" id="tab-repos"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+                    📁 Repositories
+                </button>
+                <button onclick="switchTab('tools')" id="tab-tools"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+                    🔧 Tools
+                </button>
+                <button onclick="switchTab('console')" id="tab-console"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+                    💻 Console
+                </button>
+                <button onclick="switchTab('ai')" id="tab-ai"
+                    class="py-4 px-2 text-sm font-medium text-gray-400 hover:text-white">
+                    🤖 AI Assistant
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <!-- Overview Tab -->
+        <div id="content-overview" class="tab-content">
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="glass rounded-xl p-6 card-hover">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-lg bg-indigo-500/20 flex items-center justify-center text-2xl">🔌
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold" id="stat-clients">0</div>
+                            <div class="text-sm text-gray-400">MCP Clients</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="glass rounded-xl p-6 card-hover">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-lg bg-green-500/20 flex items-center justify-center text-2xl">📁
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold" id="stat-repos">0</div>
+                            <div class="text-sm text-gray-400">MCP Repos</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="glass rounded-xl p-6 card-hover">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-lg bg-purple-500/20 flex items-center justify-center text-2xl">🔧
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold" id="stat-tools">0</div>
+                            <div class="text-sm text-gray-400">Total Tools</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="glass rounded-xl p-6 card-hover">
+                    <div class="flex items-center gap-4">
+                        <div class="w-12 h-12 rounded-lg bg-cyan-500/20 flex items-center justify-center text-2xl">✅
+                        </div>
+                        <div>
+                            <div class="text-2xl font-bold" id="stat-sota">0</div>
+                            <div class="text-sm text-gray-400">SOTA Repos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Two Column Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Discovered Clients -->
+                <div class="glass rounded-xl overflow-hidden">
+                    <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                        <h2 class="font-semibold">🔌 Discovered MCP Clients</h2>
+                        <button onclick="loadClients()"
+                            class="text-xs text-indigo-400 hover:text-indigo-300">Refresh</button>
+                    </div>
+                    <div id="clients-list" class="p-4 space-y-3 max-h-96 overflow-y-auto">
+                        <div class="text-gray-500 text-sm">Loading...</div>
+                    </div>
+                </div>
+
+                <!-- Repo Health -->
+                <div class="glass rounded-xl overflow-hidden">
+                    <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                        <h2 class="font-semibold">📊 Repository Health</h2>
+                        <button onclick="loadRepos()"
+                            class="text-xs text-indigo-400 hover:text-indigo-300">Scan</button>
+                    </div>
+                    <div id="repos-health" class="p-4 space-y-3 max-h-96 overflow-y-auto">
+                        <div class="text-gray-500 text-sm">Click "Scan" to analyze repos...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Log -->
+            <div class="mt-8 glass rounded-xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                    <h2 class="font-semibold">📋 Activity Log</h2>
+                    <span class="text-xs text-gray-500" id="log-count">0 entries</span>
+                </div>
+                <div id="activity-log" class="p-4 mono text-xs max-h-48 overflow-y-auto bg-black/30">
+                    <div class="text-gray-500">Waiting for activity...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Clients Tab -->
+        <div id="content-clients" class="tab-content hidden">
+            <div class="glass rounded-xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-white/10">
+                    <h2 class="font-semibold">🔌 MCP Client Configurations</h2>
+                    <p class="text-sm text-gray-400 mt-1">Servers discovered from Claude Desktop, Cursor, Windsurf, etc.
+                    </p>
+                </div>
+                <div id="clients-detail" class="p-6">
+                    <div class="text-gray-500">Loading client configurations...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Repos Tab -->
+        <div id="content-repos" class="tab-content hidden">
+            <!-- BIG SCANNER BUTTON -->
+            <div class="glass rounded-xl overflow-hidden mb-6">
+                <div class="p-8 text-center">
+                    <h2 class="text-3xl font-bold gradient-text mb-4">🔍 MCP Repository Scanner</h2>
+                    <p class="text-gray-400 mb-6">Scan all 95+ MCP repositories for SOTA compliance, tools, and issues
+                    </p>
+                    <button onclick="loadRepos()"
+                        class="px-12 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl text-xl font-bold shadow-lg transform hover:scale-105 transition-all duration-200">
+                        ▶️ START REPO SCAN
+                    </button>
+                </div>
+            </div>
+
+            <!-- LIVE SCAN MONITOR -->
+            <div id="scan-monitor-section" class="glass rounded-xl overflow-hidden mb-6 hidden">
+                <div class="px-6 py-4 border-b border-white/10">
+                    <h3 class="font-semibold text-lg">📈 Live Scan Progress</h3>
+                </div>
+                <div class="p-6">
+                    <div class="max-h-96 overflow-y-auto bg-black/30 rounded-lg p-4">
+                        <div id="scan-monitor-content" class="text-sm text-gray-300 font-mono space-y-1">
+                            <div class="text-blue-400">Initializing scan monitor...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass rounded-xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                    <div>
+                        <h2 class="font-semibold">📁 Repository Analysis</h2>
+                        <p class="text-sm text-gray-400 mt-1">Static analysis of MCP repos in /app/repos</p>
+                    </div>
+                    <div class="flex gap-4">
+                        <select id="repo-filter"
+                            class="bg-midnight-800 border border-white/10 rounded px-3 py-1 text-sm">
+                            <option value="all">All</option>
+                            <option value="sota">✅ SOTA</option>
+                            <option value="improvable">⚠️ Improvable</option>
+                            <option value="runt">🐛 Issues</option>
+                        </select>
+                        <button onclick="showScannerCriteria()"
+                            class="px-4 py-1 bg-purple-600/50 hover:bg-purple-600/70 rounded text-sm border border-purple-500/30"
+                            title="View classification criteria">
+                            📋 Criteria
+                        </button>
+                        <button onclick="loadRepos()"
+                            class="px-4 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-sm">
+                            🔍 Scan
+                        </button>
+                    </div>
+                </div>
+                <div id="repos-detail" class="p-6">
+                    <div class="text-gray-500">Click "Scan" to analyze repositories...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tools Tab -->
+        <div id="content-tools" class="tab-content hidden">
+            <div class="glass rounded-xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                    <div>
+                        <h2 class="font-semibold">🔧 Tool Explorer</h2>
+                        <p class="text-sm text-gray-400 mt-1">Browse tools from your MCP repos</p>
+                    </div>
+                    <div class="flex gap-4 items-center">
+                        <select id="tools-repo-select" onchange="loadRepoTools()"
+                            class="bg-midnight-800 border border-white/10 rounded-lg px-4 py-2 text-sm min-w-64">
+                            <option value="">Select a repository...</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="tools-detail" class="p-6">
+                    <div class="text-center py-12 text-gray-500">
+                        <div class="text-4xl mb-4">🔧</div>
+                        <div>Select a repository above to explore its tools</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Console Tab -->
+        <div id="content-console" class="tab-content hidden">
+            <div class="glass rounded-xl overflow-hidden">
+                <div class="px-6 py-4 border-b border-white/10">
+                    <h2 class="font-semibold">💻 Execution Console</h2>
+                    <p class="text-sm text-gray-400 mt-1">Execute tools without an LLM - connect to a server first in
+                        the Tools tab</p>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Connected Server</label>
+                            <select id="console-server"
+                                class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
+                                <option value="">Select a connected server...</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">Connect to servers via the Tools tab first</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Tool</label>
+                            <select id="console-tool"
+                                class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
+                                <option value="">Select a tool...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Tool description/schema -->
+                    <div id="tool-schema" class="mt-4 hidden"></div>
+
+                    <div class="mt-6">
+                        <label class="block text-sm font-medium mb-2">Parameters (JSON)</label>
+                        <textarea id="console-params"
+                            class="w-full h-40 bg-midnight-800 border border-white/10 rounded px-3 py-2 mono text-sm"
+                            placeholder='{"key": "value"}'>{}</textarea>
+                    </div>
+                    <div class="mt-4 flex gap-4">
+                        <button onclick="executeToolConsole()"
+                            class="px-6 py-2 bg-green-600 hover:bg-green-500 rounded font-medium">
+                            ▶ Execute Tool
+                        </button>
+                        <button
+                            onclick="document.getElementById('console-result').textContent = 'Ready...'; document.getElementById('console-result').className = 'bg-black/30 rounded p-4 mono text-sm min-h-32 overflow-auto';"
+                            class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded font-medium">
+                            Clear
+                        </button>
+                    </div>
+                    <div class="mt-6">
+                        <label class="block text-sm font-medium mb-2">Result</label>
+                        <pre id="console-result"
+                            class="bg-black/30 rounded p-4 mono text-sm min-h-32 max-h-96 overflow-auto">Ready...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Assistant Tab -->
+        <div id="content-ai" class="tab-content hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left: Chat Interface -->
+                <div class="lg:col-span-2 glass rounded-xl overflow-hidden flex flex-col"
+                    style="height: 90vh; min-height: 800px;">
+                    <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                        <div class="flex-1">
+                            <h2 class="font-semibold flex items-center gap-2">
+                                🤖 AI Assistant
+                                <span id="ai-status" class="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-400">Not
+                                    Connected</span>
+                            </h2>
+                            <div class="flex items-center gap-3 mt-2">
+                                <p class="text-sm text-gray-400">Powered by Ollama</p>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs text-gray-500">Personality:</label>
+                                    <select id="ai-preprompt"
+                                        class="bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs"
+                                        onchange="updatePreprompt()">
+                                        <option value="">⏳ Loading...</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="clearAIChat()"
+                                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-medium"
+                                title="Clear chat">
+                                🗑️ Clear
+                            </button>
+                            <button onclick="connectAI()" id="ai-connect-btn"
+                                class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm font-medium">
+                                🔌 Connect to LLM
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Chat Messages -->
+                    <div id="ai-chat" class="flex-1 p-4 overflow-y-auto space-y-4">
+                        <div class="text-center text-gray-500 py-8">
+                            <div class="text-4xl mb-4">🧠</div>
+                            <div>Connect to local-llm-mcp to start chatting</div>
+                            <div class="text-sm mt-2">The AI can analyze your MCP repos, suggest improvements, and help
+                                with tool design</div>
+                        </div>
+                    </div>
+
+                    <!-- Input Area -->
+                    <div class="p-4 border-t border-white/10">
+                        <div class="flex gap-2">
+                            <textarea id="ai-input"
+                                class="flex-1 bg-midnight-800 border border-white/10 rounded-lg px-4 py-3 text-sm resize-none"
+                                rows="2" placeholder="Ask about your MCP servers, tools, or get suggestions..."
+                                onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendAIMessage();}"></textarea>
+                            <button onclick="sendAIMessage()"
+                                class="px-6 bg-purple-600 hover:bg-purple-500 rounded-lg font-medium">
+                                Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Quick Actions & Context -->
+                <div class="space-y-6">
+                    <!-- Tools Panel -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10">
+                            <h3 class="font-semibold text-sm">🤖 AI Tools</h3>
+                        </div>
+                        <div class="p-4 space-y-3">
+                            <div>
+                                <label class="text-xs text-gray-400 flex items-center gap-2">
+                                    <input type="checkbox" id="ai-include-repos" class="rounded"> Include repo list
+                                </label>
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400">📄 Read file/folder</label>
+                                <input id="ai-file-path" type="text" placeholder="repo-name/src/main.py"
+                                    class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs">
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400">🌐 Web search</label>
+                                <input id="ai-web-search" type="text" placeholder="FastMCP best practices"
+                                    class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-2 py-1 text-xs">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Preprompt Manager -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10">
+                            <h3 class="font-semibold text-sm">💬 Preprompt Manager</h3>
+                        </div>
+                        <div class="p-4 space-y-3">
+                            <!-- AI Refine -->
+                            <div>
+                                <label class="text-xs text-gray-400 mb-1 block">🤖 AI Refine (Generate)</label>
+                                <div class="flex gap-2">
+                                    <input id="ai-refine-text" type="text"
+                                        placeholder="coin collector, chef, detective..."
+                                        class="flex-1 bg-midnight-800 border border-white/10 rounded px-2 py-1.5 text-xs">
+                                    <button onclick="aiRefinePreprompt()"
+                                        class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded text-xs font-medium whitespace-nowrap">
+                                        Generate
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Import MD File -->
+                            <div>
+                                <label class="text-xs text-gray-400 mb-1 block">📄 Import .md File</label>
+                                <input id="preprompt-file-upload" type="file" accept=".md,.txt"
+                                    onchange="importPrepromptFile(this)"
+                                    class="w-full text-xs bg-midnight-800 border border-white/10 rounded px-2 py-1.5 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-purple-600 file:text-white hover:file:bg-purple-500">
+                            </div>
+
+                            <!-- Library Browser -->
+                            <div>
+                                <button onclick="togglePrepromptLibrary()"
+                                    class="w-full text-left p-2 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium">
+                                    📚 Browse Library
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Prompts -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10">
+                            <h3 class="font-semibold text-sm">⚡ Quick Prompts</h3>
+                        </div>
+                        <div class="p-4 space-y-2">
+                            <button
+                                onclick="setAIPrompt('Analyze my MCP zoo and identify repos that need the most improvement', true)"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                                🔍 Analyze repos
+                            </button>
+                            <button
+                                onclick="setAIPrompt('Suggest which tools could be combined into portmanteau patterns', true)"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                                🔧 Suggest portmanteaus
+                            </button>
+                            <button
+                                onclick="setAIPrompt('Review tool naming conventions and suggest improvements', true)"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                                🔍 Review naming
+                            </button>
+                            <button onclick="askWithWebSearch('FastMCP 2.x best practices and patterns')"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                                🌐 FastMCP best practices
+                            </button>
+                            <button
+                                onclick="setAIPrompt('Generate a summary of all my MCP servers and their capabilities', true)"
+                                class="w-full text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-sm">
+                                📊 Zoo summary
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Context -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10">
+                            <h3 class="font-semibold text-sm">📋 Context</h3>
+                        </div>
+                        <div class="p-4 text-sm text-gray-400 space-y-2">
+                            <div class="flex justify-between">
+                                <span>Repos scanned:</span>
+                                <span id="ai-context-repos" class="text-white">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Total tools:</span>
+                                <span id="ai-context-tools" class="text-white">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>SOTA repos:</span>
+                                <span id="ai-context-sota" class="text-green-400">0</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Issues:</span>
+                                <span id="ai-context-runts" class="text-red-400">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Model Settings -->
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+                            <h3 class="font-semibold text-sm">🧠 Model</h3>
+                            <button onclick="loadOllamaModels()"
+                                class="text-xs text-purple-400 hover:text-purple-300">🔄
+                                Refresh</button>
+                        </div>
+                        <div class="p-4 space-y-3">
+                            <div>
+                                <label class="text-xs text-gray-400">Ollama Model</label>
+                                <select id="ai-model"
+                                    class="w-full mt-1 bg-midnight-800 border border-white/10 rounded px-3 py-2 text-sm">
+                                    <option value="">Loading models...</option>
+                                </select>
+                            </div>
+                            <div id="ai-model-info" class="text-xs text-gray-500">
+                                Click Refresh to load available Ollama models
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Detail Modal -->
+    <div id="modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4"
+        onclick="if(event.target.id==='modal'){closeModal();}">
+        <div class="glass rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                <h2 id="modal-title" class="font-semibold text-lg">Details</h2>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            <div id="modal-content" class="p-6 overflow-y-auto max-h-[70vh]">
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+
+                        <!-- Preprompt Library Browser Modal -->
+                        <div id="library-modal"
+                            class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center z-50"
+                            onclick="if(event.target.id==='library-modal'){closePrepromptLibrary();}">
+                            <div class="glass rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col m-4"
+                                onclick="event.stopPropagation()">
+                                <!-- Modal Header -->
+                                <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                                    <div>
+                                        <h2 class="text-xl font-semibold">📚 Preprompt Library</h2>
+                                        <p class="text-sm text-gray-400 mt-1"><span id="library-count">0</span>
+                                            personalities</p>
+                                    </div>
+                                    <div class="flex gap-2 items-center">
+                                        <input id="library-search" type="text" placeholder="Search..."
+                                            class="bg-midnight-800 border border-white/10 rounded px-3 py-1.5 text-sm w-48"
+                                            oninput="filterLibrary()">
+                                        <select id="library-filter"
+                                            class="bg-midnight-800 border border-white/10 rounded px-3 py-1.5 text-sm"
+                                            onchange="filterLibrary()">
+                                            <option value="">All Sources</option>
+                                            <option value="builtin">Built-in</option>
+                                            <option value="ai_generated">AI Generated</option>
+                                            <option value="imported">Imported</option>
+                                            <option value="user">User Created</option>
+                                        </select>
+                                        <button onclick="closePrepromptLibrary()"
+                                            class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm">
+                                            ✕
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Modal Content -->
+                                <div id="library-content" class="flex-1 overflow-y-auto p-6 space-y-3">
+                                    <div class="text-center text-gray-500 py-8">
+                                        <div class="text-4xl mb-4">⏳</div>
+                                        <div>Loading preprompts...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Preprompt Editor Modal -->
+                        <div id="editor-modal"
+                            class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center z-50"
+                            onclick="if(event.target.id==='editor-modal'){closeEditor();}">
+                            <div class="glass rounded-xl w-full max-w-3xl m-4" onclick="event.stopPropagation()">
+                                <div class="px-6 py-4 border-b border-white/10">
+                                    <h2 class="text-xl font-semibold">✏️ Edit Preprompt</h2>
+                                </div>
+                                <div class="p-6 space-y-4">
+                                    <div>
+                                        <label class="text-sm text-gray-400 block mb-2">Name</label>
+                                        <input id="edit-name" type="text"
+                                            class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2">
+                                    </div>
+                                    <div class="flex gap-4">
+                                        <div class="flex-1">
+                                            <label class="text-sm text-gray-400 block mb-2">Emoji</label>
+                                            <input id="edit-emoji" type="text" maxlength="2"
+                                                class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2 text-2xl text-center">
+                                        </div>
+                                        <div class="flex-1">
+                                            <label class="text-sm text-gray-400 block mb-2">Source</label>
+                                            <input id="edit-source" type="text" readonly
+                                                class="w-full bg-midnight-700 border border-white/10 rounded px-3 py-2 text-gray-500">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="text-sm text-gray-400 block mb-2">Preprompt Text <span
+                                                id="edit-char-count" class="text-xs text-gray-500"></span></label>
+                                        <textarea id="edit-prompt" rows="10"
+                                            class="w-full bg-midnight-800 border border-white/10 rounded px-3 py-2 font-mono text-sm"
+                                            oninput="updateCharCount()"></textarea>
+                                    </div>
+                                    <div class="flex gap-2 justify-end">
+                                        <button onclick="closeEditor()"
+                                            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">Cancel</button>
+                                        <button onclick="saveEditedPreprompt()"
+                                            class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded">Save
+                                            Changes</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+</body>
+
+</html>

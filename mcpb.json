@@ -1,24 +1,35 @@
 {
   "name": "mcp-studio",
   "version": "1.0.0",
-  "description": "MCP Studio - Professional MCP Server Management and Development Platform",
-  "author": "MCP Studio Team",
-  "license": "MIT",
-  "mcp": {
-    "version": "2.12.0",
-    "server": {
-      "command": "python",
-      "args": ["-m", "mcp_studio.main"],
-      "transport": "stdio"
-    },
-    "capabilities": {
-      "tools": true,
-      "resources": true,
-      "prompts": true
-    }
+  "type": "server",
+  "runtime": "python",
+  "entry_point": "src/mcp_studio/main.py",
+  "dependencies": [
+    "fastmcp>=2.14.4,<3.0.0"
+  ],
+  "build": {
+    "include": [
+      "src/**/*",
+      "README.md",
+      "LICENSE",
+      "glama.json"
+    ],
+    "exclude": [
+      "tests/",
+      ".git/",
+      "__pycache__/",
+      "*.pyc",
+      ".venv/",
+      "dist/",
+      "build/",
+      "target/",
+      "docs/",
+      "scripts/"
+    ]
   },
-  "dependencies": {
-    "python": ">=3.10.0",
-    "fastmcp": ">=2.12.0"
+  "scripts": {
+    "build": "mcpb build",
+    "pack": "mcpb pack . dist/mcp-studio.mcpb",
+    "test": "python -m pytest"
   }
 }

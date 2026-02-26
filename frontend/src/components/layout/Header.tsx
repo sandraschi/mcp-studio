@@ -1,14 +1,28 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../contexts/AppContext';
-import { BellIcon, MenuIcon, MoonIcon, SunIcon } from '../common/Icons';
+import { BellIcon, MenuIcon, MoonIcon, SunIcon, ExternalLinkIcon, ChevronDownIcon } from '../common/Icons';
 import SearchBar from '../common/SearchBar';
 import UserMenu from '../common/UserMenu';
+import { useEcosystem } from '../../hooks/useEcosystem';
 
 const Header: React.FC = () => {
   const { state, toggleDarkMode, toggleSidebar, addNotification } = useApp();
+  const { apps, launchApp } = useEcosystem();
   const { darkMode, notifications } = state;
-  
+  const [showApps, setShowApps] = useState(false);
+  const appsRef = useRef<HTMLDivElement>(null);
+
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (appsRef.current && !appsRef.current.contains(event.target as Node)) {
+        setShowApps(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <header className="bg-white dark:bg-gray-800 shadow-sm z-10">
@@ -28,6 +42,41 @@ const Header: React.FC = () => {
             {/* Logo */}
             <div className="hidden md:flex items-center ml-4">
               <span className="text-xl font-bold text-blue-600 dark:text-blue-400">MCP Studio</span>
+            </div>
+
+            {/* Apps Switcher */}
+            <div className="ml-8 relative" ref={appsRef}>
+              <button
+                onClick={() => setShowApps(!showApps)}
+                className="flex items-center space-x-2 text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 font-medium transition-colors p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                <ExternalLinkIcon className="h-5 w-5" />
+                <span>Our Apps</span>
+                <ChevronDownIcon className={`h-4 w-4 transition-transform ${showApps ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showApps && (
+                <div className="absolute left-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-2 z-50">
+                  <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
+                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Active Services</span>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    {apps.map(app => (
+                      <button
+                        key={app.id}
+                        onClick={() => {
+                          launchApp(app);
+                          setShowApps(false);
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 flex flex-col transition-colors"
+                      >
+                        <span className="font-medium text-gray-900 dark:text-gray-100">{app.label}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">{app.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
