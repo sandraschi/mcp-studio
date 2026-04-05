@@ -1,28 +1,29 @@
-# MCP Studio Start (reservoir ports 10724 backend, 10725 frontend per WEBAPP_PORTS.md)
-$BackendPort = 10724
-$FrontendPort = 10725
-$Root = $PSScriptRoot
+# Webapp Start - Standardized SOTA (Auto-Repaired V2.5)
+$WebPort = 10724
+$BackendPort = 10725
+$ProjectRoot = $PSScriptRoot
 
-try {
-    Push-Location (Join-Path $Root "frontend")
-    npx --yes kill-port $BackendPort $FrontendPort 2>$null
-} finally {
-    Pop-Location
+# 1. Kill any process squatting on the ports
+Write-Host "Checking for port squatters on $WebPort and $BackendPort..." -ForegroundColor Yellow
+$pids = Get-NetTCPConnection -LocalPort $WebPort, $BackendPort -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -gt 4 } | Select-Object -ExpandProperty OwningProcess -Unique
+foreach ($p in $pids) {
+    Write-Host "Found squatter (PID: $p). Terminating..." -ForegroundColor Red
+    try { Stop-Process -Id $p -Force -ErrorAction Stop } catch { Write-Host "Warning: Could not terminate PID $p." -ForegroundColor Gray }
 }
 
-Write-Host "Starting MCP Studio..." -ForegroundColor Cyan
-Write-Host "Backend: http://localhost:$BackendPort  Frontend: http://localhost:$FrontendPort" -ForegroundColor Gray
+# 2. Setup
+Set-Location $PSScriptRoot
+if (-not (Test-Path "node_modules")) { npm install }
 
-# Start backend (src.mcp_studio when run from repo root)
-$backendCmd = "Set-Location '$Root'; `$env:PYTHONPATH='$Root'; `$env:PORT='$BackendPort'; python -m uvicorn src.mcp_studio.main:app --reload --host 0.0.0.0 --port $BackendPort"
-Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCmd
+# 3. Start the Python backend (Background)
+Write-Host "Starting Python backend on port $BackendPort ..." -ForegroundColor Cyan
 
-Start-Sleep -Seconds 2
+# uv --project finds package; CWD stays script dir (no repo-root run).
+$backendCmd = "Set-Location '$PSScriptRoot'; uv run --project '$ProjectRoot' uvicorn api.server:app --host 127.0.0.1 --port $BackendPort --log-level info"
 
-# Start frontend (react-scripts uses PORT env)
-$frontendDir = Join-Path $Root "frontend"
-$frontendCmd = "Set-Location '$frontendDir'; `$env:PORT='$FrontendPort'; `$env:BROWSER='none'; npm run start"
-Start-Process powershell -ArgumentList "-NoExit", "-Command", $frontendCmd
+Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCmd -WindowStyle Normal
 
-Write-Host "Backend and frontend started. Close their windows to stop." -ForegroundColor Green
-Write-Host "Webapp: http://localhost:$FrontendPort" -ForegroundColor Cyan
+# 4. Run server (Vite dev)
+Write-Host "Starting Vite frontend on port $WebPort ..." -ForegroundColor Green
+npm run dev -- --port $WebPort --host
+

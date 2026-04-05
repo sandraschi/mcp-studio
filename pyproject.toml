@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mcp-studio"
 version = "0.2.1-beta"
-description = "MCP Studio - Management tool for MCP servers (beta): Web dashboard (FastAPI) + MCP server (FastMCP 2.13.1)"
+description = "MCP Studio - Management tool for MCP servers (beta): Web dashboard (FastAPI) + MCP server (FastMCP 3.1+)"
 authors = [{ name = "Sandra Schipal", email = "sandraschipal@hotmail.com" }]
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,7 +23,7 @@ dependencies = [
     "uvicorn>=0.23.0",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
-    "fastmcp[all]>=2.13.1",
+    "fastmcp[all]>=3.1.0,<4",
     "mcp>=1.0.0,<2.0.0",  # CRITICAL: Prevent MCP 1.16.0+ Python 3.13 incompatibility
     "anyio>=4.0.0,<5.0.0",  # CRITICAL: Prevent incompatible anyio versions
     "structlog>=23.0.0",
@@ -50,19 +50,6 @@ dev = [
 where = ["src"]
 include = ["mcp_studio*"]
 
-[tool.ruff]
-line-length = 100
-target-version = "py310"
-src = ["src"]
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP", "B", "A", "C4", "DTZ", "EM", "ISC", "ICN", "PT", "Q", "RET", "SIM", "TID", "ARG", "PLE", "PLW"]
-ignore = ["E501"]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
@@ -82,3 +69,32 @@ exclude = ["**/node_modules", "**/__pycache__", "**/.*"]
 reportMissingImports = true
 reportMissingTypeStubs = false
 pythonVersion = "3.10"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+# Hardened v13.1 Rule Set
+select = [
+    "E", "F", "I", "UP", "B", "S", "A", "ANN", "COM", "C4", "DTZ", "PIE", "T20", "PYI", "Q", "RSE", "RET", "SLF", "SIM", "TID", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "FLY", "PERF", "FURB", "LOG", "RUF"
+]
+ignore = [
+    "ANN101", # Missing type annotation for self
+    "ANN102", # Missing type annotation for cls
+    "COM812", # Trailing comma missing (handled by formatter)
+    "ISC001", # Single line implicit string concatenation (handled by formatter)
+    "PLR0913", # Too many arguments
+    "S101",   # Use of assert (standard for pytest)
+    "TRY003", # Avoid specifying long messages in exceptions
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "ANN", "PLR", "TRY", "S105", "S106", "SLF001", "ARG002", "PLC0415"]
+"server.py" = ["T20", "ARG001", "ARG002"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

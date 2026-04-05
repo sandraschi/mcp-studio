@@ -11,8 +11,14 @@ code,
 
 .glass {
     background: rgba(255, 255, 255, 0.03);
+    -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chat-container-fixed {
+    height: 90vh;
+    min-height: 800px;
 }
 
 .glow-border {
