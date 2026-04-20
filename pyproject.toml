@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mcp-studio"
 version = "0.2.1-beta"
-description = "MCP Studio - Management tool for MCP servers (beta): Web dashboard (FastAPI) + MCP server (FastMCP 3.1+)"
+description = "MCP Studio - Management tool for MCP servers (beta): Web dashboard (FastAPI) + MCP server (FastMCP 3.1.0+)"
 authors = [{ name = "Sandra Schipal", email = "sandraschipal@hotmail.com" }]
 readme = "README.md"
 requires-python = ">=3.10"

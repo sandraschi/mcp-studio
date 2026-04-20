@@ -1,9 +1,11 @@
 # MCP Studio
 
+[![FastMCP Version](https://img.shields.io/badge/FastMCP-3.1.0-blue?style=flat-square&logo=python&logoColor=white)](https://github.com/sandraschi/fastmcp) [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff) [![Built with Just](https://img.shields.io/badge/Built_with-Just-000000?style=flat-square&logo=gnu-bash&logoColor=white)](https://github.com/casey/just)
+
 **By FlowEngineer sandraschi**
 
 [![Beta](https://img.shields.io/badge/Status-Beta-orange.svg)](README.md#-beta-status)
-[![FastMCP 2.13.1](https://img.shields.io/badge/FastMCP-2.13.1-green.svg)](https://github.com/jlowin/fastmcp)
+[![FastMCP 3.1.0](https://img.shields.io/badge/FastMCP-2.13.1-green.svg)](https://github.com/jlowin/fastmcp)
 [![CI](https://img.shields.io/badge/CI-Passing-brightgreen.svg)](https://github.com/sandraschi/mcp-studio/actions)
 [![Dual Architecture](https://img.shields.io/badge/Architecture-Dual-orange.svg)](README.md#-what-is-mcp-studio)
 
@@ -16,11 +18,11 @@
 
 >  **Beta Software**: MCP Studio is currently in **beta**. Features may be incomplete, APIs may change, and there may be bugs. Use at your own risk. See [Beta Status](#-beta-status) below for details.
 
-**Dual-Architecture Platform**: A **web-based management dashboard** (FastAPI frontend) and an **MCP server** (FastMCP 2.13.1) for managing MCP servers.
+**Dual-Architecture Platform**: A **web-based management dashboard** (FastAPI frontend) and an **MCP server** (FastMCP 3.1.0) for managing MCP servers.
 
 ** This repository contains:**
 - **Web Dashboard**: FastAPI-based interface for MCP server management (work in progress)
-- **MCP Server**: FastMCP 2.13.1 server providing tools to other MCP clients (Claude Desktop, etc.)
+- **MCP Server**: FastMCP 3.1.0 server providing tools to other MCP clients (Claude Desktop, etc.)
 - **Dual Purpose**: Can be used as a web app OR as an MCP server, or both simultaneously
 
 ##  **Beta Status**
@@ -157,7 +159,7 @@ Appears in dropdown immediately!
 MCP Studio is the **central hub** for managing your entire MCP infrastructure. It's a **dual-architecture platform** that provides both:
 
 1. ** Web Dashboard** (FastAPI + React): Visual interface for browsing, testing, and managing MCP servers
-2. ** MCP Server** (FastMCP 2.13.1): Provides 12 powerful tools to other MCP clients like Claude Desktop
+2. ** MCP Server** (FastMCP 3.1.0): Provides 12 powerful tools to other MCP clients like Claude Desktop
 
 **Use it as:**
 - A standalone web application for MCP server management
@@ -197,7 +199,7 @@ One-click switching between focused MCP server configurations for different work
 - **Schema Visualization**: Interactive display of tool schemas and parameters
 - **Test Console**: Live testing interface for MCP tools with parameter forms
 
-### ** FastMCP 2.13.1 Integration**
+### ** FastMCP 3.1.0 Integration**
 - **Stdio Transport**: Bidirectional communication over stdin/stdout
 - **Type Safety**: Pydantic validation for tool parameters
 - **Async-First**: Built on Python asyncio
@@ -535,7 +537,7 @@ pytest
 MCP Studio aims to be a useful management tool for the MCP ecosystem. It provides a web interface and MCP server tools to help organize and manage MCP servers. 
 
 ### ** Built on Solid Foundations**
-Built on **FastMCP 2.13.1** and **FastAPI** for reliable performance and developer-friendly APIs.
+Built on **FastMCP 3.1.0** and **FastAPI** for reliable performance and developer-friendly APIs.
 
 ### ** Workflow Optimization**
 The **Working Sets** feature helps organize MCP servers into focused configurations for different workflows.
@@ -556,4 +558,15 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
-**MCP Studio** - Your mission control for the MCP Zoo! 
+**MCP Studio** - Your mission control for the MCP Zoo!
+
+
+## 🛡️ Industrial Quality Stack
+
+This project adheres to **SOTA 14.1** industrial standards for high-fidelity agentic orchestration:
+
+- **Python (Core)**: [Ruff](https://astral.sh/ruff) for linting and formatting. Zero-tolerance for `print` statements in core handlers (`T201`).
+- **Webapp (UI)**: [Biome](https://biomejs.dev/) for sub-millisecond linting. Strict `noConsoleLog` enforcement.
+- **Protocol Compliance**: Hardened `stdout/stderr` isolation to ensure crash-resistant JSON-RPC communication.
+- **Automation**: [Justfile](./justfile) recipes for all fleet operations (`just lint`, `just fix`, `just dev`).
+- **Security**: Automated audits via `bandit` and `safety`.
