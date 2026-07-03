@@ -1,0 +1,14 @@
+{
+    "product_name": "Mcp Studio MCP",
+    "install_dir": "%LOCALAPPDATA%\\Mcp Studio MCP",
+    "operator_exe": "mcp-studio-native.exe",
+    "backend_process_names": ["mcp-studio-native", "mcp-studio-backend"],
+    "backend_port": 10700,
+    "health_path": "/api/v1/health",
+    "diagnostics_path": "/api/v1/diagnostics",
+    "feature_smoke_path": "/api/v1/system/info",
+    "window_title_re": "Mcp Studio MCP",
+    "nsis_glob": "native/target/release/bundle/nsis/Mcp Studio MCP_*_x64-setup.exe",
+    "bridge_ok_text": "REST bridge reachable",
+    "uninstall_registry_filter": "*Mcp Studio MCP*"
+}
