@@ -1,44 +1,34 @@
 # mcp-studio
-> **Complete guide to achieving and maintaining Gold Status on Glama.ai** --- 1. [Gold Status Achievement](GOLD_STATUS_ACHIEVEMENT.md) - **Original certification** (85/100) 2. [Gold Status Update 2025-1...
 
-This project includes automated llms.txt generation for AI accessibility.
+"Mission Control for the MCP Zoo" — web dashboard (FastAPI) + MCP server (FastMCP 3.x) for managing MCP servers across the fleet. Beta (v0.2.1-beta).
+
+> Full reference: [llms-full.txt](llms-full.txt)
+
+## Key Tools
+- **MCP server discovery** — find running MCP servers on the network
+- **Server management** — start, stop, configure MCP servers via dashboard
+- **Client management** — manage IDE/desktop client configurations
+- **Repo management** — browse and clone MCP repos
+- **Working sets** — grouped collections of MCP servers for different workflows
+- **Smoke testing** — test server endpoints from the dashboard
+- **Prometheus metrics** — `/metrics` endpoint for observability
+
+## Ports
+| Port | Service |
+|------|---------|
+| 10724 | Backend (FastAPI + MCP) |
+| 10725 | Frontend (CORS origin) |
+
+## Quick Start
+```bash
+uv sync && uvicorn mcp_studio.main:app --port 10724
+```
 
 ## Docs
-- [Readme](docs\glama-platform\README.md): **Complete guide to achieving and maintaining Gold Status on Glama.ai**
-- [Readme](docs\notepadpp\README.md): **Everything you need to know about Notepad++ - from history to advanced usage**
-- [Readme](README.md): **By FlowEngineer sandraschi**
-- [Readme](docs\mcpb-packaging\README.md): **Complete guide to packaging and distributing MCP servers with MCPB**
-- [Readme](docs\glama\README.md): This directory contains documentation related to achieving GLAMA AI Gold standard status for the Adv...
-- [Readme](docs\mcp-technical\README.md): **Technical guides for MCP server development, deployment, and troubleshooting**
-- [Readme](docs\github\README.md): > **Purpose**: Comprehensive GitHub configuration guide to avoid hours of trial-and-error setup.
-- [Watchfiles Readme](WATCHFILES_README.md): This directory contains crashproofing implementation for MCP Studio using watchfiles. The crashproof...
-- [Readme](docs\development\README.md): **Guides, best practices, and lessons learned for developing notepadpp-mcp**
-- [Readme](docs\repository-protection\README.md): **Complete guide to keeping your notepadpp-mcp repository safe**
+- [README](README.md)
+- [CHANGELOG](CHANGELOG.md)
+- [llms-full.txt](llms-full.txt)
 
-## Api
-- [Discovery](src\mcp_studio\app\api\discovery.py): Api definitions and implementations
-- [Clients](src\mcp_studio\app\api\clients.py): Api definitions and implementations
-- [  Init  ](src\api\__init__.py): Api definitions and implementations
-- [Servers](src\mcp_studio\app\api\endpoints\servers.py): Endpoints definitions and implementations
-- [Websocket](src\mcp_studio\app\api\endpoints\websocket.py): Endpoints definitions and implementations
-- [Mcp Servers](src\mcp_studio\app\api\endpoints\mcp_servers.py): Endpoints definitions and implementations
-- [Repo Routes](src\mcp_studio\api\repo_routes.py): Routes definitions and implementations
-- [Smoke Test Routes](src\mcp_studio\api\smoke_test_routes.py): Routes definitions and implementations
-- [Group Routes](src\mcp_studio\api\group_routes.py): Routes definitions and implementations
-- [User](src\mcp_studio\app\models\user.py): Models definitions and implementations
-- [Mcp](src\mcp_studio\app\models\mcp.py): Models definitions and implementations
-- [Server](src\mcp_studio\app\models\server.py): Models definitions and implementations
-
-## Examples
-- [Demo Preprompts](DEMO_PREPROMPTS.md): Demo usage and code samples
-
-## Configuration
-- [Pyproject](pyproject.toml): Python project configuration and dependencies
-- [Package](frontend\package.json): Node.js project configuration and dependencies
-- [](.env): Environment variables and configuration
-- [Config](.git\config): Application configuration files
-
-## Optional
-- [Changelog](CHANGELOG.md): Project changelog information
-- [Contributing](docs\development\contributing.md): Project contributing information
-- [Roadmap](docs\roadmap.md): Project roadmap information
+## Config
+- [pyproject.toml](pyproject.toml)
+- [.env.example](.env.example)
