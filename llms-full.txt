@@ -258,7 +258,7 @@ All documentation related to:
 
 ### **Path 2: Understanding Current Status (30 min)**
 
-**For understanding notepadpp-mcp's status:**
+**For understanding mcp-studio's status:**
 
 1. [Gold Status Achievement](GOLD_STATUS_ACHIEVEMENT.md) - Original 85/100
 2. [Gold Status Update](GOLD_STATUS_UPDATE_2025_10_08.md) - Current 90/100
@@ -611,7 +611,7 @@ After:
 ### **External Links**
 
 - [Glama.ai Platform](https://glama.ai)
-- [GitHub Repository](https://github.com/sandraschi/notepadpp-mcp)
+- [GitHub Repository](https://github.com/sandraschi/mcp-studio)
 - [MCP Specification](https://modelcontextprotocol.io)
 
 ---
@@ -950,7 +950,7 @@ Source: docs\notepadpp\README.md
 
 ### **Our MCP Server Tools**
 
-The **notepadpp-mcp** server enables AI-driven automation:
+The **mcp-studio** server enables AI-driven automation:
 
 **Plugin Management**:
 ```python
@@ -1023,7 +1023,7 @@ Explore:
 
 ## 🏆 **Why This Documentation Exists**
 
-Our **notepadpp-mcp** server automates Notepad++, so we need to thoroughly understand:
+Our **mcp-studio** server automates Notepad++, so we need to thoroughly understand:
 
 ✅ **The Application**
 - What it does
@@ -1734,7 +1734,7 @@ Source: docs\mcpb-packaging\README.md
 
 **Read Time**: 15 minutes  
 **Status**: ✅ **COMPLETED** implementation  
-**Package**: dist/notepadpp-mcp.mcpb (ready!)
+**Package**: dist/mcp-studio.mcpb (ready!)
 
 ---
 
@@ -1757,12 +1757,12 @@ Source: docs\mcpb-packaging\README.md
 
 | Property | Value |
 |----------|-------|
-| **Name** | notepadpp-mcp.mcpb |
+| **Name** | mcp-studio.mcpb |
 | **Version** | 1.2.0 |
 | **Size** | 0.19 MB |
 | **Tools** | 26 |
 | **Status** | ✅ Production Ready |
-| **Location** | `dist/notepadpp-mcp.mcpb` |
+| **Location** | `dist/mcp-studio.mcpb` |
 
 ### **User Configuration**
 
@@ -1790,7 +1790,7 @@ When users install our MCPB package, they're prompted for:
 # Build MCPB package (development)
 .\scripts\build-mcpb-package.ps1 -NoSign
 
-# Output: dist/notepadpp-mcp.mcpb (0.19 MB)
+# Output: dist/mcp-studio.mcpb (0.19 MB)
 ```
 
 ### **Build Script Features**
@@ -1855,7 +1855,7 @@ When users install our MCPB package, they're prompted for:
 **Key Sections**:
 ```json
 {
-  "name": "notepadpp-mcp",
+  "name": "mcp-studio",
   "version": "1.2.0",
   "mcp": {
     "version": "2.12.0",
@@ -1880,7 +1880,7 @@ When users install our MCPB package, they're prompted for:
 ```json
 {
   "manifest_version": "0.2",
-  "name": "notepadpp-mcp",
+  "name": "mcp-studio",
   "version": "1.2.0",
   "server": {
     "type": "python",
@@ -1991,7 +1991,7 @@ When users install our MCPB package, they're prompted for:
 ### **What's Inside the MCPB Package**
 
 ```
-notepadpp-mcp.mcpb (0.19 MB)
+mcp-studio.mcpb (0.19 MB)
 ├── manifest.json              # Runtime configuration
 ├── requirements.txt           # Python dependencies
 ├── src/                       # Source code
@@ -3287,7 +3287,7 @@ Source: docs\development\README.md
 ```
 # 💻 Development Documentation
 
-**Guides, best practices, and lessons learned for developing notepadpp-mcp**
+**Guides, best practices, and lessons learned for developing mcp-studio**
 
 ---
 
@@ -3457,7 +3457,7 @@ This directory contains **development-focused documentation** including:
 ## 🏆 **Development Quality**
 
 **This documentation reflects**:
-- ✅ Real-world experience from building notepadpp-mcp
+- ✅ Real-world experience from building mcp-studio
 - ✅ Lessons learned achieving Gold Status (85/100 → 90/100)
 - ✅ Best practices for MCP server development
 - ✅ Effective AI collaboration techniques
@@ -3490,7 +3490,7 @@ Source: docs\repository-protection\README.md
 ```
 # 🛡️ Repository Protection Documentation
 
-**Complete guide to keeping your notepadpp-mcp repository safe**
+**Complete guide to keeping your mcp-studio repository safe**
 
 ---
 
@@ -3643,10 +3643,10 @@ git reset --hard HEAD@{5}
 git reset --hard backup-safe-2025-10-08
 
 # Option 3: Restore from bundle
-git clone D:\Backups\notepadpp-mcp\[latest-bundle].bundle restored
+git clone D:\Backups\mcp-studio\[latest-bundle].bundle restored
 
 # Option 4: Re-clone from GitHub (nuclear option)
-git clone https://github.com/sandraschi/notepadpp-mcp.git
+git clone https://github.com/sandraschi/mcp-studio.git
 ```
 
 ---
@@ -3692,7 +3692,7 @@ git log --oneline -5
 
 ```powershell
 # Verify backups exist
-Get-ChildItem D:\Backups\notepadpp-mcp\
+Get-ChildItem D:\Backups\mcp-studio\
 
 # Sync branches
 git checkout develop
@@ -3708,7 +3708,7 @@ git push origin develop
 
 1. **Don't Panic** - Your code is safe on GitHub
 2. **Check Reflog** - `git reflog` shows everything
-3. **Check Backups** - Look in `D:\Backups\notepadpp-mcp\`
+3. **Check Backups** - Look in `D:\Backups\mcp-studio\`
 4. **Re-clone if Needed** - GitHub has everything
 
 ### **Common Issues**
@@ -3808,9 +3808,9 @@ With these three documents and tools, you have:
 
 ### **External Resources**
 
-- [GitHub Repository](https://github.com/sandraschi/notepadpp-mcp)
-- [Issue Tracker](https://github.com/sandraschi/notepadpp-mcp/issues)
-- [Pull Requests](https://github.com/sandraschi/notepadpp-mcp/pulls)
+- [GitHub Repository](https://github.com/sandraschi/mcp-studio)
+- [Issue Tracker](https://github.com/sandraschi/mcp-studio/issues)
+- [Pull Requests](https://github.com/sandraschi/mcp-studio/pulls)
 
 ---
 
