@@ -11,7 +11,7 @@ param(
     [switch]$Test
 )
 
-Write-Host "🚀 Starting MCP Studio with Watchfiles Crashproofing" -ForegroundColor Green
+Write-Host "ðŸš€ Starting MCP Studio with Watchfiles Crashproofing" -ForegroundColor Green
 Write-Host "==================================================" -ForegroundColor Cyan
 
 # Set environment variables
@@ -32,20 +32,20 @@ Write-Host "  Health Check Interval: ${HealthCheckInterval}s" -ForegroundColor W
 Write-Host ""
 
 if ($Test) {
-    Write-Host "🧪 Running in test mode..." -ForegroundColor Yellow
+    Write-Host "ðŸ§ª Running in test mode..." -ForegroundColor Yellow
     python test_watchfiles_runner.py
 } else {
-    Write-Host "🔄 Starting crashproof runner..." -ForegroundColor Yellow
+    Write-Host "ðŸ”„ Starting crashproof runner..." -ForegroundColor Yellow
     Write-Host "Press Ctrl+C to stop gracefully" -ForegroundColor Cyan
     Write-Host ""
 
     try {
         python watchfiles_runner.py
     } catch {
-        Write-Host "✗ Failed to start watchfiles runner: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "âœ- Failed to start watchfiles runner: $($_.Exception.Message)" -ForegroundColor Red
         exit 1
     }
 }
 
 Write-Host ""
-Write-Host "👋 MCP Studio watchfiles runner stopped" -ForegroundColor Green
+Write-Host "ðŸ‘‹ MCP Studio watchfiles runner stopped" -ForegroundColor Green

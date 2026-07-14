@@ -14,7 +14,7 @@ if ($env:VIRTUAL_ENV) {
 pip install -r requirements-watchfiles.txt
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "✓ Watchfiles dependencies installed successfully" -ForegroundColor Green
+    Write-Host "âœ“ Watchfiles dependencies installed successfully" -ForegroundColor Green
     Write-Host ""
     Write-Host "To run MCP Studio with crashproofing:" -ForegroundColor Cyan
     Write-Host "  python watchfiles_runner.py" -ForegroundColor White
@@ -26,6 +26,6 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "  MCP_STUDIO_HOST=0.0.0.0" -ForegroundColor White
     Write-Host "  MCP_STUDIO_PORT=7787" -ForegroundColor White
 } else {
-    Write-Host "✗ Failed to install dependencies" -ForegroundColor Red
+    Write-Host "âœ- Failed to install dependencies" -ForegroundColor Red
     exit 1
 }

@@ -1510,6 +1510,25 @@ if __name__ == "__main__":
     import asyncio
 
     async def main():
+        HTTP_PROXY_URL = os.getenv("MCP_STUDIO_API_URL", "http://127.0.0.1:10724/mcp")
+        try:
+            import httpx
+            r = httpx.post(HTTP_PROXY_URL, json={
+                "jsonrpc": "2.0", "id": 1, "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-11-25",
+                    "capabilities": {},
+                    "clientInfo": {"name": "probe", "version": "1"}
+                }
+            }, headers={"Accept": "application/json, text/event-stream"}, timeout=0.5)
+            if r.status_code == 200:
+                from fastmcp.server import create_proxy
+                proxy = create_proxy(HTTP_PROXY_URL, name="mcp-studio")
+                proxy.run(transport="stdio")
+                return
+        except Exception:
+            pass
+
         # Auto-discover servers if enabled
         if AUTO_DISCOVERY:
             print(f"Auto-discovering MCP servers in: {', '.join(DISCOVERY_PATHS)}", file=sys.stderr)
