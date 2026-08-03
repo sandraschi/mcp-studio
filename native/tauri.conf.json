@@ -28,7 +28,7 @@
         "icon": ["icons/icon.png", "icons/icon.ico"],
         "resources": [
             "resources/mcp-studio-backend.exe",
-            "resources/.env"],
+            "resources/.env.example"],
         "windows": {
             "webviewInstallMode": {
                 "type": "skip"
@@ -41,4 +41,5 @@
     },
     "plugins": {}
 }
+
 
