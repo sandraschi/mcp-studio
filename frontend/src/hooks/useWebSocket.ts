@@ -25,7 +25,6 @@ export const useWebSocket = (
 
       ws.current.onopen = () => {
         reconnectCount.current = 0;
-        console.log('WebSocket connected');
       };
 
       ws.current.onmessage = (event) => {
@@ -38,13 +37,11 @@ export const useWebSocket = (
       };
 
       ws.current.onclose = () => {
-        console.log('WebSocket disconnected');
         if (!isMounted.current) return;
 
         // Attempt to reconnect
         if (reconnect && reconnectCount.current < reconnectAttempts) {
           reconnectCount.current += 1;
-          console.log(`Attempting to reconnect (${reconnectCount.current}/${reconnectAttempts})...`);
           
           reconnectTimeout.current = window.setTimeout(() => {
             if (isMounted.current) {

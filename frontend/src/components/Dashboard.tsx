@@ -61,7 +61,6 @@ export const Dashboard: React.FC = () => {
 
   const handleExecuteTool = (serverId: string, toolName: string) => {
     // TODO: Implement tool execution modal
-    console.log(`Execute tool ${toolName} on server ${serverId}`);
   };
 
   const filteredServers = servers.filter(server => 
@@ -92,7 +91,6 @@ export const Dashboard: React.FC = () => {
             variant="primary"
             onClick={() => {
               // TODO: Implement add server dialog
-              console.log('Add server clicked');
             }}
           >
             Add Server
@@ -145,7 +143,6 @@ export const Dashboard: React.FC = () => {
               variant="primary"
               onClick={() => {
                 // TODO: Implement add server dialog
-                console.log('Add server clicked');
               }}
             >
               <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

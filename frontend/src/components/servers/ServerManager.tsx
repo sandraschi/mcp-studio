@@ -100,7 +100,6 @@ export const ServerManager: React.FC = () => {
         }}
         onSelectServer={(server) => {
           // Handle server selection (e.g., navigate to server details)
-          console.log('Selected server:', server);
         }}
       />
 

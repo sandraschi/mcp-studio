@@ -47,7 +47,7 @@ If you prefer not to use `just`:
    uv run python -m mcp_studio.server
 
    # HTTP mode (for web dashboard)
-   uv run uvicorn mcp_studio.server:app --port 10724
+   uv run uvicorn mcp_studio.main:app --port 10724
    ```
 5. Open `http://localhost:10724` or the frontend URL.
 
