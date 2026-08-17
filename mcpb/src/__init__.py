@@ -128,7 +128,7 @@ def create_mcp_server(
     mcp = FastMCP(
         name=name,
         version=__version__,
-        description="MCP Studio - Tools for managing MCP servers and infrastructure"
+        instructions="MCP Studio - Tools for managing MCP servers and infrastructure"
     )
 
     # Store configuration for later setup
