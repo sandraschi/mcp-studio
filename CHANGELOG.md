@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.1-beta] - 2026-08-17
+
+### Fixed
+- FastMCP 3.4 migration: `description` kwarg removed -> `instructions` (server crashed on startup)
+
 ## [2.2.0] - 2025-12-02 - Complete MCP Server Lifecycle Management (CRUD)
 
 ### Added
