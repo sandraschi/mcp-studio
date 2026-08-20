@@ -52,7 +52,7 @@ result = await set_discovery_path("./mcp-servers")
 **Solution:** Created `get_default_repos_path()` function that:
 - Checks `REPOS_DIR`, `REPOS_PATH`, or `MCP_REPOS_DIR` environment variables
 - Falls back to platform-specific defaults:
-  - Windows: `%USERPROFILE%\Dev\repos`, `D:\Dev\repos`, `C:\Dev\repos`
+  - Windows: `%USERPROFILE%\Dev\repos`, `D:\Dev\repos`
   - Linux/Mac: `~/dev/repos`, `~/repos`, `/opt/repos`
 - Returns first existing path, or creates default if none exist
 

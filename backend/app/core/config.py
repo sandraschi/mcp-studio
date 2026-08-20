@@ -36,7 +36,7 @@ def get_default_repos_path() -> str:
     # Platform-specific defaults
     if os.name == 'nt':  # Windows
         # Try common Windows dev locations
-        for base in [Path.home() / "Dev" / "repos", Path("D:/Dev/repos"), Path("C:/Dev/repos")]:
+        for base in [Path.home() / "Dev" / "repos", Path("D:/Dev/repos")]:
             if base.exists():
                 return str(base)
         # Fallback to user's home/Dev/repos even if it doesn't exist yet
