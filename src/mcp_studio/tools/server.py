@@ -12,10 +12,9 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import aiohttp
-import psutil
 import structlog
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
@@ -29,7 +28,7 @@ from .decorators import (
     structured_log,
     timed,
     tool,
-    validate_input
+    validate_input,
 )
 
 logger = structlog.get_logger(__name__)
@@ -60,21 +59,19 @@ logger = structlog.get_logger(__name__)
                         "name": "Example Server",
                         "type": "python",
                         "status": "available",
-                        "tools_count": 5
+                        "tools_count": 5,
                     }
                 ]
-            }
+            },
         }
-    ]
+    ],
 )
 @structured_log(level="info", message="Discovering MCP servers")
 @timed(log_threshold=1.0)
 @cache_result(ttl_seconds=60)  # Cache for 1 minute
 async def discover_mcp_servers(
-    max_depth: int = 3,
-    include_inactive: bool = False,
-    scan_docker: bool = True
-) -> Dict[str, Any]:
+    max_depth: int = 3, include_inactive: bool = False, scan_docker: bool = True
+) -> dict[str, Any]:
     """Discover MCP servers in configured discovery paths.
 
     Args:
@@ -86,12 +83,7 @@ async def discover_mcp_servers(
         Dictionary containing discovered servers and scan statistics
     """
     discovered_servers = []
-    scan_stats = {
-        "paths_scanned": 0,
-        "files_checked": 0,
-        "servers_found": 0,
-        "errors": []
-    }
+    scan_stats = {"paths_scanned": 0, "files_checked": 0, "servers_found": 0, "errors": []}
 
     discovery_paths = settings.MCP_DISCOVERY_PATHS or []
 
@@ -105,13 +97,11 @@ async def discover_mcp_servers(
             scan_stats["paths_scanned"] += 1
 
             # Scan for different types of servers
-            servers_in_path = await _scan_path_for_servers(
-                path, max_depth, scan_docker
-            )
+            servers_in_path = await _scan_path_for_servers(path, max_depth, scan_docker)
 
             for server in servers_in_path:
                 scan_stats["files_checked"] += 1
-                
+
                 # Small delay to reduce terminal spam and CPU usage
                 await asyncio.sleep(0.05)  # 50ms delay between servers
 
@@ -124,7 +114,7 @@ async def discover_mcp_servers(
                 scan_stats["servers_found"] += 1
 
         except Exception as e:
-            error_msg = f"Error scanning path {path_str}: {str(e)}"
+            error_msg = f"Error scanning path {path_str}: {e!s}"
             scan_stats["errors"].append(error_msg)
             logger.warning("Discovery path scan failed", path=path_str, error=str(e))
 
@@ -132,7 +122,7 @@ async def discover_mcp_servers(
         "servers": discovered_servers,
         "statistics": scan_stats,
         "discovery_paths": discovery_paths,
-        "timestamp": time.time()
+        "timestamp": time.time(),
     }
 
 
@@ -158,23 +148,18 @@ async def discover_mcp_servers(
                 "name": "Example Server",
                 "version": "1.0.0",
                 "tools": ["add", "multiply", "get_weather"],
-                "status": "running"
-            }
+                "status": "running",
+            },
         }
-    ]
+    ],
 )
-@validate_input(
-    server_path=lambda x: x and len(x.strip()) > 0
-)
+@validate_input(server_path=lambda x: x and len(x.strip()) > 0)
 @structured_log(level="info", message="Getting server information")
 @retry_on_failure(max_retries=2, delay=1.0)
 @timed(log_threshold=2.0)
 async def get_server_info(
-    server_path: str,
-    timeout: float = 10.0,
-    include_tools: bool = True,
-    include_resources: bool = False
-) -> Dict[str, Any]:
+    server_path: str, timeout: float = 10.0, include_tools: bool = True, include_resources: bool = False
+) -> dict[str, Any]:
     """Get detailed information about an MCP server.
 
     Args:
@@ -195,21 +180,17 @@ async def get_server_info(
         "resources": [],
         "metadata": {},
         "health": {},
-        "timestamp": time.time()
+        "timestamp": time.time(),
     }
 
     try:
         # Determine connection method
         if server_path.startswith(("http://", "https://")):
             # Remote server
-            server_info.update(await _get_remote_server_info(
-                server_path, timeout, include_tools, include_resources
-            ))
+            server_info.update(await _get_remote_server_info(server_path, timeout, include_tools, include_resources))
         else:
             # Local server
-            server_info.update(await _get_local_server_info(
-                server_path, timeout, include_tools, include_resources
-            ))
+            server_info.update(await _get_local_server_info(server_path, timeout, include_tools, include_resources))
 
         server_info["status"] = "available"
 
@@ -243,24 +224,17 @@ async def get_server_info(
                 "connection_successful": True,
                 "response_time_ms": 150,
                 "tools_discovered": 5,
-                "server_version": "1.0.0"
-            }
+                "server_version": "1.0.0",
+            },
         }
-    ]
+    ],
 )
-@validate_input(
-    server_path=lambda x: x and len(x.strip()) > 0,
-    timeout=lambda x: x > 0 and x <= 60
-)
+@validate_input(server_path=lambda x: x and len(x.strip()) > 0, timeout=lambda x: x > 0 and x <= 60)
 @structured_log(level="info", message="Testing server connection")
 @timed(log_threshold=5.0)
 async def test_server_connection(
-    server_path: str,
-    timeout: float = 15.0,
-    test_tools: bool = True,
-    test_ping: bool = True,
-    deep_test: bool = False
-) -> Dict[str, Any]:
+    server_path: str, timeout: float = 15.0, test_tools: bool = True, test_ping: bool = True, deep_test: bool = False
+) -> dict[str, Any]:
     """Test connection to an MCP server with comprehensive diagnostics.
 
     Args:
@@ -280,7 +254,7 @@ async def test_server_connection(
         "tests_performed": [],
         "metrics": {},
         "errors": [],
-        "warnings": []
+        "warnings": [],
     }
 
     start_time = time.time()
@@ -304,11 +278,7 @@ async def test_server_connection(
                 raise FileNotFoundError(f"Server file not found: {server_path}")
 
             # Create transport and test connection
-            transport = StdioTransport(
-                command="python",
-                args=[str(server_path_obj)],
-                env=dict(os.environ)
-            )
+            transport = StdioTransport(command="python", args=[str(server_path_obj)], env=dict(os.environ))
 
             async with Client(transport) as client:
                 await client.initialize()
@@ -346,11 +316,11 @@ async def test_server_connection(
         test_results["metrics"]["connection_time_ms"] = round(connection_time, 2)
         test_results["tests_performed"].append("basic_connection")
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         test_results["errors"].append(f"Connection timeout after {timeout}s")
         test_results["connection_successful"] = False
     except Exception as e:
-        test_results["errors"].append(f"Connection failed: {str(e)}")
+        test_results["errors"].append(f"Connection failed: {e!s}")
         test_results["connection_successful"] = False
         logger.error("Server connection test failed", server_path=server_path, error=str(e))
 
@@ -383,23 +353,15 @@ async def test_server_connection(
     rate_limited=True,
     examples=[
         {
-            "input": {
-                "server_path": "/path/to/math_server.py",
-                "tool_name": "add",
-                "parameters": {"a": 5, "b": 3}
-            },
-            "output": {
-                "success": True,
-                "result": 8,
-                "execution_time_ms": 45
-            }
+            "input": {"server_path": "/path/to/math_server.py", "tool_name": "add", "parameters": {"a": 5, "b": 3}},
+            "output": {"success": True, "result": 8, "execution_time_ms": 45},
         }
-    ]
+    ],
 )
 @validate_input(
     server_path=lambda x: x and len(x.strip()) > 0,
     tool_name=lambda x: x and len(x.strip()) > 0,
-    timeout=lambda x: x > 0 and x <= 300
+    timeout=lambda x: x > 0 and x <= 300,
 )
 @rate_limited(calls_per_minute=30)  # Limit to 30 calls per minute
 @structured_log(level="info", message="Executing remote tool")
@@ -408,11 +370,11 @@ async def test_server_connection(
 async def execute_remote_tool(
     server_path: str,
     tool_name: str,
-    parameters: Dict[str, Any],
+    parameters: dict[str, Any],
     timeout: float = 30.0,
     validate_params: bool = True,
-    return_raw: bool = False
-) -> Dict[str, Any]:
+    return_raw: bool = False,
+) -> dict[str, Any]:
     """Execute a tool on a remote MCP server.
 
     Args:
@@ -434,29 +396,22 @@ async def execute_remote_tool(
         "result": None,
         "error": None,
         "metrics": {},
-        "timestamp": time.time()
+        "timestamp": time.time(),
     }
 
     start_time = time.time()
 
     try:
         logger.info(
-            "Starting tool execution",
-            server_path=server_path,
-            tool_name=tool_name,
-            param_count=len(parameters)
+            "Starting tool execution", server_path=server_path, tool_name=tool_name, param_count=len(parameters)
         )
 
         if server_path.startswith(("http://", "https://")):
             # Remote HTTP execution
-            result = await _execute_http_tool(
-                server_path, tool_name, parameters, timeout
-            )
+            result = await _execute_http_tool(server_path, tool_name, parameters, timeout)
         else:
             # Local STDIO execution
-            result = await _execute_stdio_tool(
-                server_path, tool_name, parameters, timeout, validate_params
-            )
+            result = await _execute_stdio_tool(server_path, tool_name, parameters, timeout, validate_params)
 
         execution_result["success"] = True
         execution_result["result"] = result if return_raw else _format_tool_result(result)
@@ -465,17 +420,12 @@ async def execute_remote_tool(
             "Tool execution completed successfully",
             server_path=server_path,
             tool_name=tool_name,
-            execution_time=f"{(time.time() - start_time):.3f}s"
+            execution_time=f"{(time.time() - start_time):.3f}s",
         )
 
     except Exception as e:
         execution_result["error"] = str(e)
-        logger.error(
-            "Tool execution failed",
-            server_path=server_path,
-            tool_name=tool_name,
-            error=str(e)
-        )
+        logger.error("Tool execution failed", server_path=server_path, tool_name=tool_name, error=str(e))
 
     execution_time = time.time() - start_time
     execution_result["metrics"]["execution_time_ms"] = round(execution_time * 1000, 2)
@@ -507,20 +457,14 @@ async def execute_remote_tool(
             "input": {"server_path": "/path/to/server.py", "include_schemas": True},
             "output": {
                 "tools": [
-                    {
-                        "name": "add",
-                        "description": "Add two numbers",
-                        "parameters": {"a": "number", "b": "number"}
-                    }
+                    {"name": "add", "description": "Add two numbers", "parameters": {"a": "number", "b": "number"}}
                 ],
-                "total_tools": 1
-            }
+                "total_tools": 1,
+            },
         }
-    ]
+    ],
 )
-@validate_input(
-    server_path=lambda x: x and len(x.strip()) > 0
-)
+@validate_input(server_path=lambda x: x and len(x.strip()) > 0)
 @structured_log(level="info", message="Listing server tools")
 @cache_result(ttl_seconds=120)  # Cache for 2 minutes
 @timed(log_threshold=2.0)
@@ -528,9 +472,9 @@ async def list_server_tools(
     server_path: str,
     include_schemas: bool = True,
     include_examples: bool = False,
-    filter_category: Optional[str] = None,
-    timeout: float = 15.0
-) -> Dict[str, Any]:
+    filter_category: str | None = None,
+    timeout: float = 15.0,
+) -> dict[str, Any]:
     """List all available tools on an MCP server.
 
     Args:
@@ -549,7 +493,7 @@ async def list_server_tools(
         "total_tools": 0,
         "categories": set(),
         "server_info": {},
-        "timestamp": time.time()
+        "timestamp": time.time(),
     }
 
     try:
@@ -588,9 +532,7 @@ async def list_server_tools(
         tools_result["categories"] = list(tools_result["categories"])
 
         logger.info(
-            "Successfully listed server tools",
-            server_path=server_path,
-            total_tools=tools_result["total_tools"]
+            "Successfully listed server tools", server_path=server_path, total_tools=tools_result["total_tools"]
         )
 
     except Exception as e:
@@ -602,7 +544,8 @@ async def list_server_tools(
 
 # Helper functions for tool implementations
 
-async def _scan_path_for_servers(path: Path, max_depth: int, scan_docker: bool) -> List[Dict[str, Any]]:
+
+async def _scan_path_for_servers(path: Path, max_depth: int, scan_docker: bool) -> list[dict[str, Any]]:
     """Scan a path for MCP servers."""
     servers = []
 
@@ -616,7 +559,7 @@ async def _scan_path_for_servers(path: Path, max_depth: int, scan_docker: bool) 
                     server_info = _analyze_potential_server(item, scan_docker)
                     if server_info:
                         servers.append(server_info)
-                elif item.is_dir() and not item.name.startswith('.'):
+                elif item.is_dir() and not item.name.startswith("."):
                     scan_directory(item, current_depth + 1)
         except PermissionError:
             pass  # Skip directories we can't read
@@ -631,38 +574,44 @@ async def _scan_path_for_servers(path: Path, max_depth: int, scan_docker: bool) 
     return servers
 
 
-def _analyze_potential_server(file_path: Path, scan_docker: bool) -> Optional[Dict[str, Any]]:
+def _analyze_potential_server(file_path: Path, scan_docker: bool) -> dict[str, Any] | None:
     """Analyze a file to determine if it's an MCP server."""
     server_info = None
 
     # Check Python files
-    if file_path.suffix == '.py':
+    if file_path.suffix == ".py":
         server_info = _analyze_python_server(file_path)
 
     # Check JavaScript files
-    elif file_path.suffix == '.js':
+    elif file_path.suffix == ".js":
         server_info = _analyze_js_server(file_path)
 
     # Check Docker files
-    elif scan_docker and file_path.name in ['Dockerfile', 'docker-compose.yml']:
+    elif scan_docker and file_path.name in ["Dockerfile", "docker-compose.yml"]:
         server_info = _analyze_docker_server(file_path)
 
     # Check JSON config files
-    elif file_path.suffix == '.json' and 'mcp' in file_path.name.lower():
+    elif file_path.suffix == ".json" and "mcp" in file_path.name.lower():
         server_info = _analyze_config_server(file_path)
 
     return server_info
 
 
-def _analyze_python_server(file_path: Path) -> Optional[Dict[str, Any]]:
+def _analyze_python_server(file_path: Path) -> dict[str, Any] | None:
     """Analyze a Python file to see if it's an MCP server."""
     try:
-        content = file_path.read_text(encoding='utf-8')
+        content = file_path.read_text(encoding="utf-8")
 
         # Look for MCP-related imports and patterns
         mcp_indicators = [
-            'fastmcp', 'FastMCP', 'mcp.server', '@mcp.tool',
-            'mcp_server', 'MCPServer', 'stdio', 'mcp.run'
+            "fastmcp",
+            "FastMCP",
+            "mcp.server",
+            "@mcp.tool",
+            "mcp_server",
+            "MCPServer",
+            "stdio",
+            "mcp.run",
         ]
 
         if any(indicator in content for indicator in mcp_indicators):
@@ -672,9 +621,9 @@ def _analyze_python_server(file_path: Path) -> Optional[Dict[str, Any]]:
                 "type": "python",
                 "path": str(file_path),
                 "status": "available",
-                "estimated_tools": content.count('@') + content.count('def '),
+                "estimated_tools": content.count("@") + content.count("def "),
                 "file_size": file_path.stat().st_size,
-                "modified": file_path.stat().st_mtime
+                "modified": file_path.stat().st_mtime,
             }
     except Exception:
         pass
@@ -682,15 +631,19 @@ def _analyze_python_server(file_path: Path) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _analyze_js_server(file_path: Path) -> Optional[Dict[str, Any]]:
+def _analyze_js_server(file_path: Path) -> dict[str, Any] | None:
     """Analyze a JavaScript file to see if it's an MCP server."""
     try:
-        content = file_path.read_text(encoding='utf-8')
+        content = file_path.read_text(encoding="utf-8")
 
         # Look for MCP-related patterns in JavaScript
         mcp_indicators = [
-            '@modelcontextprotocol', 'mcp-server', 'McpServer',
-            'stdio', 'process.stdin', 'process.stdout'
+            "@modelcontextprotocol",
+            "mcp-server",
+            "McpServer",
+            "stdio",
+            "process.stdin",
+            "process.stdout",
         ]
 
         if any(indicator in content for indicator in mcp_indicators):
@@ -700,9 +653,9 @@ def _analyze_js_server(file_path: Path) -> Optional[Dict[str, Any]]:
                 "type": "node",
                 "path": str(file_path),
                 "status": "available",
-                "estimated_tools": content.count('function ') + content.count('=>'),
+                "estimated_tools": content.count("function ") + content.count("=>"),
                 "file_size": file_path.stat().st_size,
-                "modified": file_path.stat().st_mtime
+                "modified": file_path.stat().st_mtime,
             }
     except Exception:
         pass
@@ -710,13 +663,13 @@ def _analyze_js_server(file_path: Path) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _analyze_docker_server(file_path: Path) -> Optional[Dict[str, Any]]:
+def _analyze_docker_server(file_path: Path) -> dict[str, Any] | None:
     """Analyze a Docker file to see if it contains an MCP server."""
     try:
-        content = file_path.read_text(encoding='utf-8')
+        content = file_path.read_text(encoding="utf-8")
 
         # Look for MCP-related patterns in Docker files
-        if 'mcp' in content.lower() or 'fastmcp' in content.lower():
+        if "mcp" in content.lower() or "fastmcp" in content.lower():
             return {
                 "id": f"docker:{file_path}",
                 "name": file_path.parent.name,
@@ -724,7 +677,7 @@ def _analyze_docker_server(file_path: Path) -> Optional[Dict[str, Any]]:
                 "path": str(file_path),
                 "status": "requires_docker",
                 "file_size": file_path.stat().st_size,
-                "modified": file_path.stat().st_mtime
+                "modified": file_path.stat().st_mtime,
             }
     except Exception:
         pass
@@ -732,24 +685,23 @@ def _analyze_docker_server(file_path: Path) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _analyze_config_server(file_path: Path) -> Optional[Dict[str, Any]]:
+def _analyze_config_server(file_path: Path) -> dict[str, Any] | None:
     """Analyze a JSON config file for MCP server configuration."""
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             config = json.load(f)
 
         # Look for MCP configuration patterns
-        if ('mcpServers' in config or 'mcp_servers' in config or
-            'servers' in config or 'tools' in config):
+        if "mcpServers" in config or "mcp_servers" in config or "servers" in config or "tools" in config:
             return {
                 "id": f"config:{file_path}",
                 "name": file_path.stem,
                 "type": "config",
                 "path": str(file_path),
                 "status": "configuration",
-                "servers_count": len(config.get('mcpServers', config.get('servers', {}))),
+                "servers_count": len(config.get("mcpServers", config.get("servers", {}))),
                 "file_size": file_path.stat().st_size,
-                "modified": file_path.stat().st_mtime
+                "modified": file_path.stat().st_mtime,
             }
     except Exception:
         pass
@@ -757,28 +709,31 @@ def _analyze_config_server(file_path: Path) -> Optional[Dict[str, Any]]:
     return None
 
 
-async def _is_server_active(server_info: Dict[str, Any]) -> bool:
+async def _is_server_active(server_info: dict[str, Any]) -> bool:
     """Check if a server is currently active."""
     try:
         if server_info["type"] == "python":
             # Quick syntax check for Python servers
-            result = subprocess.run([
-                sys.executable, "-m", "py_compile", server_info["path"]
-            ], capture_output=True, timeout=5)
+            result = await asyncio.to_thread(
+                subprocess.run,
+                [sys.executable, "-m", "py_compile", server_info["path"]],
+                capture_output=True,
+                timeout=5,
+            )
             return result.returncode == 0
 
         elif server_info["type"] == "node":
             # Basic syntax check for Node.js servers
-            result = subprocess.run([
-                "node", "--check", server_info["path"]
-            ], capture_output=True, timeout=5)
+            result = await asyncio.to_thread(
+                subprocess.run, ["node", "--check", server_info["path"]], capture_output=True, timeout=5
+            )
             return result.returncode == 0
 
         elif server_info["type"] == "docker":
             # Check if Docker is available
-            result = subprocess.run([
-                "docker", "--version"
-            ], capture_output=True, timeout=5)
+            result = await asyncio.to_thread(
+                subprocess.run, ["docker", "--version"], capture_output=True, timeout=5
+            )
             return result.returncode == 0
 
         return True  # Default to active for other types
@@ -793,22 +748,21 @@ def _detect_server_type(server_path: str) -> str:
         return "http"
 
     path = Path(server_path)
-    if path.suffix == '.py':
+    if path.suffix == ".py":
         return "python"
-    elif path.suffix == '.js':
+    elif path.suffix == ".js":
         return "node"
-    elif path.name == 'Dockerfile':
+    elif path.name == "Dockerfile":
         return "docker"
-    elif path.suffix == '.json':
+    elif path.suffix == ".json":
         return "config"
 
     return "unknown"
 
 
 async def _get_local_server_info(
-    server_path: str, timeout: float,
-    include_tools: bool, include_resources: bool
-) -> Dict[str, Any]:
+    server_path: str, timeout: float, include_tools: bool, include_resources: bool
+) -> dict[str, Any]:
     """Get information from a local MCP server."""
     server_path_obj = Path(server_path)
 
@@ -816,11 +770,7 @@ async def _get_local_server_info(
         raise FileNotFoundError(f"Server file not found: {server_path}")
 
     # Create transport and connect
-    transport = StdioTransport(
-        command="python",
-        args=[str(server_path_obj)],
-        env=dict(os.environ)
-    )
+    transport = StdioTransport(command="python", args=[str(server_path_obj)], env=dict(os.environ))
 
     server_info = {}
 
@@ -835,12 +785,7 @@ async def _get_local_server_info(
         if include_tools:
             tools = await client.list_tools()
             server_info["tools"] = [
-                {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "input_schema": tool.inputSchema
-                }
-                for tool in tools
+                {"name": tool.name, "description": tool.description, "input_schema": tool.inputSchema} for tool in tools
             ]
             server_info["tools_count"] = len(tools)
 
@@ -856,9 +801,8 @@ async def _get_local_server_info(
 
 
 async def _get_remote_server_info(
-    server_url: str, timeout: float,
-    include_tools: bool, include_resources: bool
-) -> Dict[str, Any]:
+    server_url: str, timeout: float, include_tools: bool, include_resources: bool
+) -> dict[str, Any]:
     """Get information from a remote MCP server."""
     server_info = {}
 
@@ -887,7 +831,7 @@ async def _get_remote_server_info(
     return server_info
 
 
-async def _perform_deep_connection_test(client: Client, test_results: Dict[str, Any]):
+async def _perform_deep_connection_test(client: Client, test_results: dict[str, Any]):
     """Perform deep connection testing."""
     try:
         # Test multiple tool calls
@@ -899,20 +843,16 @@ async def _perform_deep_connection_test(client: Client, test_results: Dict[str, 
                     # This would need to be adapted based on the specific tool
                     test_results["tests_performed"].append(f"tool_test_{tool.name}")
                 except Exception as e:
-                    test_results["warnings"].append(f"Tool {tool.name} test failed: {str(e)}")
+                    test_results["warnings"].append(f"Tool {tool.name} test failed: {e!s}")
 
         test_results["tests_performed"].append("deep_test")
 
     except Exception as e:
-        test_results["warnings"].append(f"Deep test failed: {str(e)}")
+        test_results["warnings"].append(f"Deep test failed: {e!s}")
 
 
 async def _execute_stdio_tool(
-    server_path: str,
-    tool_name: str,
-    parameters: Dict[str, Any],
-    timeout: float,
-    validate_params: bool
+    server_path: str, tool_name: str, parameters: dict[str, Any], timeout: float, validate_params: bool
 ) -> Any:
     """Execute a tool on a local STDIO server."""
     server_path_obj = Path(server_path)
@@ -921,11 +861,7 @@ async def _execute_stdio_tool(
         raise FileNotFoundError(f"Server file not found: {server_path}")
 
     # Create transport and connect
-    transport = StdioTransport(
-        command="python",
-        args=[str(server_path_obj)],
-        env=dict(os.environ)
-    )
+    transport = StdioTransport(command="python", args=[str(server_path_obj)], env=dict(os.environ))
 
     async with Client(transport) as client:
         await client.initialize()
@@ -938,34 +874,23 @@ async def _execute_stdio_tool(
                 raise ValueError(f"Tool '{tool_name}' not found. Available tools: {tool_names}")
 
         # Execute the tool
-        result = await asyncio.wait_for(
-            client.call_tool(tool_name, **parameters),
-            timeout=timeout
-        )
+        result = await asyncio.wait_for(client.call_tool(tool_name, **parameters), timeout=timeout)
 
         return result
 
 
-async def _execute_http_tool(
-    server_url: str,
-    tool_name: str,
-    parameters: Dict[str, Any],
-    timeout: float
-) -> Any:
+async def _execute_http_tool(server_url: str, tool_name: str, parameters: dict[str, Any], timeout: float) -> Any:
     """Execute a tool on a remote HTTP server."""
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
         tool_url = f"{server_url}/tools/{tool_name}/execute"
 
-        async with session.post(
-            tool_url,
-            json={"parameters": parameters}
-        ) as response:
+        async with session.post(tool_url, json={"parameters": parameters}) as response:
             response.raise_for_status()
             result = await response.json()
             return result.get("result", result)
 
 
-async def _list_local_tools(server_path: str, timeout: float) -> List[Dict[str, Any]]:
+async def _list_local_tools(server_path: str, timeout: float) -> list[dict[str, Any]]:
     """List tools from a local STDIO server."""
     server_path_obj = Path(server_path)
 
@@ -973,11 +898,7 @@ async def _list_local_tools(server_path: str, timeout: float) -> List[Dict[str, 
         raise FileNotFoundError(f"Server file not found: {server_path}")
 
     # Create transport and connect
-    transport = StdioTransport(
-        command="python",
-        args=[str(server_path_obj)],
-        env=dict(os.environ)
-    )
+    transport = StdioTransport(command="python", args=[str(server_path_obj)], env=dict(os.environ))
 
     async with Client(transport) as client:
         await client.initialize()
@@ -988,13 +909,13 @@ async def _list_local_tools(server_path: str, timeout: float) -> List[Dict[str, 
                 "name": tool.name,
                 "description": tool.description,
                 "inputSchema": tool.inputSchema,
-                "category": getattr(tool, "category", "utility")
+                "category": getattr(tool, "category", "utility"),
             }
             for tool in tools
         ]
 
 
-async def _list_remote_tools(server_url: str, timeout: float) -> List[Dict[str, Any]]:
+async def _list_remote_tools(server_url: str, timeout: float) -> list[dict[str, Any]]:
     """List tools from a remote HTTP server."""
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
         tools_url = f"{server_url}/tools"
@@ -1026,6 +947,7 @@ def _format_tool_result(result: Any) -> Any:
 # Alias for backwards compatibility
 discover_servers = discover_mcp_servers
 
+
 @tool(
     name="get_server_health",
     description="""Get comprehensive health information about an MCP server.
@@ -1040,16 +962,13 @@ discover_servers = discover_mcp_servers
     Returns detailed health report with recommendations.""",
     category=ToolCategory.MONITORING,
     tags=["server", "health", "monitoring", "diagnostics"],
-    estimated_runtime="2-5s"
+    estimated_runtime="2-5s",
 )
 @structured_log(level="info", message="Getting server health")
 @timed(log_threshold=3.0)
 async def get_server_health(
-    server_path: str,
-    check_tools: bool = True,
-    check_resources: bool = True,
-    timeout: float = 10.0
-) -> Dict[str, Any]:
+    server_path: str, check_tools: bool = True, check_resources: bool = True, timeout: float = 10.0
+) -> dict[str, Any]:
     """Get comprehensive health information about an MCP server."""
     health_report = {
         "server_path": server_path,
@@ -1058,7 +977,7 @@ async def get_server_health(
         "metrics": {},
         "issues": [],
         "recommendations": [],
-        "timestamp": time.time()
+        "timestamp": time.time(),
     }
 
     try:
@@ -1100,7 +1019,7 @@ async def get_server_health(
                         health_report["checks_performed"].append("file_system")
 
                 except Exception as e:
-                    health_report["issues"].append(f"Resource check failed: {str(e)}")
+                    health_report["issues"].append(f"Resource check failed: {e!s}")
 
         else:
             health_report["overall_status"] = "unhealthy"
@@ -1108,7 +1027,7 @@ async def get_server_health(
 
     except Exception as e:
         health_report["overall_status"] = "error"
-        health_report["issues"].append(f"Health check failed: {str(e)}")
+        health_report["issues"].append(f"Health check failed: {e!s}")
 
     # Generate recommendations based on issues
     if not health_report["issues"]:
@@ -1133,18 +1052,12 @@ async def get_server_health(
     category=ToolCategory.SERVER,
     tags=["server", "restart", "management"],
     estimated_runtime="5-15s",
-    requires_auth=True
+    requires_auth=True,
 )
-@validate_input(
-    server_path=lambda x: x and not x.startswith("http")
-)
+@validate_input(server_path=lambda x: x and not x.startswith("http"))
 @structured_log(level="warning", message="Restarting server")
 @timed(log_threshold=10.0)
-async def restart_server(
-    server_path: str,
-    force: bool = False,
-    timeout: float = 30.0
-) -> Dict[str, Any]:
+async def restart_server(server_path: str, force: bool = False, timeout: float = 30.0) -> dict[str, Any]:
     """Restart an MCP server process."""
     restart_result = {
         "server_path": server_path,
@@ -1152,7 +1065,7 @@ async def restart_server(
         "steps_completed": [],
         "error": None,
         "metrics": {},
-        "timestamp": time.time()
+        "timestamp": time.time(),
     }
 
     start_time = time.time()

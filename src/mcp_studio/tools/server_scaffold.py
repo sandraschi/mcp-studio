@@ -3,10 +3,10 @@
 Creates new SOTA-compliant MCP servers with all required components.
 """
 
-import shutil
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+import asyncio
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -16,113 +16,105 @@ logger = structlog.get_logger(__name__)
 
 
 async def _generate_frontend(
-    server_dir: Path,
-    server_name: str,
-    description: str,
-    author: str,
-    frontend_type: str = "fullstack"
-) -> Dict[str, Any]:
+    server_dir: Path, server_name: str, description: str, author: str, frontend_type: str = "fullstack"
+) -> dict[str, Any]:
     """Generate frontend using fullstack builder script.
-    
+
     Args:
         server_dir: Path to the server directory
         server_name: Server name
         description: Server description
         author: Author name
         frontend_type: "fullstack" or "minimal"
-    
+
     Returns:
         Dictionary with generation status
     """
     try:
         import subprocess
-        import os
-        
+
         # Path to fullstack builder script
         script_path = Path("D:/Dev/repos/mcp-central-docs/sota-scripts/fullstack-builder/new-fullstack-app.ps1")
-        
+
         if not script_path.exists():
-            return {
-                "success": False,
-                "error": f"Fullstack builder script not found: {script_path}"
-            }
-        
+            return {"success": False, "error": f"Fullstack builder script not found: {script_path}"}
+
         # Prepare command
         output_path = server_dir.parent
         cmd = [
             "pwsh",
-            "-File", str(script_path),
-            "-AppName", server_name,
-            "-Description", description,
-            "-Author", author,
-            "-OutputPath", str(output_path),
+            "-File",
+            str(script_path),
+            "-AppName",
+            server_name,
+            "-Description",
+            description,
+            "-Author",
+            author,
+            "-OutputPath",
+            str(output_path),
             "-IncludeMCP",  # Include MCP client dashboard
             "-IncludeMCPServer",  # Include MCP server (we already created it, but script will add integration)
             "-IncludeMonitoring",
             "-IncludeCI",
             "-IncludeTesting",
         ]
-        
+
         # Add more features for fullstack type
         if frontend_type == "fullstack":
-            cmd.extend([
-                "-IncludeAI",
-                "-IncludeFileUpload",
-                "-Include2FA",
-                "-IncludePWA",
-            ])
-        
+            cmd.extend(
+                [
+                    "-IncludeAI",
+                    "-IncludeFileUpload",
+                    "-Include2FA",
+                    "-IncludePWA",
+                ]
+            )
+
         # Run the script (reduced logging to debug to reduce spam)
         logger.debug(f"Calling fullstack builder: {' '.join(cmd)}")
-        result = subprocess.run(
+        # Fullstack builder runs npm installs (minutes) — off the loop.
+        result = await asyncio.to_thread(
+            subprocess.run,
             cmd,
             cwd=str(output_path),
             capture_output=True,
             text=True,
-            timeout=120  # 2 minute timeout
+            timeout=120,  # 2 minute timeout
         )
-        
+
         if result.returncode != 0:
             logger.error(f"Fullstack builder failed: {result.stderr}")
-            return {
-                "success": False,
-                "error": f"Script execution failed: {result.stderr[:500]}"
-            }
-        
+            return {"success": False, "error": f"Script execution failed: {result.stderr[:500]}"}
+
         # The script creates a new directory, but we want to merge with existing server
         # For now, we'll note that the frontend was generated separately
         # Future: merge the frontend into the existing server directory
-        
+
         frontend_dir = output_path / server_name / "frontend"
-        
+
         return {
             "success": True,
             "frontend_path": str(frontend_dir) if frontend_dir.exists() else None,
             "message": "Frontend generated using fullstack builder script",
-            "note": "Frontend may be in a separate directory - check output path"
+            "note": "Frontend may be in a separate directory - check output path",
         }
-    
+
     except subprocess.TimeoutExpired:
-        return {
-            "success": False,
-            "error": "Frontend generation timed out after 2 minutes"
-        }
+        return {"success": False, "error": "Frontend generation timed out after 2 minutes"}
     except Exception as e:
         logger.error(f"Failed to generate frontend: {e}", exc_info=True)
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}
 
 
 def _kebab_to_snake(name: str) -> str:
     """Convert kebab-case to snake_case."""
-    return name.replace('-', '_')
+    return name.replace("-", "_")
 
 
 def _kebab_to_pascal(name: str) -> str:
     """Convert kebab-case to PascalCase."""
-    return ''.join(word.capitalize() for word in name.split('-'))
+    return "".join(word.capitalize() for word in name.split("-"))
 
 
 def _generate_mcp_server_py(server_name: str, package_name: str, description: str) -> str:
@@ -138,11 +130,11 @@ app = FastMCP("{server_name}")
 @app.tool()
 async def help(level: str = "basic", topic: str | None = None) -> str:
     """Get help information about this MCP server.
-    
+
     Args:
         level: Detail level - "basic", "intermediate", or "advanced"
         topic: Optional topic to focus on
-    
+
     Returns:
         Help text for the server
     """
@@ -188,11 +180,11 @@ See individual tool docstrings for detailed information.
 @app.tool()
 async def status(level: str = "basic", focus: str | None = None) -> str:
     """Get server status and diagnostics.
-    
+
     Args:
         level: Detail level - "basic", "intermediate", or "advanced"
         focus: Optional focus area (servers, tools, system)
-    
+
     Returns:
         Status information
     """
@@ -248,7 +240,9 @@ if __name__ == "__main__":
 '''
 
 
-def _generate_pyproject_toml(server_name: str, package_name: str, description: str, author: str, license_type: str) -> str:
+def _generate_pyproject_toml(
+    server_name: str, package_name: str, description: str, author: str, license_type: str
+) -> str:
     """Generate pyproject.toml file."""
     return f'''[project]
 name = "{package_name}"
@@ -308,7 +302,7 @@ pip install -e .
 ## Usage
 
 ```bash
-python -m {server_name.replace('-', '_')}.mcp_server
+python -m {server_name.replace("-", "_")}.mcp_server
 ```
 
 ## Claude Desktop Configuration
@@ -320,7 +314,7 @@ Add to `~/.config/claude/claude_desktop_config.json`:
   "mcpServers": {{
     "{server_name}": {{
       "command": "python",
-      "args": ["-m", "{server_name.replace('-', '_')}", "mcp_server"],
+      "args": ["-m", "{server_name.replace("-", "_")}", "mcp_server"],
       "cwd": "/path/to/{server_name}"
     }}
   }}
@@ -355,7 +349,7 @@ See LICENSE file for details.
 
 def _generate_ci_workflow() -> str:
     """Generate GitHub Actions CI workflow."""
-    return '''name: CI
+    return """name: CI
 
 on:
   push:
@@ -378,7 +372,7 @@ jobs:
         run: ruff check .
       - name: Run tests
         run: pytest
-'''
+"""
 
 
 def _generate_manifest_json(server_name: str, description: str) -> str:
@@ -391,7 +385,7 @@ def _generate_manifest_json(server_name: str, description: str) -> str:
   "license": "MIT",
   "mcp": {{
     "command": "python",
-    "args": ["-m", "{server_name.replace('-', '_')}", "mcp_server"]
+    "args": ["-m", "{server_name.replace("-", "_")}", "mcp_server"]
   }}
 }}
 '''
@@ -399,7 +393,7 @@ def _generate_manifest_json(server_name: str, description: str) -> str:
 
 def _generate_gitignore() -> str:
     """Generate .gitignore file."""
-    return '''# Python
+    return """# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -443,10 +437,10 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
-'''
+"""
 
 
-def _generate_test_files(package_name: str) -> Dict[str, str]:
+def _generate_test_files(package_name: str) -> dict[str, str]:
     """Generate test file templates."""
     return {
         "tests/__init__.py": "",
@@ -481,10 +475,10 @@ async def test_server_startup():
     }
 
 
-def _generate_docs(server_name: str, description: str) -> Dict[str, str]:
+def _generate_docs(server_name: str, description: str) -> dict[str, str]:
     """Generate documentation files."""
     return {
-        "docs/README.md": f'''# {server_name} Documentation
+        "docs/README.md": f"""# {server_name} Documentation
 
 {description}
 
@@ -493,7 +487,7 @@ def _generate_docs(server_name: str, description: str) -> Dict[str, str]:
 - [MCP Server Standards](MCP_SERVER_STANDARDS.md) - MCP server development standards
 - [MCPB Standards](MCPB_STANDARDS.md) - MCPB packaging guidelines
 - [Client Rulebooks](CLIENT_RULEBOOKS/) - Client-specific integration guides
-''',
+""",
         "docs/MCP_SERVER_STANDARDS.md": '''# MCP Server Standards
 
 ## FastMCP 2.13+ Requirements
@@ -511,13 +505,13 @@ All tools must have comprehensive docstrings:
 @app.tool()
 async def my_tool(param: str) -> str:
     """Tool description.
-    
+
     Args:
         param: Parameter description
-    
+
     Returns:
         Return value description
-    
+
     Examples:
         >>> await my_tool("example")
         "result"
@@ -544,7 +538,7 @@ For servers with >15 tools, use portmanteau pattern:
 
 See: https://github.com/jlowin/fastmcp
 ''',
-        "docs/MCPB_STANDARDS.md": '''# MCPB Standards
+        "docs/MCPB_STANDARDS.md": """# MCPB Standards
 
 ## MCPB Packaging
 
@@ -566,8 +560,8 @@ Required fields:
 3. Install: `mcpb install <package-name>`
 
 See: https://modelcontextprotocol.io/packaging
-''',
-        "docs/CLIENT_RULEBOOKS/CLAUDE_DESKTOP.md": '''# Claude Desktop Integration
+""",
+        "docs/CLIENT_RULEBOOKS/CLAUDE_DESKTOP.md": """# Claude Desktop Integration
 
 ## Configuration
 
@@ -590,8 +584,8 @@ Add to `~/.config/claude/claude_desktop_config.json`:
 - Check Python path is correct
 - Verify dependencies are installed
 - Check logs in Claude Desktop
-''',
-        "docs/CLIENT_RULEBOOKS/CURSOR_IDE.md": '''# Cursor IDE Integration
+""",
+        "docs/CLIENT_RULEBOOKS/CURSOR_IDE.md": """# Cursor IDE Integration
 
 ## Configuration
 
@@ -613,8 +607,8 @@ Add to Cursor settings:
 - Tool discovery
 - Parameter autocomplete
 - Result display
-''',
-        "docs/CLIENT_RULEBOOKS/WINDSURF.md": '''# Windsurf Integration
+""",
+        "docs/CLIENT_RULEBOOKS/WINDSURF.md": """# Windsurf Integration
 
 ## Configuration
 
@@ -624,8 +618,8 @@ Windsurf uses similar configuration to Claude Desktop.
 
 - Real-time tool execution
 - Context-aware suggestions
-''',
-        "docs/CLIENT_RULEBOOKS/CLINE.md": '''# Cline Integration
+""",
+        "docs/CLIENT_RULEBOOKS/CLINE.md": """# Cline Integration
 
 ## Configuration
 
@@ -635,11 +629,11 @@ Cline supports MCP servers via configuration file.
 
 - AI-powered tool suggestions
 - Context integration
-''',
+""",
     }
 
 
-def _generate_scripts(package_name: str) -> Dict[str, str]:
+def _generate_scripts(package_name: str) -> dict[str, str]:
     """Generate script files."""
     return {
         "scripts/setup.py": '''"""Development setup script."""
@@ -654,7 +648,7 @@ def main():
 if __name__ == "__main__":
     main()
 ''',
-        "scripts/test.sh": '''#!/bin/bash
+        "scripts/test.sh": """#!/bin/bash
 # Test runner script
 
 echo "Running tests..."
@@ -664,7 +658,7 @@ echo "Running linter..."
 ruff check .
 
 echo "✅ All checks passed!"
-''',
+""",
     }
 
 
@@ -680,12 +674,12 @@ echo "✅ All checks passed!"
     - Documentation
     - DXT packaging
     - Optional React frontend (fullstack app)
-    
+
     The scaffold includes everything needed for a production-ready MCP server.
     With include_frontend=True, generates a complete fullstack app with React UI.""",
     category=ToolCategory.DISCOVERY,
     tags=["server", "scaffold", "create", "sota"],
-    estimated_runtime="5-10s"
+    estimated_runtime="5-10s",
 )
 async def create_mcp_server(
     server_name: str,
@@ -696,11 +690,11 @@ async def create_mcp_server(
     include_examples: bool = True,
     init_git: bool = True,
     include_frontend: bool = False,
-    frontend_type: str = "fullstack"
-) -> Dict[str, Any]:
+    frontend_type: str = "fullstack",
+) -> dict[str, Any]:
     """
     Create a new SOTA-compliant MCP server.
-    
+
     Args:
         server_name: Kebab-case server name (e.g., "my-awesome-server")
         description: Server description
@@ -709,34 +703,28 @@ async def create_mcp_server(
         target_path: Where to create server (default: "D:/Dev/repos")
         include_examples: Include example tools (default: True)
         init_git: Initialize git repository (default: True)
-    
+
     Returns:
         Dictionary with creation status and server path
     """
     try:
         # Validate server name
-        if not server_name or not server_name.replace('-', '').replace('_', '').isalnum():
-            return {
-                "success": False,
-                "error": "Server name must be alphanumeric with hyphens/underscores only"
-            }
-        
+        if not server_name or not server_name.replace("-", "").replace("_", "").isalnum():
+            return {"success": False, "error": "Server name must be alphanumeric with hyphens/underscores only"}
+
         # Convert to package name
         package_name = _kebab_to_snake(server_name)
-        
+
         # Create server directory
         target_dir = Path(target_path).expanduser().resolve()
         server_dir = target_dir / server_name
-        
+
         if server_dir.exists():
-            return {
-                "success": False,
-                "error": f"Directory already exists: {server_dir}"
-            }
-        
+            return {"success": False, "error": f"Directory already exists: {server_dir}"}
+
         server_dir.mkdir(parents=True, exist_ok=False)
         logger.debug(f"Creating MCP server: {server_name} at {server_dir}")
-        
+
         # Create directory structure
         (server_dir / "src" / package_name / "tools").mkdir(parents=True, exist_ok=True)
         (server_dir / "tests" / "unit").mkdir(parents=True, exist_ok=True)
@@ -744,74 +732,76 @@ async def create_mcp_server(
         (server_dir / "docs" / "CLIENT_RULEBOOKS").mkdir(parents=True, exist_ok=True)
         (server_dir / "scripts").mkdir(parents=True, exist_ok=True)
         (server_dir / ".github" / "workflows").mkdir(parents=True, exist_ok=True)
-        
+
         # Generate files
         files_created = []
-        
+
         # Main server file
         server_file = server_dir / "src" / package_name / "mcp_server.py"
-        server_file.write_text(_generate_mcp_server_py(server_name, package_name, description), encoding='utf-8')
+        server_file.write_text(_generate_mcp_server_py(server_name, package_name, description), encoding="utf-8")
         files_created.append(str(server_file.relative_to(server_dir)))
-        
+
         # Package __init__.py
-        (server_dir / "src" / package_name / "__init__.py").write_text(f'"""{description}"""\n', encoding='utf-8')
+        (server_dir / "src" / package_name / "__init__.py").write_text(f'"""{description}"""\n', encoding="utf-8")
         files_created.append(f"src/{package_name}/__init__.py")
-        
+
         # Tools __init__.py
-        (server_dir / "src" / package_name / "tools" / "__init__.py").write_text("", encoding='utf-8')
+        (server_dir / "src" / package_name / "tools" / "__init__.py").write_text("", encoding="utf-8")
         files_created.append(f"src/{package_name}/tools/__init__.py")
-        
+
         # pyproject.toml
         pyproject_file = server_dir / "pyproject.toml"
-        pyproject_file.write_text(_generate_pyproject_toml(server_name, package_name, description, author, license_type), encoding='utf-8')
+        pyproject_file.write_text(
+            _generate_pyproject_toml(server_name, package_name, description, author, license_type), encoding="utf-8"
+        )
         files_created.append("pyproject.toml")
-        
+
         # README.md
         readme_file = server_dir / "README.md"
-        readme_file.write_text(_generate_readme(server_name, description, author), encoding='utf-8')
+        readme_file.write_text(_generate_readme(server_name, description, author), encoding="utf-8")
         files_created.append("README.md")
-        
+
         # .gitignore
         gitignore_file = server_dir / ".gitignore"
-        gitignore_file.write_text(_generate_gitignore(), encoding='utf-8')
+        gitignore_file.write_text(_generate_gitignore(), encoding="utf-8")
         files_created.append(".gitignore")
-        
+
         # CI/CD workflow
         ci_file = server_dir / ".github" / "workflows" / "ci.yml"
-        ci_file.write_text(_generate_ci_workflow(), encoding='utf-8')
+        ci_file.write_text(_generate_ci_workflow(), encoding="utf-8")
         files_created.append(".github/workflows/ci.yml")
-        
+
         # manifest.json (DXT packaging)
         manifest_file = server_dir / "manifest.json"
-        manifest_file.write_text(_generate_manifest_json(server_name, description), encoding='utf-8')
+        manifest_file.write_text(_generate_manifest_json(server_name, description), encoding="utf-8")
         files_created.append("manifest.json")
-        
+
         # Test files
         test_files = _generate_test_files(package_name)
         for test_path, content in test_files.items():
             test_file = server_dir / test_path
-            test_file.write_text(content, encoding='utf-8')
+            test_file.write_text(content, encoding="utf-8")
             files_created.append(test_path)
-        
+
         # Documentation
         doc_files = _generate_docs(server_name, description)
         for doc_path, content in doc_files.items():
             doc_file = server_dir / doc_path
-            doc_file.write_text(content, encoding='utf-8')
+            doc_file.write_text(content, encoding="utf-8")
             files_created.append(doc_path)
-        
+
         # Scripts
         script_files = _generate_scripts(package_name)
         for script_path, content in script_files.items():
             script_file = server_dir / script_path
-            script_file.write_text(content, encoding='utf-8')
-            if script_path.endswith('.sh'):
+            script_file.write_text(content, encoding="utf-8")
+            if script_path.endswith(".sh"):
                 script_file.chmod(0o755)  # Make executable
             files_created.append(script_path)
-        
+
         # LICENSE file
         if license_type == "MIT":
-            license_content = f'''MIT License
+            license_content = f"""MIT License
 
 Copyright (c) {datetime.now().year} {author}
 
@@ -832,38 +822,34 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-'''
-            (server_dir / "LICENSE").write_text(license_content, encoding='utf-8')
+"""
+            (server_dir / "LICENSE").write_text(license_content, encoding="utf-8")
             files_created.append("LICENSE")
-        
+
         # Initialize git if requested
         git_initialized = False
         if init_git:
             try:
                 import subprocess
-                subprocess.run(
-                    ["git", "init"],
-                    cwd=server_dir,
-                    check=True,
-                    capture_output=True
+
+                await asyncio.to_thread(
+                    subprocess.run, ["git", "init"], cwd=server_dir, check=True, capture_output=True
                 )
-                subprocess.run(
-                    ["git", "add", "."],
-                    cwd=server_dir,
-                    check=True,
-                    capture_output=True
+                await asyncio.to_thread(
+                    subprocess.run, ["git", "add", "."], cwd=server_dir, check=True, capture_output=True
                 )
-                subprocess.run(
+                await asyncio.to_thread(
+                    subprocess.run,
                     ["git", "commit", "-m", "Initial commit: SOTA-compliant MCP server scaffold"],
                     cwd=server_dir,
                     check=True,
-                    capture_output=True
+                    capture_output=True,
                 )
                 git_initialized = True
                 logger.debug(f"Git repository initialized for {server_name}")
             except Exception as e:
                 logger.warning(f"Failed to initialize git: {e}")
-        
+
         # Generate frontend if requested
         frontend_generated = False
         frontend_path = None
@@ -875,7 +861,7 @@ SOFTWARE.
                     server_name=server_name,
                     description=description,
                     author=author,
-                    frontend_type=frontend_type
+                    frontend_type=frontend_type,
                 )
                 frontend_generated = frontend_result.get("success", False)
                 frontend_path = frontend_result.get("frontend_path")
@@ -884,26 +870,28 @@ SOFTWARE.
             except Exception as e:
                 logger.warning(f"Failed to generate frontend: {e}")
                 frontend_generated = False
-        
+
         next_steps = [
             f"cd {server_dir}",
             "pip install -e .",
             "Add your tools to src/{package_name}/tools/",
             "Run tests: pytest",
         ]
-        
+
         if frontend_generated:
-            next_steps.extend([
-                "",
-                "Frontend generated! Next steps:",
-                "cd frontend",
-                "npm install",
-                "npm run dev",
-                "",
-                "Or use Docker:",
-                "docker-compose up -d",
-            ])
-        
+            next_steps.extend(
+                [
+                    "",
+                    "Frontend generated! Next steps:",
+                    "cd frontend",
+                    "npm install",
+                    "npm run dev",
+                    "",
+                    "Or use Docker:",
+                    "docker-compose up -d",
+                ]
+            )
+
         return {
             "success": True,
             "server_name": server_name,
@@ -915,12 +903,9 @@ SOFTWARE.
             "sota_compliant": True,
             "frontend_generated": frontend_generated,
             "frontend_path": frontend_path,
-            "next_steps": next_steps
+            "next_steps": next_steps,
         }
-    
+
     except Exception as e:
         logger.error(f"Failed to create MCP server: {e}", exc_info=True)
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}

@@ -3,13 +3,14 @@
 Service for creating new SOTA-compliant MCP servers with all required components.
 """
 
+import asyncio
 import shutil
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-from datetime import datetime
-import structlog
 import subprocess
-import os
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import structlog
 
 logger = structlog.get_logger(__name__)
 
@@ -28,7 +29,7 @@ class ScaffoldService:
         init_git: bool = True,
         include_frontend: bool = False,
         frontend_type: str = "fullstack",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Create a new SOTA-compliant MCP server.
 
@@ -48,10 +49,7 @@ class ScaffoldService:
         """
         try:
             # Validate server name
-            if (
-                not server_name
-                or not server_name.replace("-", "").replace("_", "").isalnum()
-            ):
+            if not server_name or not server_name.replace("-", "").replace("_", "").isalnum():
                 return {
                     "success": False,
                     "error": "Server name must be alphanumeric with hyphens/underscores only",
@@ -74,14 +72,10 @@ class ScaffoldService:
             logger.debug(f"Creating MCP server: {server_name} at {server_dir}")
 
             # Create directory structure
-            (server_dir / "src" / package_name / "tools").mkdir(
-                parents=True, exist_ok=True
-            )
+            (server_dir / "src" / package_name / "tools").mkdir(parents=True, exist_ok=True)
             (server_dir / "tests" / "unit").mkdir(parents=True, exist_ok=True)
             (server_dir / "tests" / "integration").mkdir(parents=True, exist_ok=True)
-            (server_dir / "docs" / "CLIENT_RULEBOOKS").mkdir(
-                parents=True, exist_ok=True
-            )
+            (server_dir / "docs" / "CLIENT_RULEBOOKS").mkdir(parents=True, exist_ok=True)
             (server_dir / "scripts").mkdir(parents=True, exist_ok=True)
             (server_dir / ".github" / "workflows").mkdir(parents=True, exist_ok=True)
 
@@ -97,23 +91,17 @@ class ScaffoldService:
             files_created.append(str(server_file.relative_to(server_dir)))
 
             # Package __init__.py
-            (server_dir / "src" / package_name / "__init__.py").write_text(
-                f'"""{description}"""\n', encoding="utf-8"
-            )
+            (server_dir / "src" / package_name / "__init__.py").write_text(f'"""{description}"""\n', encoding="utf-8")
             files_created.append(f"src/{package_name}/__init__.py")
 
             # Tools __init__.py
-            (server_dir / "src" / package_name / "tools" / "__init__.py").write_text(
-                "", encoding="utf-8"
-            )
+            (server_dir / "src" / package_name / "tools" / "__init__.py").write_text("", encoding="utf-8")
             files_created.append(f"src/{package_name}/tools/__init__.py")
 
             # pyproject.toml
             pyproject_file = server_dir / "pyproject.toml"
             pyproject_file.write_text(
-                self._generate_pyproject_toml(
-                    server_name, package_name, description, author, license_type
-                ),
+                self._generate_pyproject_toml(server_name, package_name, description, author, license_type),
                 encoding="utf-8",
             )
             files_created.append("pyproject.toml")
@@ -138,9 +126,7 @@ class ScaffoldService:
 
             # manifest.json (DXT packaging)
             manifest_file = server_dir / "manifest.json"
-            manifest_file.write_text(
-                self._generate_manifest_json(server_name, description), encoding="utf-8"
-            )
+            manifest_file.write_text(self._generate_manifest_json(server_name, description), encoding="utf-8")
             files_created.append("manifest.json")
 
             # Test files
@@ -176,16 +162,18 @@ class ScaffoldService:
             git_initialized = False
             if init_git:
                 try:
-                    subprocess.run(
-                        ["git", "init"], cwd=server_dir, check=True, capture_output=True
+                    await asyncio.to_thread(
+                        subprocess.run, ["git", "init"], cwd=server_dir, check=True, capture_output=True
                     )
-                    subprocess.run(
+                    await asyncio.to_thread(
+                        subprocess.run,
                         ["git", "add", "."],
                         cwd=server_dir,
                         check=True,
                         capture_output=True,
                     )
-                    subprocess.run(
+                    await asyncio.to_thread(
+                        subprocess.run,
                         [
                             "git",
                             "commit",
@@ -217,9 +205,7 @@ class ScaffoldService:
                     frontend_generated = frontend_result.get("success", False)
                     frontend_path = frontend_result.get("frontend_path")
                     if frontend_generated:
-                        logger.debug(
-                            f"Frontend generated successfully: {frontend_path}"
-                        )
+                        logger.debug(f"Frontend generated successfully: {frontend_path}")
                 except Exception as e:
                     logger.warning(f"Failed to generate frontend: {e}")
                     frontend_generated = False
@@ -269,7 +255,7 @@ class ScaffoldService:
         force: bool = False,
         backup: bool = True,
         dry_run: bool = True,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Safely delete an MCP server repository.
 
         Args:
@@ -294,7 +280,8 @@ class ScaffoldService:
                 if (repo_dir / ".git").exists():
                     try:
                         # Check for uncommitted changes
-                        status = subprocess.run(
+                        status = await asyncio.to_thread(
+                            subprocess.run,
                             ["git", "status", "--porcelain"],
                             cwd=repo_dir,
                             capture_output=True,
@@ -309,10 +296,7 @@ class ScaffoldService:
 
                 # Check 2: Is it inside our default repos path?
                 # (Simple check to prevent deleting system files)
-                if (
-                    "repos" not in str(repo_dir).lower()
-                    and "mcp" not in str(repo_dir).lower()
-                ):
+                if "repos" not in str(repo_dir).lower() and "mcp" not in str(repo_dir).lower():
                     return {
                         "success": False,
                         "error": "Repository path looks suspicious (not in repos/mcp folder). Use force=True to override.",
@@ -363,7 +347,7 @@ class ScaffoldService:
         description: str,
         author: str,
         frontend_type: str = "fullstack",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate frontend using fullstack builder script.
 
         Args:
@@ -378,9 +362,7 @@ class ScaffoldService:
         """
         try:
             # Path to fullstack builder script
-            script_path = Path(
-                "D:/Dev/repos/mcp-central-docs/sota-scripts/fullstack-builder/new-fullstack-app.ps1"
-            )
+            script_path = Path("D:/Dev/repos/mcp-central-docs/sota-scripts/fullstack-builder/new-fullstack-app.ps1")
 
             if not script_path.exists():
                 return {
@@ -422,7 +404,9 @@ class ScaffoldService:
 
             # Run the script (reduced logging to debug to reduce spam)
             logger.debug(f"Calling fullstack builder: {' '.join(cmd)}")
-            result = subprocess.run(
+            # Fullstack builder runs npm installs (minutes) — off the loop.
+            result = await asyncio.to_thread(
+                subprocess.run,
                 cmd,
                 cwd=str(output_path),
                 capture_output=True,
@@ -467,9 +451,7 @@ class ScaffoldService:
         """Convert kebab-case to PascalCase."""
         return "".join(word.capitalize() for word in name.split("-"))
 
-    def _generate_mcp_server_py(
-        self, server_name: str, package_name: str, description: str
-    ) -> str:
+    def _generate_mcp_server_py(self, server_name: str, package_name: str, description: str) -> str:
         """Generate main mcp_server.py file."""
         return f'''"""Main MCP server module.
 
@@ -482,11 +464,11 @@ app = FastMCP("{server_name}")
 @app.tool()
 async def help(level: str = "basic", topic: str | None = None) -> str:
     """Get help information about this MCP server.
-    
+
     Args:
         level: Detail level - "basic", "intermediate", or "advanced"
         topic: Optional topic to focus on
-    
+
     Returns:
         Help text for the server
     """
@@ -532,11 +514,11 @@ See individual tool docstrings for detailed information.
 @app.tool()
 async def status(level: str = "basic", focus: str | None = None) -> str:
     """Get server status and diagnostics.
-    
+
     Args:
         level: Detail level - "basic", "intermediate", or "advanced"
         focus: Optional focus area (servers, tools, system)
-    
+
     Returns:
         Status information
     """
@@ -791,7 +773,7 @@ htmlcov/
 Thumbs.db
 """
 
-    def _generate_test_files(self, package_name: str) -> Dict[str, str]:
+    def _generate_test_files(self, package_name: str) -> dict[str, str]:
         """Generate test file templates."""
         return {
             "tests/__init__.py": "",
@@ -825,7 +807,7 @@ async def test_server_startup():
 ''',
         }
 
-    def _generate_docs(self, server_name: str, description: str) -> Dict[str, str]:
+    def _generate_docs(self, server_name: str, description: str) -> dict[str, str]:
         """Generate documentation files."""
         return {
             "docs/README.md": f"""# {server_name} Documentation
@@ -855,13 +837,13 @@ All tools must have comprehensive docstrings:
 @app.tool()
 async def my_tool(param: str) -> str:
     """Tool description.
-    
+
     Args:
         param: Parameter description
-    
+
     Returns:
         Return value description
-    
+
     Examples:
         >>> await my_tool("example")
         "result"
@@ -982,7 +964,7 @@ Cline supports MCP servers via configuration file.
 """,
         }
 
-    def _generate_scripts(self, package_name: str) -> Dict[str, str]:
+    def _generate_scripts(self, package_name: str) -> dict[str, str]:
         """Generate script files."""
         return {
             "scripts/setup.py": '''"""Development setup script."""

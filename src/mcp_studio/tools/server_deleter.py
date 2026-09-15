@@ -3,10 +3,11 @@
 Safely removes test/throwaway MCP servers with safety checks.
 """
 
+import asyncio
 import shutil
-from pathlib import Path
-from typing import Any, Dict, Optional
 import subprocess
+from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -25,32 +26,22 @@ def _has_uncommitted_changes(path: Path) -> bool:
     """Check if git repo has uncommitted changes."""
     if not _is_git_repo(path):
         return False
-    
+
     try:
-        result = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=path,
-            capture_output=True,
-            text=True,
-            check=True
-        )
+        result = subprocess.run(["git", "status", "--porcelain"], cwd=path, capture_output=True, text=True, check=True)
         return bool(result.stdout.strip())
     except Exception:
         return False
 
 
-def _get_git_remote(path: Path) -> Optional[str]:
+def _get_git_remote(path: Path) -> str | None:
     """Get git remote URL if exists."""
     if not _is_git_repo(path):
         return None
-    
+
     try:
         result = subprocess.run(
-            ["git", "remote", "get-url", "origin"],
-            cwd=path,
-            capture_output=True,
-            text=True,
-            check=True
+            ["git", "remote", "get-url", "origin"], cwd=path, capture_output=True, text=True, check=True
         )
         return result.stdout.strip()
     except Exception:
@@ -66,55 +57,49 @@ def _get_git_remote(path: Path) -> Optional[str]:
     - Uncommitted changes check
     - Remote repository check
     - Backup option
-    
+
     Use with caution - deletion is permanent!""",
     category=ToolCategory.DISCOVERY,
     tags=["server", "delete", "remove", "cleanup"],
-    estimated_runtime="1-2s"
+    estimated_runtime="1-2s",
 )
 async def delete_mcp_server(
-    repo_path: str,
-    force: bool = False,
-    backup: bool = True,
-    dry_run: bool = True
-) -> Dict[str, Any]:
+    repo_path: str, force: bool = False, backup: bool = True, dry_run: bool = True
+) -> dict[str, Any]:
     """
     Delete an MCP server repository.
-    
+
     Args:
         repo_path: Path to the repository to delete
         force: Skip safety checks (default: False)
         backup: Create backup before deletion (default: True)
         dry_run: Preview deletion without applying (default: True)
-    
+
     Returns:
         Dictionary with deletion status and warnings
     """
     try:
         path = Path(repo_path).expanduser().resolve()
-        
+
         if not path.exists():
-            return {
-                "success": False,
-                "error": f"Repository not found: {repo_path}"
-            }
-        
+            return {"success": False, "error": f"Repository not found: {repo_path}"}
+
         server_name = path.name
         warnings = []
         safety_checks = {}
-        
-        # Safety checks
+
+        # Safety checks (git spawns run in threads — never on the loop)
         is_git = _is_git_repo(path)
         safety_checks["is_git_repo"] = is_git
-        
+
         if is_git:
-            has_uncommitted = _has_uncommitted_changes(path)
+            has_uncommitted = await asyncio.to_thread(_has_uncommitted_changes, path)
             safety_checks["has_uncommitted_changes"] = has_uncommitted
-            
-            remote = _get_git_remote(path)
+
+            remote = await asyncio.to_thread(_get_git_remote, path)
             safety_checks["has_remote"] = bool(remote)
             safety_checks["remote_url"] = remote
-            
+
             if remote:
                 warnings.append(f"⚠️ Repository has remote: {remote}")
                 if not force:
@@ -122,39 +107,34 @@ async def delete_mcp_server(
                         "success": False,
                         "error": "Repository has remote. Use force=True to delete anyway.",
                         "safety_checks": safety_checks,
-                        "warnings": warnings
+                        "warnings": warnings,
                     }
-            
+
             if has_uncommitted:
                 warnings.append("⚠️ Repository has uncommitted changes")
-        
+
         # Check if it's in a common repos directory (safer to delete)
         path_str = str(path).lower()
-        is_in_repos = any(marker in path_str for marker in [
-            "dev/repos",
-            "repositories",
-            "projects",
-            "workspace"
-        ])
+        is_in_repos = any(marker in path_str for marker in ["dev/repos", "repositories", "projects", "workspace"])
         safety_checks["is_in_repos_directory"] = is_in_repos
-        
+
         if not is_in_repos and not force:
             warnings.append("⚠️ Repository is not in a standard repos directory")
-        
+
         # Create backup if requested
         backup_path = None
         if backup and not dry_run:
             backup_dir = path.parent / f"{server_name}.backup"
             if backup_dir.exists():
                 backup_dir = path.parent / f"{server_name}.backup.{int(__import__('time').time())}"
-            
+
             try:
-                shutil.copytree(path, backup_dir)
+                await asyncio.to_thread(shutil.copytree, path, backup_dir)
                 backup_path = str(backup_dir)
                 logger.info(f"Created backup: {backup_path}")
             except Exception as e:
                 warnings.append(f"⚠️ Failed to create backup: {e}")
-        
+
         # Perform deletion
         if dry_run:
             return {
@@ -166,28 +146,28 @@ async def delete_mcp_server(
                 "warnings": warnings,
                 "would_delete": True,
                 "backup_path": backup_path,
-                "message": "Dry run - no changes made. Set dry_run=False to delete."
+                "message": "Dry run - no changes made. Set dry_run=False to delete.",
             }
-        
+
         if not force and warnings:
             return {
                 "success": False,
                 "error": "Safety checks failed. Review warnings and use force=True to proceed.",
                 "safety_checks": safety_checks,
-                "warnings": warnings
+                "warnings": warnings,
             }
-        
+
         # Delete the directory
         try:
-            shutil.rmtree(path)
+            await asyncio.to_thread(shutil.rmtree, path)
             logger.info(f"Deleted repository: {path}")
-            
+
             # Clear cache for this repo
             try:
                 clear_cache(repo_path=repo_path)
             except Exception as e:
                 logger.warning(f"Failed to clear cache: {e}")
-            
+
             return {
                 "success": True,
                 "repo_path": str(path),
@@ -196,20 +176,13 @@ async def delete_mcp_server(
                 "backup_path": backup_path,
                 "safety_checks": safety_checks,
                 "warnings": warnings,
-                "message": f"Repository {server_name} deleted successfully"
+                "message": f"Repository {server_name} deleted successfully",
             }
-        
+
         except Exception as e:
             logger.error(f"Failed to delete repository: {e}", exc_info=True)
-            return {
-                "success": False,
-                "error": f"Failed to delete: {str(e)}",
-                "backup_path": backup_path
-            }
-    
+            return {"success": False, "error": f"Failed to delete: {e!s}", "backup_path": backup_path}
+
     except Exception as e:
         logger.error(f"Failed to delete MCP server: {e}", exc_info=True)
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        return {"success": False, "error": str(e)}

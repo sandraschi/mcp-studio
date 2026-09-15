@@ -6,10 +6,11 @@ This is the MCP server implementation for MCP Studio, providing tools for
 managing and interacting with MCP servers through the Model Control Protocol.
 """
 
+import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastmcp import FastMCP
 
@@ -19,22 +20,22 @@ sys.path.insert(0, str(project_root))
 
 from mcp_studio.tools import (
     discover_servers,
-    get_server_info,
     execute_remote_tool,
+    get_server_info,
     list_server_tools,
     test_server_connection,
 )
 from mcp_studio.tools.runt_analyzer import analyze_runts, get_repo_status
-from mcp_studio.tools.server_scaffold import create_mcp_server as scaffold_mcp_server
-from mcp_studio.tools.server_updater import update_mcp_server as update_server
 from mcp_studio.tools.server_deleter import delete_mcp_server as delete_server
+from mcp_studio.tools.server_updater import update_mcp_server as update_server
 
 # Import client discovery services
 try:
-    from mcp_studio.app.services.mcp_client_zoo import MCPClientZoo
-    from mcp_studio.app.services.mcp_client_metadata import get_all_clients, get_client_metadata
-    from working_sets.client_manager import ClientWorkingSetManager
     import json
+
+    from mcp_studio.app.services.mcp_client_metadata import get_all_clients, get_client_metadata
+    from mcp_studio.app.services.mcp_client_zoo import MCPClientZoo
+    from working_sets.client_manager import ClientWorkingSetManager
 except ImportError:
     # Fallback if services not available
     MCPClientZoo = None
@@ -52,7 +53,7 @@ AUTO_DISCOVERY = os.getenv("AUTO_DISCOVERY", "true").lower() == "true"
 
 
 @app.tool()
-async def discover_mcp_servers(paths: Optional[List[str]] = None) -> Dict[str, Any]:
+async def discover_mcp_servers(paths: list[str] | None = None) -> dict[str, Any]:
     """
     Discover MCP servers in configured paths.
 
@@ -81,7 +82,7 @@ async def discover_mcp_servers(paths: Optional[List[str]] = None) -> Dict[str, A
 
 
 @app.tool()
-async def discover_clients(include_servers: bool = True) -> Dict[str, Any]:
+async def discover_clients(include_servers: bool = True) -> dict[str, Any]:
     """Discover all MCP clients and their configured servers.
 
     Scans all known MCP client configurations to find:
@@ -233,7 +234,7 @@ async def discover_clients(include_servers: bool = True) -> Dict[str, Any]:
 
 
 @app.tool()
-async def get_server_info(server_id: str) -> Dict[str, Any]:
+async def get_server_info(server_id: str) -> dict[str, Any]:
     """
     Get detailed information about a specific MCP server.
 
@@ -257,7 +258,7 @@ async def get_server_info(server_id: str) -> Dict[str, Any]:
 
 
 @app.tool()
-async def list_server_tools(server_id: str) -> Dict[str, Any]:
+async def list_server_tools(server_id: str) -> dict[str, Any]:
     """
     List all tools provided by a specific MCP server.
 
@@ -278,7 +279,7 @@ async def list_server_tools(server_id: str) -> Dict[str, Any]:
 
 
 @app.tool()
-async def get_client_config(client_id: str) -> Dict[str, Any]:
+async def get_client_config(client_id: str) -> dict[str, Any]:
     """Get the current configuration for a specific MCP client.
 
     Retrieves the full configuration file content for an MCP client including:
@@ -341,14 +342,14 @@ async def get_client_config(client_id: str) -> Dict[str, Any]:
         servers = []
         if config_path.exists():
             try:
-                with open(config_path, "r", encoding="utf-8-sig") as f:
+                with open(config_path, encoding="utf-8-sig") as f:
                     config_data = json.load(f)
                     # Extract server IDs
                     servers = list(config_data.get("mcpServers", {}).keys())
             except Exception as e:
                 return {
                     "success": False,
-                    "error": f"Failed to read config file: {str(e)}",
+                    "error": f"Failed to read config file: {e!s}",
                     "client_id": client_id,
                     "config_path": str(config_path),
                 }
@@ -369,9 +370,7 @@ async def get_client_config(client_id: str) -> Dict[str, Any]:
 
 
 @app.tool()
-async def set_client_config(
-    client_id: str, config: Dict[str, Any], create_backup: bool = True
-) -> Dict[str, Any]:
+async def set_client_config(client_id: str, config: dict[str, Any], create_backup: bool = True) -> dict[str, Any]:
     """Set or update the configuration for a specific MCP client.
 
     Writes configuration data to the client's config file. Can create a backup
@@ -415,7 +414,7 @@ async def set_client_config(
             }
 
         # Initialize managers
-        client_manager = ClientWorkingSetManager()
+        ClientWorkingSetManager()
         client_zoo = MCPClientZoo()
 
         # Get config path
@@ -451,12 +450,12 @@ async def set_client_config(
                 # Copy existing config to backup
                 import shutil
 
-                shutil.copy2(config_path, backup_path)
+                await asyncio.to_thread(shutil.copy2, config_path, backup_path)
                 backup_created = True
             except Exception as e:
                 return {
                     "success": False,
-                    "error": f"Failed to create backup: {str(e)}",
+                    "error": f"Failed to create backup: {e!s}",
                     "client_id": client_id,
                 }
 
@@ -479,7 +478,7 @@ async def set_client_config(
         except Exception as e:
             return {
                 "success": False,
-                "error": f"Failed to write config file: {str(e)}",
+                "error": f"Failed to write config file: {e!s}",
                 "client_id": client_id,
                 "config_path": str(config_path),
             }
@@ -503,8 +502,8 @@ async def set_client_config(
 
 @app.tool()
 async def execute_remote_tool(
-    server_id: str, tool_name: str, parameters: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+    server_id: str, tool_name: str, parameters: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """
     Execute a tool on a remote MCP server.
 
@@ -527,7 +526,7 @@ async def execute_remote_tool(
 
 
 @app.tool()
-async def test_server_connection(server_id: str) -> Dict[str, Any]:
+async def test_server_connection(server_id: str) -> dict[str, Any]:
     """
     Test connection to an MCP server.
 
@@ -548,7 +547,7 @@ async def test_server_connection(server_id: str) -> Dict[str, Any]:
 
 
 @app.tool()
-async def help(level: str = "basic", topic: Optional[str] = None) -> str:
+async def help(level: str = "basic", topic: str | None = None) -> str:
     """Get help information about MCP Studio tools and capabilities.
 
     Provides comprehensive documentation about available tools, usage patterns,
@@ -601,7 +600,7 @@ Try: `help("basic")`'''
 
 
 @app.tool()
-async def set_discovery_path(path: str) -> Dict[str, Any]:
+async def set_discovery_path(path: str) -> dict[str, Any]:
     """Set the MCP server discovery path.
 
     Updates the discovery path used for finding MCP servers. This path
@@ -644,7 +643,7 @@ async def set_discovery_path(path: str) -> Dict[str, Any]:
         new_path = str(path_obj)
         if settings.MCP_DISCOVERY_PATHS:
             if new_path not in settings.MCP_DISCOVERY_PATHS:
-                updated_paths = list(settings.MCP_DISCOVERY_PATHS) + [new_path]
+                updated_paths = [*list(settings.MCP_DISCOVERY_PATHS), new_path]
             else:
                 updated_paths = list(settings.MCP_DISCOVERY_PATHS)
         else:
@@ -668,7 +667,7 @@ async def set_discovery_path(path: str) -> Dict[str, Any]:
 
 
 @app.tool()
-async def status(level: str = "basic", focus: Optional[str] = None) -> str:
+async def status(level: str = "basic", focus: str | None = None) -> str:
     """Get comprehensive status information about MCP Studio.
 
     Provides system status, server connectivity, and operational metrics
@@ -1081,7 +1080,7 @@ For detailed status, use: `status("intermediate")`
     except Exception as e:
         return f"""# MCP Studio Status - Basic
 
-**Error retrieving status**: {str(e)}
+**Error retrieving status**: {e!s}
 
 Use `status("intermediate")` for more details.
 """
@@ -1090,8 +1089,9 @@ Use `status("intermediate")` for more details.
 def _get_intermediate_status() -> str:
     """Intermediate status - detailed information."""
     try:
-        from mcp_studio.app.services.discovery_service import discovered_servers
         import platform
+
+        from mcp_studio.app.services.discovery_service import discovered_servers
 
         server_count = len(discovered_servers)
         tool_count = sum(len(server.tools) for server in discovered_servers.values())
@@ -1130,16 +1130,17 @@ def _get_intermediate_status() -> str:
     except Exception as e:
         return f"""# MCP Studio Status - Intermediate
 
-**Error retrieving status**: {str(e)}
+**Error retrieving status**: {e!s}
 """
 
 
 def _get_advanced_status() -> str:
     """Advanced status - performance metrics."""
     try:
-        from mcp_studio.app.services.discovery_service import discovered_servers
-        import platform
         import os
+        import platform
+
+        from mcp_studio.app.services.discovery_service import discovered_servers
 
         server_count = len(discovered_servers)
         tool_count = sum(len(server.tools) for server in discovered_servers.values())
@@ -1189,8 +1190,7 @@ def _get_advanced_status() -> str:
 
         for server_id, server in list(discovered_servers.items())[:20]:
             status_lines.append(
-                f"- **{server.name}** ({server_id}): "
-                f"{len(server.tools)} tools, status: {server.status.value}"
+                f"- **{server.name}** ({server_id}): {len(server.tools)} tools, status: {server.status.value}"
             )
 
         if server_count > 20:
@@ -1200,14 +1200,12 @@ def _get_advanced_status() -> str:
     except Exception as e:
         return f"""# MCP Studio Status - Advanced
 
-**Error retrieving status**: {str(e)}
+**Error retrieving status**: {e!s}
 """
 
 
 @app.tool()
-async def analyze_repo_sota_status(
-    repo_path: str, scan_path: Optional[str] = None
-) -> Dict[str, Any]:
+async def analyze_repo_sota_status(repo_path: str, scan_path: str | None = None) -> dict[str, Any]:
     """Analyze a single MCP repository for SOTA compliance.
 
     Evaluates a repository against FastMCP 2.13 SOTA standards and returns
@@ -1279,12 +1277,12 @@ async def create_mcp_server(
     description: str,
     author: str = "MCP Studio",
     license_type: str = "MIT",
-    target_path: Optional[str] = None,
+    target_path: str | None = None,
     include_examples: bool = True,
     init_git: bool = True,
     include_frontend: bool = False,
     frontend_type: str = "fullstack",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Create a new SOTA-compliant MCP server from scratch.
 
     Scaffolds a complete MCP server with all SOTA requirements including
@@ -1336,8 +1334,8 @@ async def create_mcp_server(
 
 @app.tool()
 async def update_mcp_server(
-    repo_path: str, components: Optional[List[str]] = None, dry_run: bool = True
-) -> Dict[str, Any]:
+    repo_path: str, components: list[str] | None = None, dry_run: bool = True
+) -> dict[str, Any]:
     """Update an MCP server to add missing SOTA components.
 
     Analyzes a server and adds missing components to bring it to SOTA compliance.
@@ -1357,7 +1355,7 @@ async def update_mcp_server(
 @app.tool()
 async def delete_mcp_server(
     repo_path: str, force: bool = False, backup: bool = True, dry_run: bool = True
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Safely delete an MCP server repository.
 
     Performs safety checks before deletion including git repository detection,
@@ -1377,8 +1375,8 @@ async def delete_mcp_server(
 
 @app.tool()
 async def scan_repos_for_sota_compliance(
-    scan_path: Optional[str] = None, max_depth: int = 1, include_sota: bool = True
-) -> Dict[str, Any]:
+    scan_path: str | None = None, max_depth: int = 1, include_sota: bool = True
+) -> dict[str, Any]:
     """Scan a directory for MCP repositories and analyze SOTA compliance.
 
     Scans a directory for MCP repositories and evaluates each against FastMCP 2.13
@@ -1435,9 +1433,7 @@ async def scan_repos_for_sota_compliance(
         if scan_path is None:
             scan_path = DEFAULT_REPOS_PATH
 
-        result = await analyze_runts(
-            scan_path=scan_path, max_depth=max_depth, include_sota=include_sota
-        )
+        result = await analyze_runts(scan_path=scan_path, max_depth=max_depth, include_sota=include_sota)
         return result
     except Exception as e:
         return {"success": False, "error": str(e), "scan_path": scan_path}
@@ -1454,8 +1450,7 @@ def _get_focused_status(focus: str, level: str) -> str:
             status_lines = ["# Server Status"]
             for server_id, server in discovered_servers.items():
                 status_lines.append(
-                    f"- **{server.name}** ({server_id}): "
-                    f"{len(server.tools)} tools, status: {server.status.value}"
+                    f"- **{server.name}** ({server_id}): {len(server.tools)} tools, status: {server.status.value}"
                 )
             return "\n".join(status_lines)
         except Exception as e:
@@ -1513,16 +1508,25 @@ if __name__ == "__main__":
         HTTP_PROXY_URL = os.getenv("MCP_STUDIO_API_URL", "http://127.0.0.1:10724/mcp")
         try:
             import httpx
-            r = httpx.post(HTTP_PROXY_URL, json={
-                "jsonrpc": "2.0", "id": 1, "method": "initialize",
-                "params": {
-                    "protocolVersion": "2025-11-25",
-                    "capabilities": {},
-                    "clientInfo": {"name": "probe", "version": "1"}
-                }
-            }, headers={"Accept": "application/json, text/event-stream"}, timeout=0.5)
+
+            r = httpx.post(
+                HTTP_PROXY_URL,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2025-11-25",
+                        "capabilities": {},
+                        "clientInfo": {"name": "probe", "version": "1"},
+                    },
+                },
+                headers={"Accept": "application/json, text/event-stream"},
+                timeout=0.5,
+            )
             if r.status_code == 200:
                 from fastmcp.server import create_proxy
+
                 proxy = create_proxy(HTTP_PROXY_URL, name="mcp-studio")
                 proxy.run(transport="stdio")
                 return
