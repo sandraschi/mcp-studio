@@ -342,14 +342,19 @@ def discover_tools(package: Union[str, List[str]],
 # Example usage
 if __name__ == "__main__":
     import logging
-    
+    import os
+
+    # Absolute log path: a bare filename lands in the host's cwd (BUG-063)
+    log_dir = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "mcp-studio" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler('tool_discovery.log')
+            logging.FileHandler(log_dir / 'tool_discovery.log')
         ]
     )
     

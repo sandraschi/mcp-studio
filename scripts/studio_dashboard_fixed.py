@@ -29,11 +29,15 @@ import platform
 from urllib.parse import urlparse
 import tomli
 
+# Absolute log path: a bare filename lands in the host's cwd (BUG-063)
+LOG_DIR = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "mcp-studio" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler("mcp_studio.log")],
+    handlers=[logging.StreamHandler(), logging.FileHandler(LOG_DIR / "mcp_studio.log")],
 )
 logger = logging.getLogger(__name__)
 
