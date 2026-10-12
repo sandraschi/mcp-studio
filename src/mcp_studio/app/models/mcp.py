@@ -1,7 +1,7 @@
 """Pydantic models for MCP-related data structures."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
@@ -9,80 +9,85 @@ from ..core.enums import ParameterType, ServerStatus
 
 # ServerStatus and ParameterType enums moved to core.enums
 
+
 class MCPToolParameter(BaseModel):
     """Parameter definition for an MCP tool."""
+
     name: str = Field(..., description="Name of the parameter")
     type: ParameterType = Field(..., description="Data type of the parameter")
     description: str = Field("", description="Description of the parameter")
     required: bool = Field(True, description="Whether the parameter is required")
-    default: Optional[Any] = Field(None, description="Default value for the parameter")
-    enum: Optional[List[Any]] = Field(None, description="Allowed values for the parameter")
-    format: Optional[str] = Field(None, description="Format of the parameter")
-    minimum: Optional[Union[int, float]] = Field(None, description="Minimum value for numeric parameters")
-    maximum: Optional[Union[int, float]] = Field(None, description="Maximum value for numeric parameters")
-    min_length: Optional[int] = Field(None, alias="minLength", description="Minimum length for string parameters")
-    max_length: Optional[int] = Field(None, alias="maxLength", description="Maximum length for string parameters")
-    pattern: Optional[str] = Field(None, description="Regex pattern for string validation")
-    items: Optional[Dict[str, Any]] = Field(None, description="Schema for array items")
-    properties: Optional[Dict[str, Any]] = Field(None, description="Properties for object parameters")
+    default: Any | None = Field(None, description="Default value for the parameter")
+    enum: list[Any] | None = Field(None, description="Allowed values for the parameter")
+    format: str | None = Field(None, description="Format of the parameter")
+    minimum: int | float | None = Field(None, description="Minimum value for numeric parameters")
+    maximum: int | float | None = Field(None, description="Maximum value for numeric parameters")
+    min_length: int | None = Field(None, alias="minLength", description="Minimum length for string parameters")
+    max_length: int | None = Field(None, alias="maxLength", description="Maximum length for string parameters")
+    pattern: str | None = Field(None, description="Regex pattern for string validation")
+    items: dict[str, Any] | None = Field(None, description="Schema for array items")
+    properties: dict[str, Any] | None = Field(None, description="Properties for object parameters")
 
-    model_config = ConfigDict(
-        populate_by_name=True,
-        use_enum_values=True
-    )
+    model_config = ConfigDict(populate_by_name=True, use_enum_values=True)
+
 
 class MCPTool(BaseModel):
     """Definition of an MCP tool."""
+
     name: str = Field(..., description="Name of the tool")
     description: str = Field("", description="Description of the tool")
-    parameters: List[MCPToolParameter] = Field(default_factory=list, description="List of parameters")
-    categories: List[str] = Field(default_factory=list, description="Categories for the tool")
+    parameters: list[MCPToolParameter] = Field(default_factory=list, description="List of parameters")
+    categories: list[str] = Field(default_factory=list, description="Categories for the tool")
     version: str = Field("0.1.0", description="Version of the tool")
     deprecated: bool = Field(False, description="Whether the tool is deprecated")
 
     # Runtime information
-    last_used: Optional[datetime] = Field(None, description="When the tool was last used")
+    last_used: datetime | None = Field(None, description="When the tool was last used")
     usage_count: int = Field(0, description="Number of times the tool has been used")
 
     model_config = ConfigDict()
 
+
 class MCPServerHealth(BaseModel):
     """Health status of an MCP server."""
+
     status: ServerStatus = Field(..., description="Current status of the server")
-    uptime: Optional[float] = Field(None, description="Uptime in seconds")
-    version: Optional[str] = Field(None, description="Server version")
+    uptime: float | None = Field(None, description="Uptime in seconds")
+    version: str | None = Field(None, description="Server version")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="When the health was checked")
 
     model_config = ConfigDict()
 
+
 class MCPServer(BaseModel):
     """Information about an MCP server."""
+
     id: str = Field(..., description="Unique identifier for the server")
     name: str = Field(..., description="Display name of the server")
     description: str = Field("", description="Description of the server")
     version: str = Field("0.1.0", description="Version of the server")
 
     # Connection details
-    url: Optional[HttpUrl] = Field(None, description="URL of the server")
-    path: Optional[str] = Field(None, description="Filesystem path to the server")
+    url: HttpUrl | None = Field(None, description="URL of the server")
+    path: str | None = Field(None, description="Filesystem path to the server")
     type: str = Field("python", description="Type of the server (python, dxt, http, etc.)")
 
     # Status
     status: ServerStatus = Field(ServerStatus.OFFLINE, description="Current status of the server")
-    last_seen: Optional[datetime] = Field(None, description="When the server was last seen")
-    health: Optional[MCPServerHealth] = Field(None, description="Health status of the server")
+    last_seen: datetime | None = Field(None, description="When the server was last seen")
+    health: MCPServerHealth | None = Field(None, description="Health status of the server")
 
     # Tools
-    tools: List[MCPTool] = Field(default_factory=list, description="List of available tools")
+    tools: list[MCPTool] = Field(default_factory=list, description="List of available tools")
 
     # Metadata
-    tags: List[str] = Field(default_factory=list, description="Tags for categorization")
+    tags: list[str] = Field(default_factory=list, description="Tags for categorization")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="When the server was discovered")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="When the server was last updated")
 
     model_config = ConfigDict()
 
-    def update_health(self, health: 'MCPServerHealth') -> None:
+    def update_health(self, health: "MCPServerHealth") -> None:
         """Update the health status of the server."""
         self.health = health
         self.status = health.status
@@ -112,39 +117,46 @@ class MCPServer(BaseModel):
             return True
         return False
 
+
 class ToolExecutionRequest(BaseModel):
     """Request to execute a tool on an MCP server."""
+
     server_id: str = Field(..., description="ID of the server to execute the tool on")
     tool_name: str = Field(..., description="Name of the tool to execute")
-    parameters: Dict[str, Any] = Field(default_factory=dict, description="Parameters for the tool")
-    timeout: Optional[float] = Field(60.0, description="Timeout in seconds")
+    parameters: dict[str, Any] = Field(default_factory=dict, description="Parameters for the tool")
+    timeout: float | None = Field(60.0, description="Timeout in seconds")
 
-    @field_validator('parameters')
+    @field_validator("parameters")
     @classmethod
-    def validate_parameters(cls, v: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_parameters(cls, v: dict[str, Any]) -> dict[str, Any]:
         """Validate that parameters are JSON-serializable."""
         try:
             import json
+
             json.dumps(v)
             return v
         except (TypeError, ValueError) as e:
-            raise ValueError(f"Parameters must be JSON-serializable: {str(e)}")
+            raise ValueError(f"Parameters must be JSON-serializable: {e!s}")
+
 
 class ToolExecutionResult(BaseModel):
     """Result of a tool execution."""
+
     success: bool = Field(..., description="Whether the execution was successful")
-    result: Optional[Any] = Field(None, description="Result of the execution")
-    error: Optional[str] = Field(None, description="Error message if execution failed")
+    result: Any | None = Field(None, description="Result of the execution")
+    error: str | None = Field(None, description="Error message if execution failed")
     execution_time: float = Field(..., description="Execution time in seconds")
     timestamp: datetime = Field(default_factory=datetime.utcnow, description="When the execution completed")
 
     model_config = ConfigDict()
 
+
 class ServerRegistration(BaseModel):
     """Request to register a new MCP server."""
+
     name: str = Field(..., description="Name of the server")
-    url: Optional[HttpUrl] = Field(None, description="URL of the server")
-    path: Optional[str] = Field(None, description="Filesystem path to the server")
+    url: HttpUrl | None = Field(None, description="URL of the server")
+    path: str | None = Field(None, description="Filesystem path to the server")
     type: str = Field("python", description="Type of the server (python, dxt, http, etc.)")
     description: str = Field("", description="Description of the server")
-    tags: List[str] = Field(default_factory=list, description="Tags for categorization")
+    tags: list[str] = Field(default_factory=list, description="Tags for categorization")

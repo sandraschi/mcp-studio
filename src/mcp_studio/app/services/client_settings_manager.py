@@ -4,16 +4,17 @@ Client Settings Manager - Discover and manage IDE client configuration settings
 
 import json
 import logging
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class SettingType(Enum):
     """Types of settings we can manage."""
+
     STRING = "string"
     NUMBER = "number"
     BOOLEAN = "boolean"
@@ -24,6 +25,7 @@ class SettingType(Enum):
 
 class SettingCategory(Enum):
     """Categories for organizing settings."""
+
     EDITOR = "editor"
     WORKBENCH = "workbench"
     TERMINAL = "terminal"
@@ -39,104 +41,66 @@ class SettingCategory(Enum):
 @dataclass
 class ClientSetting:
     """Represents a client configuration setting."""
+
     key: str
     value: Any
     setting_type: SettingType
     category: SettingCategory
-    description: Optional[str] = None
-    display_name: Optional[str] = None
+    description: str | None = None
+    display_name: str | None = None
     editable: bool = True
-    validation_rules: Dict[str, Any] = field(default_factory=dict)
+    validation_rules: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ClientConfig:
     """Represents a client's configuration file."""
+
     client_id: str
     config_path: Path
-    settings: Dict[str, ClientSetting] = field(default_factory=dict)
-    raw_config: Dict[str, Any] = field(default_factory=dict)
+    settings: dict[str, ClientSetting] = field(default_factory=dict)
+    raw_config: dict[str, Any] = field(default_factory=dict)
 
 
 class ClientSettingsManager:
     """Manages client configuration settings discovery and editing."""
 
-    def __init__(self):
-        self.clients: Dict[str, ClientConfig] = {}
+    def __init__(self) -> None:
+        self.clients: dict[str, ClientConfig] = {}
         self._setting_patterns = self._build_setting_patterns()
 
-    def _build_setting_patterns(self) -> Dict[str, Dict[str, Any]]:
+    def _build_setting_patterns(self) -> dict[str, dict[str, Any]]:
         """Build patterns for categorizing and describing settings."""
         return {
             # Editor settings
-            "editor.": {
-                "category": SettingCategory.EDITOR,
-                "description": "Code editor configuration"
-            },
-            "diffEditor.": {
-                "category": SettingCategory.EDITOR,
-                "description": "Diff editor settings"
-            },
-
+            "editor.": {"category": SettingCategory.EDITOR, "description": "Code editor configuration"},
+            "diffEditor.": {"category": SettingCategory.EDITOR, "description": "Diff editor settings"},
             # Workbench/UI settings
-            "workbench.": {
-                "category": SettingCategory.WORKBENCH,
-                "description": "Workbench and UI configuration"
-            },
-            "window.": {
-                "category": SettingCategory.WORKBENCH,
-                "description": "Window management settings"
-            },
-
+            "workbench.": {"category": SettingCategory.WORKBENCH, "description": "Workbench and UI configuration"},
+            "window.": {"category": SettingCategory.WORKBENCH, "description": "Window management settings"},
             # Terminal settings
-            "terminal.": {
-                "category": SettingCategory.TERMINAL,
-                "description": "Integrated terminal configuration"
-            },
-
+            "terminal.": {"category": SettingCategory.TERMINAL, "description": "Integrated terminal configuration"},
             # Theme and appearance
             "colorTheme": {
                 "category": SettingCategory.THEME,
                 "description": "Color theme selection",
-                "display_name": "Color Theme"
+                "display_name": "Color Theme",
             },
             "iconTheme": {
                 "category": SettingCategory.THEME,
                 "description": "Icon theme selection",
-                "display_name": "Icon Theme"
+                "display_name": "Icon Theme",
             },
-
             # File management
-            "files.": {
-                "category": SettingCategory.FILES,
-                "description": "File handling and management"
-            },
-            "explorer.": {
-                "category": SettingCategory.FILES,
-                "description": "File explorer configuration"
-            },
-
+            "files.": {"category": SettingCategory.FILES, "description": "File handling and management"},
+            "explorer.": {"category": SettingCategory.FILES, "description": "File explorer configuration"},
             # Search settings
-            "search.": {
-                "category": SettingCategory.SEARCH,
-                "description": "Search and find functionality"
-            },
-
+            "search.": {"category": SettingCategory.SEARCH, "description": "Search and find functionality"},
             # Git settings
-            "git.": {
-                "category": SettingCategory.GIT,
-                "description": "Git integration settings"
-            },
-
+            "git.": {"category": SettingCategory.GIT, "description": "Git integration settings"},
             # Debug settings
-            "debug.": {
-                "category": SettingCategory.DEBUG,
-                "description": "Debugger configuration"
-            },
-            "launch.": {
-                "category": SettingCategory.DEBUG,
-                "description": "Launch configuration"
-            },
+            "debug.": {"category": SettingCategory.DEBUG, "description": "Debugger configuration"},
+            "launch.": {"category": SettingCategory.DEBUG, "description": "Launch configuration"},
         }
 
     def _infer_setting_type(self, value: Any) -> SettingType:
@@ -154,22 +118,22 @@ class ClientSettingsManager:
         else:
             return SettingType.UNKNOWN
 
-    def _categorize_setting(self, key: str) -> Tuple[SettingCategory, Optional[str], Optional[str]]:
+    def _categorize_setting(self, key: str) -> tuple[SettingCategory, str | None, str | None]:
         """Categorize a setting based on its key."""
         for pattern, info in self._setting_patterns.items():
-            if key.startswith(pattern) or pattern.rstrip('.') == key:
+            if key.startswith(pattern) or pattern.rstrip(".") == key:
                 return (
                     info["category"],
                     info.get("description"),
-                    info.get("display_name", key.replace('.', ' ').title())
+                    info.get("display_name", key.replace(".", " ").title()),
                 )
 
         # Extension-specific settings
-        if '.' in key and any(ext in key.lower() for ext in ['cline', 'continue', 'gemini', 'roo', 'anthropic']):
+        if "." in key and any(ext in key.lower() for ext in ["cline", "continue", "gemini", "roo", "anthropic"]):
             return SettingCategory.EXTENSIONS, "Extension-specific settings", key
 
         # Default to other
-        return SettingCategory.OTHER, None, key.replace('.', ' ').title()
+        return SettingCategory.OTHER, None, key.replace(".", " ").title()
 
     def _create_setting(self, key: str, value: Any) -> ClientSetting:
         """Create a ClientSetting object from a key-value pair."""
@@ -182,7 +146,7 @@ class ClientSettingsManager:
             category=category,
             description=description,
             display_name=display_name,
-            editable=self._is_setting_editable(key, value)
+            editable=self._is_setting_editable(key, value),
         )
 
     def _is_setting_editable(self, key: str, value: Any) -> bool:
@@ -190,9 +154,9 @@ class ClientSettingsManager:
         # Don't allow editing certain sensitive or complex settings
         non_editable_patterns = [
             "mcpServers",  # We handle this separately
-            "machineId",   # System identifiers
-            "install",     # Installation settings
-            "telemetry",   # Telemetry settings (usually locked)
+            "machineId",  # System identifiers
+            "install",  # Installation settings
+            "telemetry",  # Telemetry settings (usually locked)
         ]
 
         if any(pattern in key for pattern in non_editable_patterns):
@@ -202,7 +166,7 @@ class ClientSettingsManager:
         editable_types = (str, int, float, bool, list)
         return isinstance(value, editable_types)
 
-    def discover_client_settings(self, client_id: str, config_path: Optional[Path] = None) -> Optional[ClientConfig]:
+    def discover_client_settings(self, client_id: str, config_path: Path | None = None) -> ClientConfig | None:
         """
         Discover and parse settings from a client configuration file(s).
 
@@ -235,7 +199,7 @@ class ClientSettingsManager:
                     continue
 
                 try:
-                    with open(config_path, 'r', encoding='utf-8') as f:
+                    with open(config_path, encoding="utf-8") as f:
                         raw_config = json.load(f)
 
                     # For MCP-specific configs, only process MCP-related settings
@@ -252,7 +216,7 @@ class ClientSettingsManager:
                                     category=SettingCategory.EXTENSIONS,
                                     description=f"MCP server configuration for {server_name}",
                                     display_name=f"MCP: {server_name}",
-                                    editable=False  # MCP configs are managed separately
+                                    editable=False,  # MCP configs are managed separately
                                 )
                             combined_raw_config[f"_mcp_{config_type}"] = raw_config
                         continue
@@ -282,14 +246,13 @@ class ClientSettingsManager:
             primary_path = config_files[0][1]
 
             client_config = ClientConfig(
-                client_id=client_id,
-                config_path=primary_path,
-                settings=all_settings,
-                raw_config=combined_raw_config
+                client_id=client_id, config_path=primary_path, settings=all_settings, raw_config=combined_raw_config
             )
 
             self.clients[client_id] = client_config
-            logger.info(f"Discovered {len(all_settings)} settings for client {client_id} from {len(config_files)} config files")
+            logger.info(
+                f"Discovered {len(all_settings)} settings for client {client_id} from {len(config_files)} config files"
+            )
 
             return client_config
 
@@ -297,43 +260,42 @@ class ClientSettingsManager:
             logger.error(f"Failed to discover settings for client {client_id}: {e}")
             return None
 
-    def get_client_settings(self, client_id: str) -> Optional[Dict[str, Any]]:
+    def get_client_settings(self, client_id: str) -> dict[str, Any] | None:
         """Get all settings for a client, organized by category."""
         client_config = self.clients.get(client_id)
         if not client_config:
             return None
 
-        categorized = {}
+        categorized: dict[str, Any] = {}
         for setting in client_config.settings.values():
             category_name = setting.category.value
             if category_name not in categorized:
                 categorized[category_name] = []
 
-            categorized[category_name].append({
-                "key": setting.key,
-                "value": setting.value,
-                "type": setting.setting_type.value,
-                "description": setting.description,
-                "display_name": setting.display_name or setting.key,
-                "editable": setting.editable
-            })
+            categorized[category_name].append(
+                {
+                    "key": setting.key,
+                    "value": setting.value,
+                    "type": setting.setting_type.value,
+                    "description": setting.description,
+                    "display_name": setting.display_name or setting.key,
+                    "editable": setting.editable,
+                }
+            )
 
         # Sort categories and settings within categories
         sorted_categorized = {}
         for category in sorted(categorized.keys()):
-            sorted_categorized[category] = sorted(
-                categorized[category],
-                key=lambda x: x["display_name"].lower()
-            )
+            sorted_categorized[category] = sorted(categorized[category], key=lambda x: x["display_name"].lower())
 
         return {
             "client_id": client_id,
             "categories": sorted_categorized,
             "total_settings": len(client_config.settings),
-            "editable_settings": sum(1 for s in client_config.settings.values() if s.editable)
+            "editable_settings": sum(1 for s in client_config.settings.values() if s.editable),
         }
 
-    def get_setting(self, client_id: str, key: str) -> Optional[Dict[str, Any]]:
+    def get_setting(self, client_id: str, key: str) -> dict[str, Any] | None:
         """Get a specific setting."""
         client_config = self.clients.get(client_id)
         if not client_config or key not in client_config.settings:
@@ -347,7 +309,7 @@ class ClientSettingsManager:
             "category": setting.category.value,
             "description": setting.description,
             "display_name": setting.display_name,
-            "editable": setting.editable
+            "editable": setting.editable,
         }
 
     def update_setting(self, client_id: str, key: str, value: Any, create_backup: bool = True) -> bool:
@@ -387,13 +349,13 @@ class ClientSettingsManager:
                     return False
 
             # Load the target config file
-            with open(target_config_path, 'r', encoding='utf-8') as f:
+            with open(target_config_path, encoding="utf-8") as f:
                 target_config = json.load(f)
 
             # Update the setting in the target config
             if target_config_key:
                 # Setting is at a nested path (e.g., mcp.servers.server_name)
-                keys = target_config_key.split('.')
+                keys = target_config_key.split(".")
                 current = target_config
                 for k in keys[:-1]:
                     if k not in current:
@@ -405,14 +367,14 @@ class ClientSettingsManager:
                 target_config[key] = value
 
             # Write back to file
-            with open(target_config_path, 'w', encoding='utf-8') as f:
+            with open(target_config_path, "w", encoding="utf-8") as f:
                 json.dump(target_config, f, indent=2, ensure_ascii=False)
 
             # Update our in-memory representation
             setting.value = value
             if target_config_key:
                 # Update nested config
-                keys = target_config_key.split('.')
+                keys = target_config_key.split(".")
                 current = client_config.raw_config
                 for k in keys[:-1]:
                     if k not in current:
@@ -429,7 +391,7 @@ class ClientSettingsManager:
             logger.error(f"Failed to update setting {key}: {e}")
             return False
 
-    def _find_setting_location(self, client_id: str, key: str) -> Tuple[Optional[Path], Optional[str]]:
+    def _find_setting_location(self, client_id: str, key: str) -> tuple[Path | None, str | None]:
         """
         Find which config file and key path contains a setting.
 
@@ -444,7 +406,7 @@ class ClientSettingsManager:
             for config_type, config_path in config_files:
                 if config_type == "mcp" and config_path.exists():
                     try:
-                        with open(config_path, 'r', encoding='utf-8') as f:
+                        with open(config_path, encoding="utf-8") as f:
                             config = json.load(f)
                         if "mcpServers" in config and server_name in config["mcpServers"]:
                             return config_path, f"mcpServers.{server_name}"
@@ -455,7 +417,7 @@ class ClientSettingsManager:
         for config_type, config_path in config_files:
             if config_path.exists():
                 try:
-                    with open(config_path, 'r', encoding='utf-8') as f:
+                    with open(config_path, encoding="utf-8") as f:
                         config = json.load(f)
                     if key in config:
                         return config_path, None
@@ -464,7 +426,7 @@ class ClientSettingsManager:
 
         return None, None
 
-    def _create_backup_for_path(self, config_path: Path, backup_name: str) -> Optional[Path]:
+    def _create_backup_for_path(self, config_path: Path, backup_name: str) -> Path | None:
         """Create a backup of a specific config file."""
         try:
             backup_dir = config_path.parent / "backups"
@@ -472,6 +434,7 @@ class ClientSettingsManager:
 
             backup_path = backup_dir / f"{backup_name}.json"
             import shutil
+
             shutil.copy2(config_path, backup_path)
 
             logger.info(f"Created backup: {backup_path}")
@@ -497,7 +460,7 @@ class ClientSettingsManager:
             # For unknown types, be permissive
             return True
 
-    def _create_backup(self, client_config: ClientConfig, backup_name: str) -> Optional[Path]:
+    def _create_backup(self, client_config: ClientConfig, backup_name: str) -> Path | None:
         """Create a backup of the client config."""
         try:
             backup_dir = client_config.config_path.parent / "backups"
@@ -505,6 +468,7 @@ class ClientSettingsManager:
 
             backup_path = backup_dir / f"{backup_name}.json"
             import shutil
+
             shutil.copy2(client_config.config_path, backup_path)
 
             logger.info(f"Created backup: {backup_path}")
@@ -514,13 +478,13 @@ class ClientSettingsManager:
             logger.error(f"Failed to create backup: {e}")
             return None
 
-    def get_setting_categories(self) -> Dict[str, Dict[str, Any]]:
+    def get_setting_categories(self) -> dict[str, dict[str, Any]]:
         """Get information about available setting categories."""
         return {
             category.value: {
                 "name": category.value.title(),
                 "description": self._get_category_description(category),
-                "icon": self._get_category_icon(category)
+                "icon": self._get_category_icon(category),
             }
             for category in SettingCategory
         }
@@ -537,7 +501,7 @@ class ClientSettingsManager:
             SettingCategory.SEARCH: "Search and find functionality",
             SettingCategory.GIT: "Git integration and version control",
             SettingCategory.DEBUG: "Debugger and development tools",
-            SettingCategory.OTHER: "Miscellaneous settings"
+            SettingCategory.OTHER: "Miscellaneous settings",
         }
         return descriptions.get(category, "General settings")
 
@@ -553,11 +517,11 @@ class ClientSettingsManager:
             SettingCategory.SEARCH: "fas fa-search",
             SettingCategory.GIT: "fab fa-git",
             SettingCategory.DEBUG: "fas fa-bug",
-            SettingCategory.OTHER: "fas fa-cog"
+            SettingCategory.OTHER: "fas fa-cog",
         }
         return icons.get(category, "fas fa-cog")
 
-    def get_client_config_paths(self, client_id: str) -> List[Tuple[str, Path]]:
+    def get_client_config_paths(self, client_id: str) -> list[tuple[str, Path]]:
         """
         Get all configuration file paths for a client.
 
@@ -567,8 +531,8 @@ class ClientSettingsManager:
         Returns:
             List of (config_type, path) tuples for the client
         """
-        from pathlib import Path
         import os
+        from pathlib import Path
 
         appdata = Path(os.environ.get("APPDATA", ""))
 
@@ -584,12 +548,28 @@ class ClientSettingsManager:
             # Extension-specific configs
             if client_id == "cline-vscode":
                 # Roo-Cline MCP config
-                roo_cline_mcp = appdata / "Code" / "User" / "globalStorage" / "rooveterinaryinc.roo-cline" / "settings" / "mcp_settings.json"
+                roo_cline_mcp = (
+                    appdata
+                    / "Code"
+                    / "User"
+                    / "globalStorage"
+                    / "rooveterinaryinc.roo-cline"
+                    / "settings"
+                    / "mcp_settings.json"
+                )
                 if roo_cline_mcp.exists():
                     configs.append(("mcp", roo_cline_mcp))
 
                 # Claude Dev (original Cline) MCP config - fallback
-                claude_dev_mcp = appdata / "Code" / "User" / "globalStorage" / "saoudrizwan.claude-dev" / "settings" / "cline_mcp_settings.json"
+                claude_dev_mcp = (
+                    appdata
+                    / "Code"
+                    / "User"
+                    / "globalStorage"
+                    / "saoudrizwan.claude-dev"
+                    / "settings"
+                    / "cline_mcp_settings.json"
+                )
                 if claude_dev_mcp.exists():
                     configs.append(("mcp", claude_dev_mcp))
 
@@ -629,8 +609,8 @@ class ClientSettingsManager:
         elif client_id == "lm-studio":
             # Check both possible LM Studio config locations
             lm_studio_paths = [
-                Path.home() / ".lmstudio" / "mcp.json",        # User's preferred location
-                appdata / "LM Studio" / "config.json",         # Alternative location
+                Path.home() / ".lmstudio" / "mcp.json",  # User's preferred location
+                appdata / "LM Studio" / "config.json",  # Alternative location
             ]
             for path in lm_studio_paths:
                 if path.exists():
@@ -638,7 +618,7 @@ class ClientSettingsManager:
 
         return []
 
-    def _get_client_config_path(self, client_id: str) -> Optional[Path]:
+    def _get_client_config_path(self, client_id: str) -> Path | None:
         """
         Get the primary configuration file path for a client (backwards compatibility).
 

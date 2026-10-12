@@ -1,46 +1,37 @@
 """STDIO transport for MCP server communication using FastMCP 2.11."""
 
 import asyncio
-import json
-import logging
 import os
-import sys
 import time
 import uuid
-from asyncio import StreamReader, StreamWriter
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
-import structlog
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
-from pydantic import BaseModel
 
-from .config import settings
-from .enums import ServerStatus
+from ..models.mcp import MCPServer, ToolExecutionResult
 from .logging_utils import get_logger
-from ..models.mcp import MCPServer, ToolExecutionRequest, ToolExecutionResult
 
 logger = get_logger(__name__)
 
 # Constants for message handling
-MESSAGE_DELIMITER = b'\n'
+MESSAGE_DELIMITER = b"\n"
 MAX_MESSAGE_SIZE = 1024 * 1024  # 1MB
 
 
 class MCPStdioTransport:
     """Modern STDIO transport for MCP server communication using FastMCP 2.11."""
 
-    def __init__(self, server: MCPServer):
+    def __init__(self, server: MCPServer) -> None:
         """Initialize the STDIO transport.
 
         Args:
             server: The MCP server to communicate with
         """
         self.server = server
-        self.client: Optional[Client] = None
-        self.transport: Optional[StdioTransport] = None
+        self.client: Client | None = None
+        self.transport: StdioTransport | None = None
         self._is_connected = False
         self._process = None
 
@@ -66,7 +57,7 @@ class MCPStdioTransport:
 
             # Prepare environment variables
             env = os.environ.copy()
-            if hasattr(self.server, 'env') and self.server.env:
+            if hasattr(self.server, "env") and self.server.env:
                 env.update(self.server.env)
 
             # Create STDIO transport
@@ -74,7 +65,7 @@ class MCPStdioTransport:
                 command="python",
                 args=[str(server_path)],
                 env=env,
-                cwd=str(server_path.parent) if hasattr(self.server, 'cwd') and self.server.cwd else None
+                cwd=str(server_path.parent) if hasattr(self.server, "cwd") and self.server.cwd else None,
             )
 
             # Create FastMCP client
@@ -87,29 +78,20 @@ class MCPStdioTransport:
 
                 # Verify connection with a ping
                 tools = await self.client.list_tools()
-                logger.info(
-                    "Connected to MCP server via STDIO",
-                    server_id=self.server.id,
-                    tools_count=len(tools)
-                )
+                logger.info("Connected to MCP server via STDIO", server_id=self.server.id, tools_count=len(tools))
 
             self._is_connected = True
             return True
 
         except Exception as e:
-            logger.error(
-                "Failed to connect to MCP server",
-                server_id=self.server.id,
-                error=str(e),
-                exc_info=True
-            )
+            logger.error("Failed to connect to MCP server", server_id=self.server.id, error=str(e), exc_info=True)
             await self.close()
             return False
 
     async def execute_tool(
         self,
         tool_name: str,
-        parameters: Dict[str, Any],
+        parameters: dict[str, Any],
         timeout: float = 30.0,
     ) -> ToolExecutionResult:
         """Execute a tool on the MCP server.
@@ -169,7 +151,7 @@ class MCPStdioTransport:
                 execution_time=execution_time,
             )
 
-        except asyncio.TimeoutError as e:
+        except TimeoutError:
             error_msg = f"Tool execution timed out after {timeout} seconds"
             logger.warning(
                 error_msg,
@@ -184,7 +166,7 @@ class MCPStdioTransport:
             )
 
         except Exception as e:
-            error_msg = f"Unexpected error: {str(e)}"
+            error_msg = f"Unexpected error: {e!s}"
             logger.error(
                 error_msg,
                 server_id=self.server.id,
@@ -198,7 +180,7 @@ class MCPStdioTransport:
                 execution_time=time.monotonic() - start_time,
             )
 
-    async def list_tools(self) -> List[Dict[str, Any]]:
+    async def list_tools(self) -> list[dict[str, Any]]:
         """List available tools on the MCP server.
 
         Returns:
@@ -224,21 +206,13 @@ class MCPStdioTransport:
                     }
                     tool_list.append(tool_dict)
 
-                logger.debug(
-                    "Listed tools from MCP server",
-                    server_id=self.server.id,
-                    tool_count=len(tool_list)
-                )
+                logger.debug("Listed tools from MCP server", server_id=self.server.id, tool_count=len(tool_list))
 
                 return tool_list
 
         except Exception as e:
-            error_msg = f"Failed to list tools: {str(e)}"
-            logger.error(
-                error_msg,
-                server_id=self.server.id,
-                exc_info=True
-            )
+            error_msg = f"Failed to list tools: {e!s}"
+            logger.error(error_msg, server_id=self.server.id, exc_info=True)
             raise RuntimeError(error_msg) from e
 
     async def ping(self) -> bool:
@@ -257,14 +231,10 @@ class MCPStdioTransport:
                 return True
 
         except Exception as e:
-            logger.warning(
-                "Ping failed",
-                server_id=self.server.id,
-                error=str(e)
-            )
+            logger.warning("Ping failed", server_id=self.server.id, error=str(e))
             return False
 
-    async def get_server_info(self) -> Dict[str, Any]:
+    async def get_server_info(self) -> dict[str, Any]:
         """Get server information and capabilities.
 
         Returns:
@@ -281,33 +251,22 @@ class MCPStdioTransport:
                 server_info = {
                     "server_id": self.server.id,
                     "name": self.server.name,
-                    "version": getattr(self.server, 'version', '1.0.0'),
+                    "version": getattr(self.server, "version", "1.0.0"),
                     "status": "connected",
                     "tools_count": len(tools),
-                    "tools": [
-                        {
-                            "name": tool.name,
-                            "description": tool.description
-                        }
-                        for tool in tools
-                    ],
+                    "tools": [{"name": tool.name, "description": tool.description} for tool in tools],
                     "capabilities": {
                         "tools": True,
                         "resources": True,  # Assume supported
-                        "prompts": True,    # Assume supported
-                    }
+                        "prompts": True,  # Assume supported
+                    },
                 }
 
                 return server_info
 
         except Exception as e:
-            logger.error(
-                "Failed to get server info",
-                server_id=self.server.id,
-                error=str(e),
-                exc_info=True
-            )
-            raise RuntimeError(f"Failed to get server info: {str(e)}") from e
+            logger.error("Failed to get server info", server_id=self.server.id, error=str(e), exc_info=True)
+            raise RuntimeError(f"Failed to get server info: {e!s}") from e
 
     async def close(self) -> None:
         """Close the connection to the MCP server and clean up resources.
@@ -326,11 +285,7 @@ class MCPStdioTransport:
                 # No explicit close needed for FastMCP 2.11 client
                 pass
             except Exception as e:
-                logger.warning(
-                    "Error closing FastMCP client",
-                    server_id=self.server.id,
-                    error=str(e)
-                )
+                logger.warning("Error closing FastMCP client", server_id=self.server.id, error=str(e))
             finally:
                 self.client = None
 
@@ -340,11 +295,7 @@ class MCPStdioTransport:
                 # Transport cleanup is handled by FastMCP
                 pass
             except Exception as e:
-                logger.warning(
-                    "Error cleaning up transport",
-                    server_id=self.server.id,
-                    error=str(e)
-                )
+                logger.warning("Error cleaning up transport", server_id=self.server.id, error=str(e))
             finally:
                 self.transport = None
 
@@ -354,12 +305,12 @@ class MCPStdioTransport:
 class MCPTransportManager:
     """Manager for MCP transport connections using FastMCP 2.11."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the transport manager."""
-        self.transports: Dict[str, MCPStdioTransport] = {}
+        self.transports: dict[str, MCPStdioTransport] = {}
         self._lock = asyncio.Lock()
 
-    async def get_transport(self, server: MCPServer) -> Optional[MCPStdioTransport]:
+    async def get_transport(self, server: MCPServer) -> MCPStdioTransport | None:
         """Get or create a transport for the given server.
 
         Args:
@@ -410,7 +361,7 @@ class MCPTransportManager:
                     logger.error("Error closing transport", error=str(e))
             self.transports.clear()
 
-    async def get_all_server_info(self) -> Dict[str, Dict[str, Any]]:
+    async def get_all_server_info(self) -> dict[str, dict[str, Any]]:
         """Get information about all connected servers.
 
         Returns:
@@ -424,16 +375,9 @@ class MCPTransportManager:
                         info = await transport.get_server_info()
                         server_info[server_id] = info
                     else:
-                        server_info[server_id] = {
-                            "server_id": server_id,
-                            "status": "disconnected"
-                        }
+                        server_info[server_id] = {"server_id": server_id, "status": "disconnected"}
                 except Exception as e:
-                    server_info[server_id] = {
-                        "server_id": server_id,
-                        "status": "error",
-                        "error": str(e)
-                    }
+                    server_info[server_id] = {"server_id": server_id, "status": "error", "error": str(e)}
 
         return server_info
 

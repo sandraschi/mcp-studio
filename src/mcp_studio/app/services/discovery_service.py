@@ -1,22 +1,15 @@
 """MCP server discovery service."""
 
 import asyncio
-import importlib
-import importlib.util
 import inspect
-import json
-import logging
 import os
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any
 
-import aiohttp
 from fastapi import HTTPException
-from fastmcp import FastMCP
-from pydantic import AnyHttpUrl, ValidationError
 
 from ..core.config import settings
 from ..core.logging_utils import get_logger
@@ -26,13 +19,14 @@ from ..models.mcp import MCPServer, MCPTool, MCPToolParameter, ServerStatus
 logger = get_logger(__name__)
 
 # In-memory cache of discovered MCP servers
-discovered_servers: Dict[str, MCPServer] = {}
+discovered_servers: dict[str, MCPServer] = {}
 
 # Set of server IDs that are currently being discovered
-discovering_servers: Set[str] = set()
+discovering_servers: set[str] = set()
 
 # Lock for thread-safe server discovery
 discovery_lock = asyncio.Lock()
+
 
 async def discover_mcp_servers() -> None:
     """Discover and register MCP servers from configured paths."""
@@ -46,9 +40,7 @@ async def discover_mcp_servers() -> None:
             # Discover servers from each path
             discovery_tasks = []
             for server_path, server_type in server_paths:
-                task = asyncio.create_task(
-                    _discover_server(server_path, server_type)
-                )
+                task = asyncio.create_task(_discover_server(server_path, server_type))
                 discovery_tasks.append(task)
 
             # Wait for all discoveries to complete
@@ -65,7 +57,8 @@ async def discover_mcp_servers() -> None:
         # Wait before next discovery cycle
         await asyncio.sleep(30)  # Check every 30 seconds
 
-async def _find_potential_servers() -> List[Tuple[Path, str]]:
+
+async def _find_potential_servers() -> list[tuple[Path, str]]:
     """Find potential MCP server paths."""
     server_paths = []
 
@@ -99,6 +92,7 @@ async def _find_potential_servers() -> List[Tuple[Path, str]]:
     logger.debug("Found potential MCP servers", count=len(server_paths))
     return server_paths
 
+
 async def _discover_server(server_path: Path, server_type: str) -> None:
     """Discover and register a single MCP server."""
     server_id = f"{server_type}:{server_path}"
@@ -127,6 +121,7 @@ async def _discover_server(server_path: Path, server_type: str) -> None:
         finally:
             discovering_servers.discard(server_id)
 
+
 async def _discover_python_server(server_path: Path) -> None:
     """Discover a Python-based MCP server by launching it and connecting via stdio."""
     server_id = f"python:{server_path}"
@@ -139,11 +134,12 @@ async def _discover_python_server(server_path: Path) -> None:
                 return
 
         # Launch the server process
-        process = await asyncio.create_subprocess_exec(
-            sys.executable, str(server_path),
+        await asyncio.create_subprocess_exec(
+            sys.executable,
+            str(server_path),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
 
         # Create MCP server model
@@ -159,8 +155,8 @@ async def _discover_python_server(server_path: Path) -> None:
                 "type": "python",
                 "path": str(server_path),
                 "discovered_at": datetime.utcnow().isoformat(),
-                "last_seen": datetime.utcnow().isoformat()
-            }
+                "last_seen": datetime.utcnow().isoformat(),
+            },
         )
 
         # Get transport and connect
@@ -206,17 +202,13 @@ async def _discover_python_server(server_path: Path) -> None:
             # Update server status and tools
             server.status = ServerStatus.ONLINE
             server.tools = tools
-            server.metadata.update({
-                "version": tools_response.get("version", "1.0.0"),
-                "last_seen": datetime.utcnow().isoformat()
-            })
+            server.metadata.update(
+                {"version": tools_response.get("version", "1.0.0"), "last_seen": datetime.utcnow().isoformat()}
+            )
 
             # Register the server
             discovered_servers[server_id] = server
-            logger.info("Discovered MCP server",
-                      server_id=server_id,
-                      tools=len(tools),
-                      status=server.status.value)
+            logger.info("Discovered MCP server", server_id=server_id, tools=len(tools), status=server.status.value)
 
         except Exception as e:
             logger.error(
@@ -230,30 +222,24 @@ async def _discover_python_server(server_path: Path) -> None:
         if server_path.parent.is_dir() and str(server_path.parent) in sys.path:
             sys.path.remove(str(server_path.parent))
 
+
 async def _discover_dxt_server(dxt_path: Path) -> None:
     """Discover a DXT/MCPB-packaged MCP server."""
     from .mcpb_loader import load_mcpb_package
-    
+
     try:
-        logger.info(
-            "Loading packaged server",
-            path=str(dxt_path),
-            type="dxt/mcpb"
-        )
-        
+        logger.info("Loading packaged server", path=str(dxt_path), type="dxt/mcpb")
+
         # Load the package
         server_config = await load_mcpb_package(dxt_path)
-        
+
         if not server_config:
-            logger.error(
-                "Failed to load packaged server",
-                path=str(dxt_path)
-            )
+            logger.error("Failed to load packaged server", path=str(dxt_path))
             return
-        
+
         # Create server ID
         server_id = f"package:{server_config['id']}"
-        
+
         # Register the server
         server = MCPServer(
             id=server_id,
@@ -268,25 +254,21 @@ async def _discover_dxt_server(dxt_path: Path) -> None:
             version=server_config.get("version", "unknown"),
             type=server_config["type"],
         )
-        
+
         discovered_servers[server_id] = server
-        
+
         logger.info(
             "Packaged server registered",
             server_id=server_id,
             name=server["name"],
-            version=server.get("version", "unknown")
-        )
-        
-    except Exception as e:
-        logger.error(
-            "Error loading packaged server",
-            path=str(dxt_path),
-            error=str(e),
-            exc_info=True
+            version=server.get("version", "unknown"),
         )
 
-def _extract_tool_info(tool_name: str, tool_func: Any) -> Optional[MCPTool]:
+    except Exception as e:
+        logger.error("Error loading packaged server", path=str(dxt_path), error=str(e), exc_info=True)
+
+
+def _extract_tool_info(tool_name: str, tool_func: Any) -> MCPTool | None:
     """Extract tool information from a tool function."""
     try:
         # Get function signature
@@ -330,6 +312,7 @@ def _extract_tool_info(tool_name: str, tool_func: Any) -> Optional[MCPTool]:
         logger.error("Error extracting tool info", tool=tool_name, error=str(e), exc_info=True)
         return None
 
+
 def _get_type_name(type_obj: Any) -> str:
     """Get a string representation of a type."""
     if hasattr(type_obj, "__name__"):
@@ -337,56 +320,58 @@ def _get_type_name(type_obj: Any) -> str:
     return str(type_obj).lower()
 
 
-def _parse_docstring_args(docstring: str) -> Dict[str, str]:
+def _parse_docstring_args(docstring: str) -> dict[str, str]:
     """Parse docstring to extract parameter descriptions from Args section.
-    
+
     Supports Google-style docstrings:
         Args:
             param_name: Parameter description
             param_name (type): Parameter description with type
-            
+
     Returns:
         Dictionary mapping parameter names to their descriptions
     """
     if not docstring:
         return {}
-    
-    param_descriptions = {}
-    
+
+    param_descriptions: dict[str, str] = {}
+
     # Find Args section (case-insensitive, handles "Args:" or "Parameters:")
-    args_pattern = re.compile(r'^(Args|Parameters):\s*$', re.IGNORECASE | re.MULTILINE)
+    args_pattern = re.compile(r"^(Args|Parameters):\s*$", re.IGNORECASE | re.MULTILINE)
     match = args_pattern.search(docstring)
-    
+
     if not match:
         return param_descriptions
-    
+
     # Extract everything after Args:
     args_start = match.end()
     args_text = docstring[args_start:]
-    
+
     # Stop at next section (Returns, Examples, Raises, etc.) or end of docstring
-    next_section_pattern = re.compile(r'^(Returns?|Examples?|Raises?|Yields?|Note|See Also|Usage):\s*$', re.IGNORECASE | re.MULTILINE)
+    next_section_pattern = re.compile(
+        r"^(Returns?|Examples?|Raises?|Yields?|Note|See Also|Usage):\s*$", re.IGNORECASE | re.MULTILINE
+    )
     next_match = next_section_pattern.search(args_text)
     if next_match:
-        args_text = args_text[:next_match.start()]
-    
+        args_text = args_text[: next_match.start()]
+
     # Parse each parameter line
     # Pattern: param_name: description or param_name (type): description
     # Handles indented continuation lines
-    lines = args_text.split('\n')
+    lines = args_text.split("\n")
     current_param = None
     current_desc = []
-    
+
     for line in lines:
         # Check if this is a parameter line (starts with word, then colon)
         # Handles: "param:", "param (type):", "param_name:", etc.
-        param_match = re.match(r'^\s*(\w+)(?:\s*\([^)]+\))?:\s*(.+)?$', line)
-        
+        param_match = re.match(r"^\s*(\w+)(?:\s*\([^)]+\))?:\s*(.+)?$", line)
+
         if param_match:
             # Save previous parameter
             if current_param and current_desc:
-                param_descriptions[current_param] = ' '.join(current_desc).strip()
-            
+                param_descriptions[current_param] = " ".join(current_desc).strip()
+
             # Start new parameter
             current_param = param_match.group(1)
             current_desc = [param_match.group(2)] if param_match.group(2) else []
@@ -396,17 +381,18 @@ def _parse_docstring_args(docstring: str) -> Dict[str, str]:
             if stripped:
                 current_desc.append(stripped)
             elif current_desc:  # Empty line ends description
-                param_descriptions[current_param] = ' '.join(current_desc).strip()
+                param_descriptions[current_param] = " ".join(current_desc).strip()
                 current_param = None
                 current_desc = []
-    
+
     # Save last parameter
     if current_param and current_desc:
-        param_descriptions[current_param] = ' '.join(current_desc).strip()
-    
+        param_descriptions[current_param] = " ".join(current_desc).strip()
+
     return param_descriptions
 
-async def _cleanup_servers(active_paths: List[Tuple[Path, str]]) -> None:
+
+async def _cleanup_servers(active_paths: list[tuple[Path, str]]) -> None:
     """Remove servers that are no longer available."""
     active_ids = {f"{server_type}:{path}" for path, server_type in active_paths}
 
@@ -415,75 +401,59 @@ async def _cleanup_servers(active_paths: List[Tuple[Path, str]]) -> None:
             logger.info("Removing inactive MCP server", server_id=server_id)
             del discovered_servers[server_id]
 
-async def get_servers() -> List[MCPServer]:
+
+async def get_servers() -> list[MCPServer]:
     """Get all discovered MCP servers."""
     return list(discovered_servers.values())
 
-async def get_server(server_id: str) -> Optional[MCPServer]:
+
+async def get_server(server_id: str) -> MCPServer | None:
     """Get a specific MCP server by ID."""
     return discovered_servers.get(server_id)
 
+
 async def execute_tool(
-    server_id: str, 
-    tool_name: str, 
-    parameters: Dict[str, Any],
-    timeout: float = 30.0
-) -> Dict[str, Any]:
+    server_id: str, tool_name: str, parameters: dict[str, Any], timeout: float = 30.0
+) -> dict[str, Any]:
     """Execute a tool on an MCP server.
-    
+
     Args:
         server_id: ID of the MCP server
         tool_name: Name of the tool to execute
         parameters: Parameters to pass to the tool
         timeout: Maximum time to wait for execution (seconds)
-        
+
     Returns:
         Dictionary containing execution result with keys:
         - success: bool indicating if execution succeeded
         - result: The tool execution result (if successful)
         - error: Error message (if failed)
         - execution_time: Time taken to execute (seconds)
-        
+
     Raises:
         HTTPException: If server or tool not found, or execution fails
     """
     server = discovered_servers.get(server_id)
     if not server:
-        raise HTTPException(
-            status_code=404, 
-            detail=f"Server {server_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"Server {server_id} not found")
 
     # Find the tool
     tool = next((t for t in server.tools if t.name == tool_name), None)
     if not tool:
-        raise HTTPException(
-            status_code=404, 
-            detail=f"Tool {tool_name} not found on server {server_id}"
-        )
+        raise HTTPException(status_code=404, detail=f"Tool {tool_name} not found on server {server_id}")
 
     try:
         # Get transport for the server
         transport = await transport_manager.get_transport(server)
         if not transport:
             raise HTTPException(
-                status_code=503,
-                detail=f"Failed to connect to server {server_id}. Server may be unavailable."
+                status_code=503, detail=f"Failed to connect to server {server_id}. Server may be unavailable."
             )
 
         # Execute the tool
-        logger.info(
-            "Executing tool",
-            server_id=server_id,
-            tool_name=tool_name,
-            parameters=parameters
-        )
-        
-        result = await transport.execute_tool(
-            tool_name=tool_name,
-            parameters=parameters,
-            timeout=timeout
-        )
+        logger.info("Executing tool", server_id=server_id, tool_name=tool_name, parameters=parameters)
+
+        result = await transport.execute_tool(tool_name=tool_name, parameters=parameters, timeout=timeout)
 
         if result.success:
             return {
@@ -493,36 +463,26 @@ async def execute_tool(
                 "execution_time": result.execution_time,
             }
         else:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Tool execution failed: {result.error}"
-            )
+            raise HTTPException(status_code=500, detail=f"Tool execution failed: {result.error}")
 
     except HTTPException:
         # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
         logger.error(
-            "Unexpected error executing tool",
-            server_id=server_id,
-            tool_name=tool_name,
-            error=str(e),
-            exc_info=True
+            "Unexpected error executing tool", server_id=server_id, tool_name=tool_name, error=str(e), exc_info=True
         )
-        raise HTTPException(
-            status_code=500,
-            detail=f"Unexpected error executing tool: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Unexpected error executing tool: {e!s}")
 
 
 # Create a simple discovery service class
 class DiscoveryService:
     """Simple discovery service implementation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.settings = settings
 
-    async def discover_mcp_servers(self):
+    async def discover_mcp_servers(self) -> Any:
         """Start MCP server discovery."""
         return await discover_mcp_servers()
 
