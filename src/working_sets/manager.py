@@ -1,14 +1,14 @@
-﻿"""
+"""
 MCP Studio Working Set Manager
 Manages different working sets of MCP servers for focused workflows.
 """
 
 import json
+import logging
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any
-import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class WorkingSet:
     """Represents a working set configuration."""
 
-    def __init__(self, data: Dict[str, Any]):
+    def __init__(self, data: dict[str, Any]) -> None:
         self.name = data.get("name", "")
         self.id = data.get("id", "")
         self.description = data.get("description", "")
@@ -26,15 +26,15 @@ class WorkingSet:
         self.created_at = data.get("created_at")
         self.updated_at = data.get("updated_at")
 
-    def get_server_names(self) -> List[str]:
+    def get_server_names(self) -> list[str]:
         """Get list of server names in this working set."""
         return [server["name"] for server in self.servers]
 
-    def get_required_servers(self) -> List[str]:
+    def get_required_servers(self) -> list[str]:
         """Get list of required server names."""
         return [server["name"] for server in self.servers if server.get("required", False)]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "name": self.name,
@@ -51,7 +51,7 @@ class WorkingSet:
 class WorkingSetManager:
     """Manages working sets and Claude Desktop config switching."""
 
-    def __init__(self, config_path: str, backup_dir: str = None, templates_dir: str = None):
+    def __init__(self, config_path: str, backup_dir: str | None = None, templates_dir: str | None = None) -> None:
         self.config_path = Path(config_path)
         self.backup_dir = Path(backup_dir or self.config_path.parent / "backup")
         self.templates_dir = Path(templates_dir or "templates")
@@ -71,24 +71,24 @@ class WorkingSetManager:
         self._current_config = self._load_current_config()
         self._working_sets = self._load_working_sets()
 
-    def _load_current_config(self) -> Dict[str, Any]:
+    def _load_current_config(self) -> dict[str, Any]:
         """Load current Claude Desktop config."""
         try:
             if self.config_path.exists():
-                with open(self.config_path, "r", encoding="utf-8") as f:
+                with open(self.config_path, encoding="utf-8") as f:
                     return json.load(f)
             return {"mcpServers": {}}
         except Exception as e:
             logger.error(f"Failed to load config: {e}")
             return {"mcpServers": {}}
 
-    def _load_working_sets(self) -> Dict[str, WorkingSet]:
+    def _load_working_sets(self) -> dict[str, WorkingSet]:
         """Load all working set templates."""
         working_sets = {}
         for template_file in self.templates_dir.glob("*.json"):
             try:
                 # Use utf-8-sig to handle UTF-8 BOM markers
-                with open(template_file, "r", encoding="utf-8-sig") as f:
+                with open(template_file, encoding="utf-8-sig") as f:
                     data = json.load(f)
                     working_set = WorkingSet(data)
                     working_sets[working_set.id] = working_set
@@ -96,21 +96,21 @@ class WorkingSetManager:
                 logger.error(f"Failed to load working set {template_file}: {e}")
         return working_sets
 
-    def list_working_sets(self) -> List[Dict[str, Any]]:
+    def list_working_sets(self) -> list[dict[str, Any]]:
         """Get list of all available working sets."""
         return [ws.to_dict() for ws in self._working_sets.values()]
 
-    def get_working_set(self, working_set_id: str) -> Optional[WorkingSet]:
+    def get_working_set(self, working_set_id: str) -> WorkingSet | None:
         """Get specific working set by ID."""
         return self._working_sets.get(working_set_id)
 
-    def get_current_working_set(self) -> Optional[str]:
+    def get_current_working_set(self) -> str | None:
         """Detect current working set based on active servers."""
         current_servers = set(self._current_config.get("mcpServers", {}).keys())
 
         # Find best match
         best_match = None
-        best_score = 0
+        best_score: float = 0
 
         for ws_id, working_set in self._working_sets.items():
             ws_servers = set(working_set.get_server_names())
@@ -127,7 +127,7 @@ class WorkingSetManager:
 
         return best_match
 
-    def create_backup(self, name: str = None) -> str:
+    def create_backup(self, name: str | None = None) -> str:
         """Create backup of current config."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = name or f"backup_{timestamp}"
@@ -141,7 +141,7 @@ class WorkingSetManager:
             logger.error(f"Failed to create backup: {e}")
             raise
 
-    def list_backups(self) -> List[Dict[str, Any]]:
+    def list_backups(self) -> list[dict[str, Any]]:
         """List all available backups."""
         backups = []
         for backup_file in self.backup_dir.glob("*.json"):
@@ -175,7 +175,7 @@ class WorkingSetManager:
             logger.error(f"Failed to restore backup: {e}")
             raise
 
-    def generate_config_for_working_set(self, working_set_id: str) -> Dict[str, Any]:
+    def generate_config_for_working_set(self, working_set_id: str) -> dict[str, Any]:
         """Generate Claude Desktop config for specific working set."""
         working_set = self.get_working_set(working_set_id)
         if not working_set:
@@ -185,7 +185,7 @@ class WorkingSetManager:
         server_names = working_set.get_server_names()
 
         # Build new config with only specified servers
-        new_config = {"mcpServers": {}}
+        new_config: dict[str, Any] = {"mcpServers": {}}
         current_servers = self._current_config.get("mcpServers", {})
 
         for server_name in server_names:
@@ -196,7 +196,7 @@ class WorkingSetManager:
 
         return new_config
 
-    def switch_to_working_set(self, working_set_id: str, create_backup: bool = True) -> Dict[str, Any]:
+    def switch_to_working_set(self, working_set_id: str, create_backup: bool = True) -> dict[str, Any]:
         """Switch to specified working set with automatic rollback on failure."""
         working_set = self.get_working_set(working_set_id)
         if not working_set:
@@ -227,7 +227,7 @@ class WorkingSetManager:
                 json.dump(new_config, f, indent=2, ensure_ascii=False)
 
             # Verify the config was written correctly by reading it back
-            with open(self.config_path, "r", encoding="utf-8") as f:
+            with open(self.config_path, encoding="utf-8") as f:
                 verify_config = json.load(f)
 
             if not isinstance(verify_config, dict) or "mcpServers" not in verify_config:
@@ -242,7 +242,7 @@ class WorkingSetManager:
                 "working_set_id": working_set_id,
                 "working_set_name": working_set.name,
                 "backup_created": backup_created,
-                "servers_count": len(new_config.get("mcpServers", {}))
+                "servers_count": len(new_config.get("mcpServers", {})),
             }
 
         except Exception as e:
@@ -258,13 +258,15 @@ class WorkingSetManager:
                     logger.info("Rollback successful - config restored from memory")
                 except Exception as rollback_error:
                     logger.error(f"Rollback failed: {rollback_error}")
-                    logger.warning(f"Config may be in inconsistent state. Manual recovery needed.")
+                    logger.warning("Config may be in inconsistent state. Manual recovery needed.")
                     logger.warning(f"Backup available at: {backup_created}")
 
-            raise RuntimeError(f"Failed to switch to working set {working_set_id}: {str(e)}. "
-                             f"{'Config automatically rolled back.' if backup_created else 'No backup available.'}")
+            raise RuntimeError(
+                f"Failed to switch to working set {working_set_id}: {e!s}. "
+                f"{'Config automatically rolled back.' if backup_created else 'No backup available.'}"
+            )
 
-    def preview_working_set_config(self, working_set_id: str) -> Dict[str, Any]:
+    def preview_working_set_config(self, working_set_id: str) -> dict[str, Any]:
         """Preview config changes for working set without applying."""
         current_servers = set(self._current_config.get("mcpServers", {}).keys())
         new_config = self.generate_config_for_working_set(working_set_id)
@@ -278,7 +280,7 @@ class WorkingSetManager:
             "config_preview": new_config,
         }
 
-    def validate_working_set(self, working_set_id: str) -> Dict[str, Any]:
+    def validate_working_set(self, working_set_id: str) -> dict[str, Any]:
         """Validate that working set can be applied."""
         working_set = self.get_working_set(working_set_id)
         if not working_set:

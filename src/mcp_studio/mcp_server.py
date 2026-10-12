@@ -7,6 +7,7 @@ managing and interacting with MCP servers through the Model Control Protocol.
 """
 
 import asyncio
+import logging
 import os
 import sys
 from pathlib import Path
@@ -18,13 +19,11 @@ from fastmcp import FastMCP
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from mcp_studio.tools import (
-    discover_servers,
-    execute_remote_tool,
-    get_server_info,
-    list_server_tools,
-    test_server_connection,
-)
+from mcp_studio.tools import discover_servers
+from mcp_studio.tools import execute_remote_tool as _execute_remote_tool
+from mcp_studio.tools import get_server_info as _get_server_info
+from mcp_studio.tools import list_server_tools as _list_server_tools
+from mcp_studio.tools import test_server_connection as _test_server_connection
 from mcp_studio.tools.runt_analyzer import analyze_runts, get_repo_status
 from mcp_studio.tools.server_deleter import delete_mcp_server as delete_server
 from mcp_studio.tools.server_updater import update_mcp_server as update_server
@@ -36,13 +35,16 @@ try:
     from mcp_studio.app.services.mcp_client_metadata import get_all_clients, get_client_metadata
     from mcp_studio.app.services.mcp_client_zoo import MCPClientZoo
     from working_sets.client_manager import ClientWorkingSetManager
+
+    CLIENT_SERVICES_AVAILABLE = True
 except ImportError:
     # Fallback if services not available
-    MCPClientZoo = None
-    get_all_clients = None
-    get_client_metadata = None
-    ClientWorkingSetManager = None
-    json = None
+    MCPClientZoo = None  # type: ignore[assignment,misc]
+    get_all_clients = None  # type: ignore[assignment]
+    get_client_metadata = None  # type: ignore[assignment]
+    ClientWorkingSetManager = None  # type: ignore[assignment,misc]
+    json = None  # type: ignore[assignment]
+    CLIENT_SERVICES_AVAILABLE = False
 
 # Initialize FastMCP server
 app = FastMCP(name="mcp-studio")
@@ -75,7 +77,9 @@ async def discover_mcp_servers(paths: list[str] | None = None) -> dict[str, Any]
     """
     try:
         scan_paths = paths or DISCOVERY_PATHS
-        result = await discover_servers(scan_paths)
+        # FIXME(BUG-078 typing pass): discover_servers scans the configured discovery paths and
+        # takes no path list (passing one landed in its max_depth parameter); `paths` is not honoured.
+        result = await discover_servers()
         return {"success": True, "servers": result, "scanned_paths": scan_paths}
     except Exception as e:
         return {"success": False, "error": str(e), "scanned_paths": scan_paths}
@@ -129,7 +133,7 @@ async def discover_clients(include_servers: bool = True) -> dict[str, Any]:
         result = await discover_clients(include_servers=False)
     """
     try:
-        if not MCPClientZoo:
+        if not CLIENT_SERVICES_AVAILABLE:
             return {
                 "success": False,
                 "error": "Client discovery services not available",
@@ -144,11 +148,11 @@ async def discover_clients(include_servers: bool = True) -> dict[str, Any]:
         client_results = zoo.scan_all_clients()
 
         # Get client metadata
-        all_client_metadata = get_all_clients() if get_all_clients else []
+        all_client_metadata = get_all_clients() if CLIENT_SERVICES_AVAILABLE else []
         metadata_map = {client.id: client for client in all_client_metadata}
 
         # Build client information
-        clients_info = []
+        clients_info: list[dict[str, Any]] = []
         total_servers = 0
 
         for client_id, servers in client_results.items():
@@ -164,7 +168,7 @@ async def discover_clients(include_servers: bool = True) -> dict[str, Any]:
                 except Exception:
                     pass
 
-            client_info = {
+            client_info: dict[str, Any] = {
                 "id": client_id,
                 "name": client_meta.name if client_meta else client_id,
                 "type": client_meta.client_type if client_meta else "Unknown",
@@ -251,7 +255,7 @@ async def get_server_info(server_id: str) -> dict[str, Any]:
         Detailed server information dictionary
     """
     try:
-        info = await get_server_info(server_id)
+        info = await _get_server_info(server_id)
         return {"success": True, "server": info}
     except Exception as e:
         return {"success": False, "error": str(e), "server_id": server_id}
@@ -272,7 +276,7 @@ async def list_server_tools(server_id: str) -> dict[str, Any]:
         List of tools with their metadata
     """
     try:
-        tools = await list_server_tools(server_id)
+        tools = await _list_server_tools(server_id)
         return {"success": True, "server_id": server_id, "tools": tools}
     except Exception as e:
         return {"success": False, "error": str(e), "server_id": server_id}
@@ -308,7 +312,7 @@ async def get_client_config(client_id: str) -> dict[str, Any]:
         result = await get_client_config("cursor-ide")
     """
     try:
-        if not ClientWorkingSetManager or not MCPClientZoo:
+        if not CLIENT_SERVICES_AVAILABLE:
             return {
                 "success": False,
                 "error": "Client config services not available",
@@ -406,7 +410,7 @@ async def set_client_config(client_id: str, config: dict[str, Any], create_backu
         )
     """
     try:
-        if not ClientWorkingSetManager or not MCPClientZoo or not json:
+        if not CLIENT_SERVICES_AVAILABLE:
             return {
                 "success": False,
                 "error": "Client config services not available",
@@ -519,7 +523,7 @@ async def execute_remote_tool(
         Tool execution result
     """
     try:
-        result = await execute_remote_tool(server_id, tool_name, parameters or {})
+        result = await _execute_remote_tool(server_id, tool_name, parameters or {})
         return {"success": True, "server_id": server_id, "tool_name": tool_name, "result": result}
     except Exception as e:
         return {"success": False, "error": str(e), "server_id": server_id, "tool_name": tool_name}
@@ -540,7 +544,7 @@ async def test_server_connection(server_id: str) -> dict[str, Any]:
         Connection test results
     """
     try:
-        result = await test_server_connection(server_id)
+        result = await _test_server_connection(server_id)
         return {"success": True, "server_id": server_id, "connection_status": result}
     except Exception as e:
         return {"success": False, "error": str(e), "server_id": server_id}
@@ -1265,6 +1269,8 @@ async def analyze_repo_sota_status(repo_path: str, scan_path: str | None = None)
             full_path = Path(repo_path).expanduser().resolve()
 
         result = await get_repo_status(str(full_path))
+        if isinstance(result, str):
+            return {"success": False, "error": result, "repo_path": repo_path}
         return result
     except Exception as e:
         return {"success": False, "error": str(e), "repo_path": repo_path}
@@ -1317,6 +1323,7 @@ async def create_mcp_server(
     Returns:
         Dictionary with creation status and server path
     """
+    from mcp_studio.app.core.config import DEFAULT_REPOS_PATH
     from mcp_studio.tools.server_scaffold import create_mcp_server as scaffold_server
 
     return await scaffold_server(
@@ -1324,7 +1331,7 @@ async def create_mcp_server(
         description=description,
         author=author,
         license_type=license_type,
-        target_path=target_path,
+        target_path=target_path or str(DEFAULT_REPOS_PATH),
         include_examples=include_examples,
         init_git=init_git,
         include_frontend=include_frontend,
@@ -1434,6 +1441,8 @@ async def scan_repos_for_sota_compliance(
             scan_path = DEFAULT_REPOS_PATH
 
         result = await analyze_runts(scan_path=scan_path, max_depth=max_depth, include_sota=include_sota)
+        if isinstance(result, str):
+            return {"success": False, "error": result}
         return result
     except Exception as e:
         return {"success": False, "error": str(e), "scan_path": scan_path}
@@ -1504,12 +1513,13 @@ if __name__ == "__main__":
     # Run the MCP server
     import asyncio
 
-    async def main():
+    async def main() -> None:
         HTTP_PROXY_URL = os.getenv("MCP_STUDIO_API_URL", "http://127.0.0.1:10724/mcp")
         try:
             import httpx
 
-            r = httpx.post(
+            r = await asyncio.to_thread(
+                httpx.post,
                 HTTP_PROXY_URL,
                 json={
                     "jsonrpc": "2.0",
@@ -1537,8 +1547,8 @@ if __name__ == "__main__":
         if AUTO_DISCOVERY:
             print(f"Auto-discovering MCP servers in: {', '.join(DISCOVERY_PATHS)}", file=sys.stderr)
             try:
-                discovered = await discover_servers(DISCOVERY_PATHS)
-                print(f"Discovered {len(discovered)} MCP servers", file=sys.stderr)
+                discovered = await discover_servers()
+                print(f"Discovered {len(discovered.get('servers', []))} MCP servers", file=sys.stderr)
             except Exception as e:
                 print(f"Auto-discovery failed: {e}", file=sys.stderr)
 

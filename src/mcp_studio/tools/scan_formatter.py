@@ -3,25 +3,25 @@
 Converts scan results to human-readable markdown format.
 """
 
-from typing import Any, Dict, List
 from datetime import datetime
+from typing import Any
 
 
-def format_scan_result_markdown(result: Dict[str, Any]) -> str:
+def format_scan_result_markdown(result: dict[str, Any]) -> str:
     """Format scan result as markdown.
-    
+
     Args:
         result: Scan result dictionary
-    
+
     Returns:
         Formatted markdown string
     """
     if not result.get("success"):
         return f"# Scan Failed\n\n**Error:** {result.get('error', 'Unknown error')}\n"
-    
+
     md = []
     md.append("# MCP Repository Scan Results\n")
-    
+
     # Summary
     summary = result.get("summary", {})
     md.append("## Summary\n")
@@ -29,14 +29,14 @@ def format_scan_result_markdown(result: Dict[str, Any]) -> str:
     md.append(f"- **Runts:** {summary.get('runts', 0)}")
     md.append(f"- **SOTA:** {summary.get('sota', 0)}")
     md.append(f"- **Scan Path:** `{result.get('scan_path', 'N/A')}`")
-    
+
     timestamp = result.get("timestamp")
     if timestamp:
         dt = datetime.fromtimestamp(timestamp)
         md.append(f"- **Scan Time:** {dt.strftime('%Y-%m-%d %H:%M:%S')}")
-    
+
     md.append("")
-    
+
     # Runts
     runts = result.get("runts", [])
     if runts:
@@ -48,23 +48,23 @@ def format_scan_result_markdown(result: Dict[str, Any]) -> str:
             md.append(f"**FastMCP Version:** {runt.get('fastmcp_version', 'Unknown')}")
             md.append(f"**Tool Count:** {runt.get('tool_count', 0)}")
             md.append("")
-            
+
             reasons = runt.get("runt_reasons", [])
             if reasons:
                 md.append("**Issues:**")
                 for reason in reasons:
                     md.append(f"- {reason}")
                 md.append("")
-            
+
             recommendations = runt.get("recommendations", [])
             if recommendations:
                 md.append("**Recommendations:**")
                 for rec in recommendations:
                     md.append(f"- {rec}")
                 md.append("")
-            
+
             md.append("---\n")
-    
+
     # SOTA Repos
     sota_repos = result.get("sota_repos", [])
     if sota_repos:
@@ -78,25 +78,25 @@ def format_scan_result_markdown(result: Dict[str, Any]) -> str:
             md.append(f"**Zoo Class:** {repo.get('zoo_class', 'unknown')} {repo.get('zoo_animal', '')}")
             md.append("")
             md.append("---\n")
-    
+
     return "\n".join(md)
 
 
-def format_repo_status_markdown(result: Dict[str, Any]) -> str:
+def format_repo_status_markdown(result: dict[str, Any]) -> str:
     """Format single repo status as markdown.
-    
+
     Args:
         result: Repo status dictionary
-    
+
     Returns:
         Formatted markdown string
     """
     if not result.get("success"):
         return f"# Repository Status Failed\n\n**Error:** {result.get('error', 'Unknown error')}\n"
-    
+
     md = []
     md.append(f"# {result.get('name', 'Unknown Repository')}\n")
-    
+
     # Status Overview
     md.append("## Status Overview\n")
     md.append(f"**Status:** {result.get('status_emoji', '✅')} {result.get('status_label', 'Unknown')}")
@@ -104,7 +104,7 @@ def format_repo_status_markdown(result: Dict[str, Any]) -> str:
     md.append(f"**Upgrade Priority:** {result.get('upgrade_priority', 'N/A')}")
     md.append(f"**Path:** `{result.get('path', 'N/A')}`")
     md.append("")
-    
+
     # Basic Info
     md.append("## Basic Information\n")
     md.append(f"- **FastMCP Version:** {result.get('fastmcp_version', 'Unknown')}")
@@ -112,7 +112,7 @@ def format_repo_status_markdown(result: Dict[str, Any]) -> str:
     md.append(f"- **Has Portmanteau:** {'Yes' if result.get('has_portmanteau') else 'No'}")
     md.append(f"- **Zoo Class:** {result.get('zoo_class', 'unknown')} {result.get('zoo_animal', '')}")
     md.append("")
-    
+
     # Issues
     reasons = result.get("runt_reasons", [])
     if reasons:
@@ -120,7 +120,7 @@ def format_repo_status_markdown(result: Dict[str, Any]) -> str:
         for reason in reasons:
             md.append(f"- ❌ {reason}")
         md.append("")
-    
+
     # Recommendations
     recommendations = result.get("recommendations", [])
     if recommendations:
@@ -128,12 +128,12 @@ def format_repo_status_markdown(result: Dict[str, Any]) -> str:
         for rec in recommendations:
             md.append(f"- 💡 {rec}")
         md.append("")
-    
+
     # Detailed Information
     details = result.get("details")
     if details:
         md.append("## Detailed Information\n")
-        
+
         # Metadata
         metadata = details.get("metadata", {})
         if metadata:
@@ -147,7 +147,7 @@ def format_repo_status_markdown(result: Dict[str, Any]) -> str:
             if metadata.get("license_type"):
                 md.append(f"**License:** {metadata['license_type']}")
             md.append("")
-        
+
         # Dependencies
         deps = details.get("dependencies", {})
         if deps:
@@ -160,7 +160,7 @@ def format_repo_status_markdown(result: Dict[str, Any]) -> str:
                 if len(python_deps) > 10:
                     md.append(f"  *... and {len(python_deps) - 10} more*")
             md.append("")
-        
+
         # Tools
         tools = details.get("tools", {})
         if tools:
@@ -168,7 +168,7 @@ def format_repo_status_markdown(result: Dict[str, Any]) -> str:
             md.append(f"- **Total Tools:** {tools.get('total_count', 0)}")
             md.append(f"- **Has Help Tool:** {'Yes' if tools.get('has_help_tool') else 'No'}")
             md.append(f"- **Has Status Tool:** {'Yes' if tools.get('has_status_tool') else 'No'}")
-            
+
             tool_list = tools.get("tools", [])
             if tool_list:
                 md.append("\n**Tool List:**")
@@ -177,7 +177,7 @@ def format_repo_status_markdown(result: Dict[str, Any]) -> str:
                 if len(tool_list) > 20:
                     md.append(f"  *... and {len(tool_list) - 20} more*")
             md.append("")
-        
+
         # Structure
         structure = details.get("structure", {})
         if structure:
@@ -189,33 +189,33 @@ def format_repo_status_markdown(result: Dict[str, Any]) -> str:
                 md.append(f"- **Python Files:** {file_counts.get('python', 0)}")
                 md.append(f"- **Markdown Files:** {file_counts.get('markdown', 0)}")
             md.append("")
-        
+
         # Testing
         testing = details.get("testing", {})
         if testing:
             md.append("### Testing\n")
             md.append(f"- **Has Tests:** {'Yes' if testing.get('has_tests') else 'No'}")
-            if testing.get('has_tests'):
+            if testing.get("has_tests"):
                 md.append(f"- **Test Files:** {testing.get('test_file_count', 0)}")
                 md.append(f"- **Framework:** {testing.get('test_framework', 'Unknown')}")
                 md.append(f"- **Unit Tests:** {'Yes' if testing.get('has_unit_tests') else 'No'}")
                 md.append(f"- **Integration Tests:** {'Yes' if testing.get('has_integration_tests') else 'No'}")
             md.append("")
-        
+
         # CI/CD
         ci_cd = details.get("ci_cd", {})
         if ci_cd:
             md.append("### CI/CD\n")
             md.append(f"- **Has CI:** {'Yes' if ci_cd.get('has_ci') else 'No'}")
-            if ci_cd.get('has_ci'):
+            if ci_cd.get("has_ci"):
                 md.append(f"- **Provider:** {ci_cd.get('ci_provider', 'Unknown')}")
                 md.append(f"- **Workflows:** {ci_cd.get('workflow_count', 0)}")
             md.append("")
-    
+
     # Timestamp
     timestamp = result.get("timestamp")
     if timestamp:
         dt = datetime.fromtimestamp(timestamp)
         md.append(f"---\n*Generated: {dt.strftime('%Y-%m-%d %H:%M:%S')}*")
-    
+
     return "\n".join(md)

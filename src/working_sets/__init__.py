@@ -2,11 +2,11 @@
 Working Sets module for MCP Studio.
 """
 
-from .manager import WorkingSetManager, WorkingSet
 from .client_manager import ClientWorkingSetManager
+from .manager import WorkingSet, WorkingSetManager
 
 __all__ = [
-    "WorkingSetManager",
-    "WorkingSet",
     "ClientWorkingSetManager",
+    "WorkingSet",
+    "WorkingSetManager",
 ]

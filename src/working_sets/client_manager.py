@@ -6,7 +6,8 @@ Manages working sets for all MCP clients (Claude Desktop, Cursor, Windsurf, etc.
 
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Any, List
+from typing import Any
+
 from .manager import WorkingSetManager
 
 # Import will be done lazily to avoid circular dependencies
@@ -14,7 +15,7 @@ try:
     from mcp_studio.app.services.mcp_client_zoo import MCPClientZoo
 except ImportError:
     try:
-        from ...mcp_studio.app.services.mcp_client_zoo import MCPClientZoo
+        from ...mcp_studio.app.services.mcp_client_zoo import MCPClientZoo  # type: ignore[misc,no-redef]
     except ImportError:
         # Fallback for different import paths
         import sys
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 class ClientWorkingSetManager:
     """Manages working sets for multiple MCP clients."""
 
-    def __init__(self, templates_dir: str = None):
+    def __init__(self, templates_dir: str | None = None) -> None:
         """
         Initialize multi-client working set manager.
 
@@ -40,12 +41,12 @@ class ClientWorkingSetManager:
         self.templates_dir.mkdir(exist_ok=True)
 
         # Cache of managers per client
-        self._managers: Dict[str, WorkingSetManager] = {}
+        self._managers: dict[str, WorkingSetManager] = {}
 
         # Client zoo for getting config paths
         self._client_zoo = MCPClientZoo()
 
-    def get_manager(self, client_id: str) -> Optional[WorkingSetManager]:
+    def get_manager(self, client_id: str) -> WorkingSetManager | None:
         """
         Get WorkingSetManager for a specific client.
 
@@ -70,9 +71,7 @@ class ClientWorkingSetManager:
         try:
             backup_dir.mkdir(exist_ok=True)
         except Exception as e:
-            logger.warning(
-                f"Could not create backup directory for {client_id} (likely read-only fs): {e}"
-            )
+            logger.warning(f"Could not create backup directory for {client_id} (likely read-only fs): {e}")
 
         # Create manager for this client
         manager = WorkingSetManager(
@@ -84,10 +83,10 @@ class ClientWorkingSetManager:
         # Cache it
         self._managers[client_id] = manager
 
-        logger.info(f"Created WorkingSetManager for {client_id}", config_path=str(config_path))
+        logger.info("Created WorkingSetManager for %s (config_path=%s)", client_id, config_path)
         return manager
 
-    def list_clients_with_configs(self) -> List[str]:
+    def list_clients_with_configs(self) -> list[str]:
         """
         List all clients that have config files.
 
@@ -115,7 +114,7 @@ class ClientWorkingSetManager:
 
         return clients_with_configs
 
-    def get_client_config_info(self, client_id: str) -> Optional[Dict[str, Any]]:
+    def get_client_config_info(self, client_id: str) -> dict[str, Any] | None:
         """
         Get configuration info for a client.
 

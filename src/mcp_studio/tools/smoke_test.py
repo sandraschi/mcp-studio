@@ -8,14 +8,14 @@ Bare minimum connectivity test for MCP servers:
 
 No LLM required - just validates the server is alive and responding.
 """
+
 import asyncio
 import json
 import os
-import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import structlog
 
@@ -32,7 +32,7 @@ SMOKE_TEST_TOOLS = ["help", "status", "get_help", "get_status", "info", "health"
 async def smoke_test_server(
     server_path: str,
     timeout: float = CONNECTION_TIMEOUT,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Perform a bare minimum smoke test on an MCP server.
 
@@ -50,7 +50,7 @@ async def smoke_test_server(
     Returns:
         Test result with success status, latency, and any errors
     """
-    result = {
+    result: dict[str, Any] = {
         "server_path": server_path,
         "success": False,
         "steps_completed": [],
@@ -71,7 +71,7 @@ async def smoke_test_server(
     try:
         # Step 1: Spawn server process
         start_time = time.time()
-        
+
         # Determine how to run the server
         if server_file.suffix == ".py":
             cmd = [sys.executable, str(server_file)]
@@ -89,7 +89,7 @@ async def smoke_test_server(
             cwd=str(server_file.parent),
             env={**os.environ, "PYTHONUNBUFFERED": "1"},
         )
-        
+
         spawn_time = (time.time() - start_time) * 1000
         result["latency_ms"]["spawn"] = round(spawn_time, 2)
         result["steps_completed"].append("spawn_process")
@@ -105,16 +105,16 @@ async def smoke_test_server(
                 "clientInfo": {"name": "mcp-studio-smoke-test", "version": "1.0.0"},
             },
         }
-        
+
         start_time = time.time()
         response = await _send_request(process, init_request, timeout)
         init_time = (time.time() - start_time) * 1000
         result["latency_ms"]["initialize"] = round(init_time, 2)
-        
+
         if not response or "error" in response:
-            result["errors"].append(f"Initialize failed: {response.get('error', 'no response')}")
+            result["errors"].append(f"Initialize failed: {(response or {}).get('error', 'no response')}")
             return result
-        
+
         result["steps_completed"].append("initialize")
 
         # Step 3: List tools
@@ -124,16 +124,16 @@ async def smoke_test_server(
             "method": "tools/list",
             "params": {},
         }
-        
+
         start_time = time.time()
         response = await _send_request(process, list_tools_request, timeout)
         list_time = (time.time() - start_time) * 1000
         result["latency_ms"]["list_tools"] = round(list_time, 2)
-        
+
         if not response or "error" in response:
-            result["errors"].append(f"List tools failed: {response.get('error', 'no response')}")
+            result["errors"].append(f"List tools failed: {(response or {}).get('error', 'no response')}")
             return result
-        
+
         tools = response.get("result", {}).get("tools", [])
         result["tools_found"] = [t.get("name") for t in tools]
         result["steps_completed"].append("list_tools")
@@ -144,11 +144,11 @@ async def smoke_test_server(
             if preferred_tool in result["tools_found"]:
                 smoke_tool = preferred_tool
                 break
-        
+
         if not smoke_tool and result["tools_found"]:
             # Fall back to first available tool
             smoke_tool = result["tools_found"][0]
-        
+
         if smoke_tool:
             call_request = {
                 "jsonrpc": "2.0",
@@ -159,12 +159,12 @@ async def smoke_test_server(
                     "arguments": {},
                 },
             }
-            
+
             start_time = time.time()
             response = await _send_request(process, call_request, TOOL_CALL_TIMEOUT)
             call_time = (time.time() - start_time) * 1000
             result["latency_ms"]["tool_call"] = round(call_time, 2)
-            
+
             if response and "result" in response:
                 result["smoke_tool_called"] = smoke_tool
                 content = response.get("result", {}).get("content", [])
@@ -173,7 +173,7 @@ async def smoke_test_server(
                     result["smoke_response_length"] = len(text)
                 result["steps_completed"].append("tool_call")
             else:
-                result["errors"].append(f"Tool call failed: {response.get('error', 'no response')}")
+                result["errors"].append(f"Tool call failed: {(response or {}).get('error', 'no response')}")
         else:
             result["errors"].append("No tools found to test")
 
@@ -183,22 +183,22 @@ async def smoke_test_server(
             and "list_tools" in result["steps_completed"]
             and len(result["tools_found"]) > 0
         )
-        
+
         # Bonus points for successful tool call
         if "tool_call" in result["steps_completed"] and result["smoke_response_length"] > 0:
             result["success"] = True
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         result["errors"].append(f"Timeout after {timeout}s")
     except Exception as e:
-        result["errors"].append(f"Exception: {str(e)}")
+        result["errors"].append(f"Exception: {e!s}")
         logger.error("Smoke test failed", server_path=server_path, error=str(e))
     finally:
         if process:
             try:
                 process.terminate()
                 await asyncio.wait_for(process.wait(), timeout=2.0)
-            except:
+            except Exception:
                 process.kill()
 
     return result
@@ -206,11 +206,15 @@ async def smoke_test_server(
 
 async def _send_request(
     process: asyncio.subprocess.Process,
-    request: Dict[str, Any],
+    request: dict[str, Any],
     timeout: float,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Send a JSON-RPC request and wait for response."""
     try:
+        if process.stdin is None or process.stdout is None:
+            logger.error("Request failed", error="process has no stdin/stdout pipe")
+            return None
+
         # Send request
         request_str = json.dumps(request)
         message = f"Content-Length: {len(request_str)}\r\n\r\n{request_str}"
@@ -222,31 +226,31 @@ async def _send_request(
             _read_response(process.stdout),
             timeout=timeout,
         )
-        
+
         if response_data:
             return json.loads(response_data)
         return None
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         raise
     except Exception as e:
         logger.error("Request failed", error=str(e))
         return None
 
 
-async def _read_response(stdout: asyncio.StreamReader) -> Optional[str]:
+async def _read_response(stdout: asyncio.StreamReader) -> str | None:
     """Read a JSON-RPC response from stdout."""
     # Read headers
-    headers = {}
+    headers: dict[str, str] = {}
     while True:
         line = await stdout.readline()
         if not line:
             return None
-        line = line.decode().strip()
-        if not line:
+        text = line.decode().strip()
+        if not text:
             break
-        if ":" in line:
-            key, value = line.split(":", 1)
+        if ":" in text:
+            key, value = text.split(":", 1)
             headers[key.strip().lower()] = value.strip()
 
     # Read body
@@ -254,14 +258,14 @@ async def _read_response(stdout: asyncio.StreamReader) -> Optional[str]:
     if content_length > 0:
         body = await stdout.read(content_length)
         return body.decode()
-    
+
     return None
 
 
 async def smoke_test_all_servers(
     scan_path: str = "D:/Dev/repos",
     max_concurrent: int = 3,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Run smoke tests on all MCP servers in a directory.
 
@@ -273,8 +277,8 @@ async def smoke_test_all_servers(
         Summary with all test results
     """
     from .runt_analyzer import _analyze_repo
-    
-    results = {
+
+    results: dict[str, Any] = {
         "success": True,
         "scan_path": scan_path,
         "servers_tested": 0,
@@ -283,44 +287,46 @@ async def smoke_test_all_servers(
         "results": [],
         "timestamp": time.time(),
     }
-    
+
     path = Path(scan_path)
     if not path.exists():
         results["success"] = False
         results["error"] = f"Path not found: {scan_path}"
         return results
-    
+
     # Find server entry points
     servers_to_test = []
     for repo_dir in path.iterdir():
-        if not repo_dir.is_dir() or repo_dir.name.startswith('.'):
+        if not repo_dir.is_dir() or repo_dir.name.startswith("."):
             continue
-        
+
         # Check if it's an MCP repo
         repo_info = _analyze_repo(repo_dir)
         if not repo_info:
             continue
-        
+
         # Find server entry point
         server_paths = [
             repo_dir / "server.py",
             repo_dir / "src" / f"{repo_dir.name.replace('-', '_')}" / "server.py",
             repo_dir / f"{repo_dir.name.replace('-', '_')}" / "server.py",
         ]
-        
+
         for server_path in server_paths:
             if server_path.exists():
-                servers_to_test.append({
-                    "name": repo_dir.name,
-                    "path": str(server_path),
-                    "repo_info": repo_info,
-                })
+                servers_to_test.append(
+                    {
+                        "name": repo_dir.name,
+                        "path": str(server_path),
+                        "repo_info": repo_info,
+                    }
+                )
                 break
-    
+
     # Run tests with concurrency limit
     semaphore = asyncio.Semaphore(max_concurrent)
-    
-    async def test_with_limit(server_info):
+
+    async def test_with_limit(server_info: Any) -> Any:
         async with semaphore:
             test_result = await smoke_test_server(server_info["path"])
             return {
@@ -328,12 +334,12 @@ async def smoke_test_all_servers(
                 "repo_status": server_info["repo_info"]["status_color"],
                 **test_result,
             }
-    
+
     tasks = [test_with_limit(s) for s in servers_to_test]
     test_results = await asyncio.gather(*tasks, return_exceptions=True)
-    
+
     for r in test_results:
-        if isinstance(r, Exception):
+        if isinstance(r, BaseException):
             results["results"].append({"error": str(r)})
             results["servers_failed"] += 1
         else:
@@ -343,6 +349,5 @@ async def smoke_test_all_servers(
                 results["servers_passed"] += 1
             else:
                 results["servers_failed"] += 1
-    
-    return results
 
+    return results

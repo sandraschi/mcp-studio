@@ -5,11 +5,12 @@ repositories on every request. Uses JSON files with timestamp-based
 invalidation.
 """
 
+import hashlib
 import json
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
-import hashlib
+from typing import Any
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -30,61 +31,61 @@ def _get_repo_cache_key(repo_path: str) -> str:
     return hashlib.md5(repo_path.encode()).hexdigest()
 
 
-def get_cached_scan(scan_path: str, max_depth: int = 1, ttl: int = CACHE_TTL) -> Optional[Dict[str, Any]]:
+def get_cached_scan(scan_path: str, max_depth: int = 1, ttl: int = CACHE_TTL) -> dict[str, Any] | None:
     """Get cached scan result if still valid.
-    
+
     Args:
         scan_path: Path that was scanned
         max_depth: Scan depth used
         ttl: Time-to-live in seconds (default: 1 hour)
-    
+
     Returns:
         Cached result if valid, None otherwise
     """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     cache_key = _get_cache_key(scan_path, max_depth)
     cache_file = CACHE_DIR / f"scan_{cache_key}.json"
-    
+
     if not cache_file.exists():
         return None
-    
+
     try:
-        with open(cache_file, 'r', encoding='utf-8') as f:
+        with open(cache_file, encoding="utf-8") as f:
             cached = json.load(f)
-        
+
         # Check if cache is still valid
         cache_time = cached.get("cache_timestamp", 0)
         if time.time() - cache_time > ttl:
             logger.debug(f"Cache expired for {scan_path}")
             return None
-        
+
         # Check if scan path still exists and hasn't changed
         scan_path_obj = Path(scan_path).expanduser().resolve()
         if not scan_path_obj.exists():
             return None
-        
+
         logger.debug(f"Using cached scan result for {scan_path}")
         return cached.get("result")
-    
+
     except Exception as e:
         logger.warning(f"Failed to read cache: {e}")
         return None
 
 
-def cache_scan_result(scan_path: str, max_depth: int, result: Dict[str, Any]) -> None:
+def cache_scan_result(scan_path: str, max_depth: int, result: dict[str, Any]) -> None:
     """Cache scan result.
-    
+
     Args:
         scan_path: Path that was scanned
         max_depth: Scan depth used
         result: Scan result to cache
     """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     cache_key = _get_cache_key(scan_path, max_depth)
     cache_file = CACHE_DIR / f"scan_{cache_key}.json"
-    
+
     try:
         cache_data = {
             "scan_path": scan_path,
@@ -92,106 +93,106 @@ def cache_scan_result(scan_path: str, max_depth: int, result: Dict[str, Any]) ->
             "cache_timestamp": time.time(),
             "result": result,
         }
-        
-        with open(cache_file, 'w', encoding='utf-8') as f:
+
+        with open(cache_file, "w", encoding="utf-8") as f:
             json.dump(cache_data, f, indent=2)
-        
+
         logger.debug(f"Cached scan result for {scan_path}")
-    
+
     except Exception as e:
         logger.warning(f"Failed to cache scan result: {e}")
 
 
-def get_cached_repo_status(repo_path: str, ttl: int = CACHE_TTL) -> Optional[Dict[str, Any]]:
+def get_cached_repo_status(repo_path: str, ttl: int = CACHE_TTL) -> dict[str, Any] | None:
     """Get cached repo status if still valid.
-    
+
     Args:
         repo_path: Path to repository
         ttl: Time-to-live in seconds (default: 1 hour)
-    
+
     Returns:
         Cached result if valid, None otherwise
     """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     cache_key = _get_repo_cache_key(repo_path)
     cache_file = CACHE_DIR / f"repo_{cache_key}.json"
-    
+
     if not cache_file.exists():
         return None
-    
+
     try:
-        with open(cache_file, 'r', encoding='utf-8') as f:
+        with open(cache_file, encoding="utf-8") as f:
             cached = json.load(f)
-        
+
         # Check if cache is still valid
         cache_time = cached.get("cache_timestamp", 0)
         if time.time() - cache_time > ttl:
             logger.debug(f"Cache expired for {repo_path}")
             return None
-        
+
         # Check if repo still exists
         repo_path_obj = Path(repo_path).expanduser().resolve()
         if not repo_path_obj.exists():
             return None
-        
+
         # Check if repo has been modified (simple check - could be enhanced)
         repo_mtime = repo_path_obj.stat().st_mtime
         if repo_mtime > cache_time:
             logger.debug(f"Repo modified, cache invalid for {repo_path}")
             return None
-        
+
         logger.debug(f"Using cached repo status for {repo_path}")
         return cached.get("result")
-    
+
     except Exception as e:
         logger.warning(f"Failed to read repo cache: {e}")
         return None
 
 
-def cache_repo_status(repo_path: str, result: Dict[str, Any]) -> None:
+def cache_repo_status(repo_path: str, result: dict[str, Any]) -> None:
     """Cache repo status result.
-    
+
     Args:
         repo_path: Path to repository
         result: Repo status result to cache
     """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     cache_key = _get_repo_cache_key(repo_path)
     cache_file = CACHE_DIR / f"repo_{cache_key}.json"
-    
+
     try:
         cache_data = {
             "repo_path": repo_path,
             "cache_timestamp": time.time(),
             "result": result,
         }
-        
-        with open(cache_file, 'w', encoding='utf-8') as f:
+
+        with open(cache_file, "w", encoding="utf-8") as f:
             json.dump(cache_data, f, indent=2)
-        
+
         logger.debug(f"Cached repo status for {repo_path}")
-    
+
     except Exception as e:
         logger.warning(f"Failed to cache repo status: {e}")
 
 
-def clear_cache(scan_path: Optional[str] = None, repo_path: Optional[str] = None) -> int:
+def clear_cache(scan_path: str | None = None, repo_path: str | None = None) -> int:
     """Clear cache entries.
-    
+
     Args:
         scan_path: Clear cache for specific scan path (None = all scans)
         repo_path: Clear cache for specific repo (None = all repos)
-    
+
     Returns:
         Number of cache files deleted
     """
     if not CACHE_DIR.exists():
         return 0
-    
+
     deleted = 0
-    
+
     if scan_path:
         cache_key = _get_cache_key(scan_path)
         cache_file = CACHE_DIR / f"scan_{cache_key}.json"
@@ -209,14 +210,14 @@ def clear_cache(scan_path: Optional[str] = None, repo_path: Optional[str] = None
         for cache_file in CACHE_DIR.glob("*.json"):
             cache_file.unlink()
             deleted += 1
-    
+
     logger.info(f"Cleared {deleted} cache entries")
     return deleted
 
 
-def get_cache_stats() -> Dict[str, Any]:
+def get_cache_stats() -> dict[str, Any]:
     """Get cache statistics.
-    
+
     Returns:
         Dictionary with cache statistics
     """
@@ -228,19 +229,19 @@ def get_cache_stats() -> Dict[str, Any]:
             "oldest_cache": None,
             "newest_cache": None,
         }
-    
+
     cache_files = list(CACHE_DIR.glob("*.json"))
     total_size = sum(f.stat().st_size for f in cache_files)
-    
+
     cache_times = []
     for cache_file in cache_files:
         try:
-            with open(cache_file, 'r', encoding='utf-8') as f:
+            with open(cache_file, encoding="utf-8") as f:
                 cached = json.load(f)
                 cache_times.append(cached.get("cache_timestamp", 0))
         except Exception:
             pass
-    
+
     return {
         "cache_dir": str(CACHE_DIR),
         "total_files": len(cache_files),
