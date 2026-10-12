@@ -762,21 +762,21 @@ async def _is_server_active(server_info: Dict[str, Any]) -> bool:
     try:
         if server_info["type"] == "python":
             # Quick syntax check for Python servers
-            result = subprocess.run([
+            result = await asyncio.to_thread(subprocess.run, [
                 sys.executable, "-m", "py_compile", server_info["path"]
             ], capture_output=True, timeout=5)
             return result.returncode == 0
 
         elif server_info["type"] == "node":
             # Basic syntax check for Node.js servers
-            result = subprocess.run([
+            result = await asyncio.to_thread(subprocess.run, [
                 "node", "--check", server_info["path"]
             ], capture_output=True, timeout=5)
             return result.returncode == 0
 
         elif server_info["type"] == "docker":
             # Check if Docker is available
-            result = subprocess.run([
+            result = await asyncio.to_thread(subprocess.run, [
                 "docker", "--version"
             ], capture_output=True, timeout=5)
             return result.returncode == 0

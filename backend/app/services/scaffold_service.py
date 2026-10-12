@@ -3,6 +3,7 @@
 Service for creating new SOTA-compliant MCP servers with all required components.
 """
 
+import asyncio
 import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -176,16 +177,16 @@ class ScaffoldService:
             git_initialized = False
             if init_git:
                 try:
-                    subprocess.run(
+                    await asyncio.to_thread(subprocess.run,
                         ["git", "init"], cwd=server_dir, check=True, capture_output=True
                     )
-                    subprocess.run(
+                    await asyncio.to_thread(subprocess.run,
                         ["git", "add", "."],
                         cwd=server_dir,
                         check=True,
                         capture_output=True,
                     )
-                    subprocess.run(
+                    await asyncio.to_thread(subprocess.run,
                         [
                             "git",
                             "commit",
@@ -329,7 +330,7 @@ class ScaffoldService:
 
             # Run the script (reduced logging to debug to reduce spam)
             logger.debug(f"Calling fullstack builder: {' '.join(cmd)}")
-            result = subprocess.run(
+            result = await asyncio.to_thread(subprocess.run,
                 cmd,
                 cwd=str(output_path),
                 capture_output=True,

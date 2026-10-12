@@ -3,6 +3,7 @@
 Safely removes test/throwaway MCP servers with safety checks.
 """
 
+import asyncio
 import shutil
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -108,10 +109,10 @@ async def delete_mcp_server(
         safety_checks["is_git_repo"] = is_git
         
         if is_git:
-            has_uncommitted = _has_uncommitted_changes(path)
+            has_uncommitted = await asyncio.to_thread(_has_uncommitted_changes, path)
             safety_checks["has_uncommitted_changes"] = has_uncommitted
             
-            remote = _get_git_remote(path)
+            remote = await asyncio.to_thread(_get_git_remote, path)
             safety_checks["has_remote"] = bool(remote)
             safety_checks["remote_url"] = remote
             
