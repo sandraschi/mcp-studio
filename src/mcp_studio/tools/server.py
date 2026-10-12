@@ -83,7 +83,7 @@ async def discover_mcp_servers(
         Dictionary containing discovered servers and scan statistics
     """
     discovered_servers = []
-    scan_stats = {"paths_scanned": 0, "files_checked": 0, "servers_found": 0, "errors": []}
+    scan_stats: dict[str, Any] = {"paths_scanned": 0, "files_checked": 0, "servers_found": 0, "errors": []}
 
     discovery_paths = settings.MCP_DISCOVERY_PATHS or []
 
@@ -171,7 +171,7 @@ async def get_server_info(
     Returns:
         Dictionary containing server information and capabilities
     """
-    server_info = {
+    server_info: dict[str, Any] = {
         "server_path": server_path,
         "type": _detect_server_type(server_path),
         "status": "unknown",
@@ -247,7 +247,7 @@ async def test_server_connection(
     Returns:
         Dictionary containing connection test results and diagnostics
     """
-    test_results = {
+    test_results: dict[str, Any] = {
         "server_path": server_path,
         "test_started": time.time(),
         "connection_successful": False,
@@ -388,7 +388,7 @@ async def execute_remote_tool(
     Returns:
         Dictionary containing execution results and metrics
     """
-    execution_result = {
+    execution_result: dict[str, Any] = {
         "server_path": server_path,
         "tool_name": tool_name,
         "parameters": parameters,
@@ -487,7 +487,7 @@ async def list_server_tools(
     Returns:
         Dictionary containing tools list and metadata
     """
-    tools_result = {
+    tools_result: dict[str, Any] = {
         "server_path": server_path,
         "tools": [],
         "total_tools": 0,
@@ -549,7 +549,7 @@ async def _scan_path_for_servers(path: Path, max_depth: int, scan_docker: bool) 
     """Scan a path for MCP servers."""
     servers = []
 
-    def scan_directory(dir_path: Path, current_depth: int):
+    def scan_directory(dir_path: Path, current_depth: int) -> None:
         if current_depth > max_depth:
             return
 
@@ -731,9 +731,7 @@ async def _is_server_active(server_info: dict[str, Any]) -> bool:
 
         elif server_info["type"] == "docker":
             # Check if Docker is available
-            result = await asyncio.to_thread(
-                subprocess.run, ["docker", "--version"], capture_output=True, timeout=5
-            )
+            result = await asyncio.to_thread(subprocess.run, ["docker", "--version"], capture_output=True, timeout=5)
             return result.returncode == 0
 
         return True  # Default to active for other types
@@ -772,7 +770,7 @@ async def _get_local_server_info(
     # Create transport and connect
     transport = StdioTransport(command="python", args=[str(server_path_obj)], env=dict(os.environ))
 
-    server_info = {}
+    server_info: dict[str, Any] = {}
 
     async with Client(transport) as client:
         await client.initialize()
@@ -804,7 +802,7 @@ async def _get_remote_server_info(
     server_url: str, timeout: float, include_tools: bool, include_resources: bool
 ) -> dict[str, Any]:
     """Get information from a remote MCP server."""
-    server_info = {}
+    server_info: dict[str, Any] = {}
 
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
         # Try to get server info from a standard endpoint
@@ -831,7 +829,7 @@ async def _get_remote_server_info(
     return server_info
 
 
-async def _perform_deep_connection_test(client: Client, test_results: dict[str, Any]):
+async def _perform_deep_connection_test(client: Client, test_results: dict[str, Any]) -> None:
     """Perform deep connection testing."""
     try:
         # Test multiple tool calls
@@ -970,7 +968,7 @@ async def get_server_health(
     server_path: str, check_tools: bool = True, check_resources: bool = True, timeout: float = 10.0
 ) -> dict[str, Any]:
     """Get comprehensive health information about an MCP server."""
-    health_report = {
+    health_report: dict[str, Any] = {
         "server_path": server_path,
         "overall_status": "unknown",
         "checks_performed": [],
@@ -1059,7 +1057,7 @@ async def get_server_health(
 @timed(log_threshold=10.0)
 async def restart_server(server_path: str, force: bool = False, timeout: float = 30.0) -> dict[str, Any]:
     """Restart an MCP server process."""
-    restart_result = {
+    restart_result: dict[str, Any] = {
         "server_path": server_path,
         "success": False,
         "steps_completed": [],

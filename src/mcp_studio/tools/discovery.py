@@ -9,7 +9,7 @@ import inspect
 import logging
 import pkgutil
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from mcp_studio.tools.decorators import ToolMetadata, tool
 
@@ -22,7 +22,7 @@ T = TypeVar("T")
 class ToolRegistry:
     """Registry for MCP tools."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._tools: dict[str, dict[str, Any]] = {}
         self._tool_metadata: dict[str, ToolMetadata] = {}
         self._discovered = False
@@ -192,7 +192,7 @@ class ToolRegistry:
 
         result = []
         for name, tool_info in self._tools.items():
-            metadata = self._tool_metadata.get(name, {})
+            metadata: Any = self._tool_metadata.get(name, {})
             result.append(
                 {
                     "name": name,
@@ -206,7 +206,7 @@ class ToolRegistry:
 
         return result
 
-    def execute_tool(self, name: str, *args, **kwargs) -> Any:
+    def execute_tool(self, name: str, *args: Any, **kwargs: Any) -> Any:
         """
         Execute a tool by name with the given arguments.
 
@@ -237,7 +237,7 @@ class ToolRegistry:
                 "tool": name,
                 "args": args,
                 "kwargs": kwargs,
-                "metadata": self._tool_metadata.get(name, {}).to_dict()
+                "metadata": cast(Any, self._tool_metadata.get(name, {})).to_dict()
                 if hasattr(self._tool_metadata.get(name), "to_dict")
                 else str(self._tool_metadata.get(name)),
             },
@@ -287,7 +287,7 @@ def list_tools() -> list[dict[str, Any]]:
     return registry.list_tools()
 
 
-def execute_tool(name: str, *args, **kwargs) -> Any:
+def execute_tool(name: str, *args: Any, **kwargs: Any) -> Any:
     """Execute a tool by name with the given arguments."""
     return registry.execute_tool(name, *args, **kwargs)
 

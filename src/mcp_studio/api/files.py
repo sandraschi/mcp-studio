@@ -75,7 +75,7 @@ def to_file_info_model(file_info: FileInfo) -> FileInfoModel:
 
 # API Endpoints
 @router.get("/list/{path:path}", response_model=DirectoryListing)
-async def list_directory_endpoint(path: str = "", current_user: Any = Depends(get_current_active_user)):
+async def list_directory_endpoint(path: str = "", current_user: Any = Depends(get_current_active_user)) -> Any:
     """
     List contents of a directory.
 
@@ -101,7 +101,7 @@ async def list_directory_endpoint(path: str = "", current_user: Any = Depends(ge
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Not a directory: {path}")
 
         # List directory contents
-        files = list_directory(str(target_path))
+        files = await list_directory(str(target_path))
         return DirectoryListing(
             path=str(target_path.relative_to(base_dir)), files=[to_file_info_model(f) for f in files]
         )
@@ -115,7 +115,7 @@ async def list_directory_endpoint(path: str = "", current_user: Any = Depends(ge
 
 
 @router.get("/download/{path:path}")
-async def download_file(path: str, current_user: Any = Depends(get_current_active_user)):
+async def download_file(path: str, current_user: Any = Depends(get_current_active_user)) -> Any:
     """
     Download a file.
 
@@ -145,7 +145,9 @@ async def download_file(path: str, current_user: Any = Depends(get_current_activ
 
 
 @router.post("/upload/{path:path}", response_model=FileUploadResponse)
-async def upload_file(path: str, file: UploadFile = File(...), current_user: Any = Depends(get_current_active_user)):
+async def upload_file(
+    path: str, file: UploadFile = File(...), current_user: Any = Depends(get_current_active_user)
+) -> Any:
     """
     Upload a file.
 
@@ -198,7 +200,7 @@ async def upload_file(path: str, file: UploadFile = File(...), current_user: Any
 
 
 @router.post("/create-directory/{path:path}", response_model=FileOperationResponse)
-async def create_directory(path: str, current_user: Any = Depends(get_current_active_user)):
+async def create_directory(path: str, current_user: Any = Depends(get_current_active_user)) -> Any:
     """
     Create a directory.
 
@@ -237,7 +239,7 @@ async def create_directory(path: str, current_user: Any = Depends(get_current_ac
 
 
 @router.delete("/delete/{path:path}", response_model=FileOperationResponse)
-async def delete_path(path: str, recursive: bool = False, current_user: Any = Depends(get_current_active_user)):
+async def delete_path(path: str, recursive: bool = False, current_user: Any = Depends(get_current_active_user)) -> Any:
     """
     Delete a file or directory.
 

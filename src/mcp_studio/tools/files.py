@@ -7,8 +7,8 @@ import shutil
 import tempfile
 from pathlib import Path
 
-import aiofiles
-import aiofiles.os
+import aiofiles  # type: ignore[import-untyped]
+import aiofiles.os  # type: ignore[import-untyped]
 from pydantic import BaseModel, Field
 
 from mcp_studio.tools.decorators import retry_on_failure, structured_log, tool
@@ -29,12 +29,12 @@ class FileInfo(BaseModel):
 @structured_log()
 async def list_directory(path: str) -> list[FileInfo]:
     """List contents of a directory."""
-    path = Path(path).resolve()
-    if not await aiofiles.os.path.exists(path):
-        raise FileNotFoundError(f"Directory not found: {path}")
+    resolved = Path(path).resolve()
+    if not await aiofiles.os.path.exists(resolved):
+        raise FileNotFoundError(f"Directory not found: {resolved}")
 
     results = []
-    with os.scandir(path) as entries:
+    with os.scandir(resolved) as entries:
         for entry in entries:
             stat = entry.stat()
             results.append(FileInfo(path=entry.path, size=stat.st_size, modified=stat.st_mtime, is_dir=entry.is_dir()))
@@ -45,26 +45,27 @@ async def list_directory(path: str) -> list[FileInfo]:
 @structured_log()
 async def read_file(path: str) -> str:
     """Read file contents as text."""
-    path = Path(path).resolve()
-    if not await aiofiles.os.path.exists(path):
-        raise FileNotFoundError(f"File not found: {path}")
+    resolved = Path(path).resolve()
+    if not await aiofiles.os.path.exists(resolved):
+        raise FileNotFoundError(f"File not found: {resolved}")
 
-    async with aiofiles.open(path, encoding="utf-8") as f:
-        return await f.read()
+    async with aiofiles.open(resolved, encoding="utf-8") as f:
+        text: str = await f.read()
+        return text
 
 
 @tool(name="write_file", description="Write data to a file", tags=["filesystem", "file"])
 @structured_log()
 async def write_file(path: str, content: str) -> FileInfo:
     """Write text content to a file."""
-    path = Path(path).resolve()
-    path.parent.mkdir(parents=True, exist_ok=True)
+    resolved = Path(path).resolve()
+    resolved.parent.mkdir(parents=True, exist_ok=True)
 
-    async with aiofiles.open(path, "w", encoding="utf-8") as f:
+    async with aiofiles.open(resolved, "w", encoding="utf-8") as f:
         await f.write(content)
 
-    stat = await aiofiles.os.stat(path)
-    return FileInfo(path=str(path), size=stat.st_size, modified=stat.st_mtime, is_dir=False)
+    stat = await aiofiles.os.stat(resolved)
+    return FileInfo(path=str(resolved), size=stat.st_size, modified=stat.st_mtime, is_dir=False)
 
 
 @tool(name="create_temp_file", description="Create a temporary file", tags=["filesystem", "temporary"])
@@ -79,14 +80,14 @@ async def create_temp_file() -> str:
 @retry_on_failure(max_retries=3)
 async def copy_file(source: str, destination: str) -> FileInfo:
     """Copy a file from source to destination."""
-    source = Path(source).resolve()
-    destination = Path(destination).resolve()
+    src = Path(source).resolve()
+    dst = Path(destination).resolve()
 
-    if not await aiofiles.os.path.exists(source):
-        raise FileNotFoundError(f"Source file not found: {source}")
+    if not await aiofiles.os.path.exists(src):
+        raise FileNotFoundError(f"Source file not found: {src}")
 
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    await asyncio.to_thread(shutil.copy2, source, destination)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(shutil.copy2, src, dst)
 
-    stat = await aiofiles.os.stat(destination)
-    return FileInfo(path=str(destination), size=stat.st_size, modified=stat.st_mtime, is_dir=False)
+    stat = await aiofiles.os.stat(dst)
+    return FileInfo(path=str(dst), size=stat.st_size, modified=stat.st_mtime, is_dir=False)

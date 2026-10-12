@@ -86,7 +86,7 @@ async def delete_mcp_server(
 
         server_name = path.name
         warnings = []
-        safety_checks = {}
+        safety_checks: dict[str, Any] = {}
 
         # Safety checks (git spawns run in threads — never on the loop)
         is_git = _is_git_repo(path)
