@@ -1,8 +1,9 @@
 """Lifespan management for MCP Studio application."""
 
 import asyncio
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator, Dict, Any
+from typing import Any
 
 import structlog
 from fastapi import FastAPI
@@ -12,8 +13,9 @@ from .logging import configure_logging
 
 logger = structlog.get_logger(__name__)
 
+
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[Dict[str, Any], None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[dict[str, Any], None]:
     """Manage application lifespan events.
 
     Args:
@@ -35,7 +37,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[Dict[str, Any], None]:
 
     # Initialize application state
     app.state.started_at = asyncio.get_event_loop().time()
-    app.state.mcp_servers: Dict[str, Dict[str, Any]] = {}
+    app.state.mcp_servers = {}
 
     try:
         # Start background tasks

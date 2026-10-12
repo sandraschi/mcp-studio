@@ -22,11 +22,11 @@ except ImportError:
         # Fallback if pydantic not available
         BaseSettings = object
 
-        def _field_fallback(**kwargs):
+        def _field_fallback(**kwargs: Any) -> Any:
             return None
 
-        def _validator_fallback(*args, **kwargs):
-            def _decorator(func):
+        def _validator_fallback(*args: Any, **kwargs: Any) -> Any:
+            def _decorator(func: Any) -> Any:
                 return func
 
             return _decorator
@@ -66,7 +66,7 @@ def get_default_repos_path() -> str:
 DEFAULT_REPOS_PATH = get_default_repos_path()
 
 
-class Settings(BaseSettings if BaseSettings is not object else object):
+class Settings(BaseSettings if BaseSettings is not object else object):  # type: ignore[misc]
     """Application settings with fallbacks."""
 
     # Application
@@ -75,7 +75,7 @@ class Settings(BaseSettings if BaseSettings is not object else object):
     DEBUG: bool = True
 
     # Server (reservoir port 10724 per WEBAPP_PORTS.md)
-    HOST: str = "0.0.0.0"  # noqa: S104 - Bind to all interfaces
+    HOST: str = "0.0.0.0"
     PORT: int = 10724
     RELOAD: bool = True
     WORKERS: int = 1
@@ -89,7 +89,7 @@ class Settings(BaseSettings if BaseSettings is not object else object):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
     # CORS (frontend 10725, backend 10724)
-    BACKEND_CORS_ORIGINS: list[str] = [  # noqa: RUF012 - pydantic settings field
+    BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:3000",
         "http://localhost:10724",
         "http://localhost:10725",
@@ -101,12 +101,12 @@ class Settings(BaseSettings if BaseSettings is not object else object):
     DATABASE_URL: str = "sqlite:///./mcp-studio.db"
 
     # MCP Discovery
-    MCP_DISCOVERY_PATHS: list[str] = []  # noqa: RUF012 - pydantic settings field
+    MCP_DISCOVERY_PATHS: list[str] = []
 
     # Repo Scanner
     REPOS_PATH: str = DEFAULT_REPOS_PATH
     REPO_SCAN_DEPTH: int = 2  # How deep to scan subdirectories
-    REPO_SCAN_EXCLUDE: list[str] = [  # noqa: RUF012 - pydantic settings field
+    REPO_SCAN_EXCLUDE: list[str] = [
         ".git",
         "node_modules",
         "__pycache__",
@@ -123,7 +123,7 @@ class Settings(BaseSettings if BaseSettings is not object else object):
     DXT_PACKAGE_VERSION: str = "0.1.0"
     DXT_PACKAGE_DESCRIPTION: str = "MCP Studio - UI for managing MCP servers"
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         if BaseSettings is not object:
             super().__init__(**kwargs)
         else:
@@ -136,7 +136,7 @@ class Settings(BaseSettings if BaseSettings is not object else object):
         if not self.MCP_DISCOVERY_PATHS:
             self._setup_discovery_paths()
 
-    def _setup_discovery_paths(self):
+    def _setup_discovery_paths(self) -> None:
         """Set up default MCP discovery paths."""
         try:
             paths = [
@@ -276,7 +276,7 @@ def update_settings(**kwargs: Any) -> None:
 
 
 # Test configuration loading
-def test_config():
+def test_config() -> bool:
     """Test that configuration loads correctly."""
     try:
         test_settings = get_settings()

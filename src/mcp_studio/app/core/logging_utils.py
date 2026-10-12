@@ -1,7 +1,7 @@
 """Logging utilities for consistent logging across the application."""
+
 import logging
 import sys
-from typing import Optional
 
 import structlog
 
@@ -17,7 +17,7 @@ structlog.configure(
         structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.JSONRenderer()
+        structlog.processors.JSONRenderer(),
     ],
     context_class=dict,
     logger_factory=structlog.stdlib.LoggerFactory(),
@@ -25,25 +25,27 @@ structlog.configure(
     cache_logger_on_first_use=True,
 )
 
-def get_logger(name: Optional[str] = None) -> structlog.BoundLogger:
+
+def get_logger(name: str | None = None) -> structlog.BoundLogger:
     """Get a configured logger instance.
-    
+
     Args:
         name: The name of the logger. If None, the root logger is used.
-        
+
     Returns:
         A configured structlog logger instance.
     """
     return structlog.get_logger(name)
 
-def configure_uvicorn_logging():
+
+def configure_uvicorn_logging() -> None:
     """Configure uvicorn to use structlog for consistent logging."""
     logging.basicConfig(
         format="%(message)s",
         stream=sys.stdout,
         level=logging.INFO,
     )
-    
+
     # Replace the default handlers with our own
     for logger_name in ["uvicorn", "uvicorn.error", "uvicorn.access"]:
         logging_logger = logging.getLogger(logger_name)

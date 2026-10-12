@@ -4,37 +4,60 @@ FastAPI best practices compliance.
 """
 
 import platform
-import sys
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from datetime import UTC, datetime
+from typing import Any
+
+import psutil
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse, PlainTextResponse
-import psutil
+from pydantic import BaseModel, Field
 
 # Prometheus client
 try:
-    from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+    from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
+
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
-    # Dummy classes to prevent errors
-    class Counter:
-        def __init__(self, *args, **kwargs): pass
-        def labels(self, *args, **kwargs): return self
-        def inc(self): pass
-        def observe(self, value): pass
-    class Histogram:
-        def __init__(self, *args, **kwargs): pass
-        def labels(self, *args, **kwargs): return self
-    class Gauge:
-        def __init__(self, *args, **kwargs): pass
-        def set(self, value): pass
-        def inc(self): pass
-        def dec(self): pass
-    def generate_latest(): return b""
 
-from ...app.core.config import settings
+    # Dummy classes to prevent errors
+    class Counter:  # type: ignore[no-redef]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def labels(self, *args: Any, **kwargs: Any) -> Any:
+            return self
+
+        def inc(self) -> None:
+            pass
+
+        def observe(self, value: Any) -> None:
+            pass
+
+    class Histogram:  # type: ignore[no-redef]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def labels(self, *args: Any, **kwargs: Any) -> Any:
+            return self
+
+    class Gauge:  # type: ignore[no-redef]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def set(self, value: Any) -> None:
+            pass
+
+        def inc(self) -> None:
+            pass
+
+        def dec(self) -> None:
+            pass
+
+    def generate_latest() -> bytes:
+        return b""
+
+
 from ...app.core.logging_utils import get_logger
 
 # Import __version__ safely
@@ -50,55 +73,35 @@ logger = get_logger(__name__)
 if PROMETHEUS_AVAILABLE:
     # API metrics
     API_REQUESTS_TOTAL = Counter(
-        'mcp_api_requests_total',
-        'Total number of API requests',
-        ['method', 'endpoint', 'status_code']
+        "mcp_api_requests_total", "Total number of API requests", ["method", "endpoint", "status_code"]
     )
 
     API_REQUEST_DURATION = Histogram(
-        'mcp_api_request_duration_seconds',
-        'API request duration in seconds',
-        ['method', 'endpoint'],
-        buckets=[0.1, 0.5, 1.0, 2.5, 5.0, 10.0]
+        "mcp_api_request_duration_seconds",
+        "API request duration in seconds",
+        ["method", "endpoint"],
+        buckets=[0.1, 0.5, 1.0, 2.5, 5.0, 10.0],
     )
 
     # Active connections
-    ACTIVE_CONNECTIONS = Gauge(
-        'mcp_active_connections',
-        'Number of active connections'
-    )
+    ACTIVE_CONNECTIONS = Gauge("mcp_active_connections", "Number of active connections")
 
     # Repo scanning metrics
-    SCAN_PROGRESS_TOTAL = Gauge(
-        'mcp_scan_progress_total',
-        'Total repositories being scanned'
-    )
+    SCAN_PROGRESS_TOTAL = Gauge("mcp_scan_progress_total", "Total repositories being scanned")
 
-    SCAN_PROGRESS_FOUND = Gauge(
-        'mcp_scan_progress_found',
-        'Number of MCP repositories found'
-    )
+    SCAN_PROGRESS_FOUND = Gauge("mcp_scan_progress_found", "Number of MCP repositories found")
 
-    SCAN_PROGRESS_SKIPPED = Gauge(
-        'mcp_scan_progress_skipped',
-        'Number of repositories skipped'
-    )
+    SCAN_PROGRESS_SKIPPED = Gauge("mcp_scan_progress_skipped", "Number of repositories skipped")
 
-    SCAN_PROGRESS_ERRORS = Gauge(
-        'mcp_scan_progress_errors',
-        'Number of scanning errors'
-    )
+    SCAN_PROGRESS_ERRORS = Gauge("mcp_scan_progress_errors", "Number of scanning errors")
 
     # Repo metrics
-    REPO_TOOLS = Gauge(
-        'mcp_repo_tools',
-        'Number of tools in a repository',
-        ['repo_name']
-    )
+    REPO_TOOLS = Gauge("mcp_repo_tools", "Number of tools in a repository", ["repo_name"])
 
 
 class ServiceInfo(BaseModel):
     """Service information model."""
+
     name: str = Field(..., description="Service name")
     version: str = Field(..., description="Service version")
     status: str = Field(..., description="Service status")
@@ -106,6 +109,7 @@ class ServiceInfo(BaseModel):
 
 class SystemInfo(BaseModel):
     """System information model."""
+
     platform: str = Field(..., description="Operating system")
     python_version: str = Field(..., description="Python version")
     hostname: str = Field(..., description="Hostname")
@@ -114,6 +118,7 @@ class SystemInfo(BaseModel):
 
 class ResourceUsage(BaseModel):
     """Resource usage model."""
+
     cpu_percent: float = Field(..., description="CPU usage percentage")
     memory_mb: float = Field(..., description="Memory usage in MB")
     memory_percent: float = Field(..., description="Memory usage percentage")
@@ -123,17 +128,19 @@ class ResourceUsage(BaseModel):
 
 class StatusResponse(BaseModel):
     """Standard status response."""
+
     service: ServiceInfo = Field(..., description="Service information")
     system: SystemInfo = Field(..., description="System information")
     resources: ResourceUsage = Field(..., description="Resource usage")
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    uptime_seconds: Optional[float] = Field(None, description="Server uptime in seconds")
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    uptime_seconds: float | None = Field(None, description="Server uptime in seconds")
 
 
 class HealthResponse(BaseModel):
     """Health check response."""
+
     status: str = Field(..., description="Health status")
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     version: str = Field(..., description="Service version")
 
 
@@ -150,21 +157,21 @@ class HealthResponse(BaseModel):
 async def get_status() -> StatusResponse:
     """
     Get comprehensive status information.
-    
+
     Returns detailed information about the service, system, and resource usage.
     This endpoint provides production-ready monitoring capabilities.
-    
+
     Returns:
         StatusResponse with service, system, and resource information
     """
     try:
         process = psutil.Process()
         memory_info = process.memory_info()
-        
+
         # Get uptime
         create_time = process.create_time()
         uptime = datetime.now().timestamp() - create_time
-        
+
         return StatusResponse(
             service=ServiceInfo(
                 name="MCP Studio",
@@ -189,8 +196,7 @@ async def get_status() -> StatusResponse:
     except Exception as e:
         logger.error("Failed to get status", error=str(e), exc_info=True)
         return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"detail": "Service status unavailable"}
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={"detail": "Service status unavailable"}
         )
 
 
@@ -206,10 +212,10 @@ async def get_status() -> StatusResponse:
 async def health_check() -> HealthResponse:
     """
     Health check endpoint.
-    
+
     Simple endpoint for load balancers and monitoring systems.
     Returns minimal information quickly.
-        
+
     Returns:
         HealthResponse with status and version
     """
@@ -231,10 +237,10 @@ async def health_check() -> HealthResponse:
 async def readiness_check() -> JSONResponse:
     """
     Readiness check endpoint.
-    
+
     Verifies that the service and dependencies are ready.
     Used by Kubernetes liveness probes.
-    
+
     Returns:
         JSON response with status
     """
@@ -244,47 +250,43 @@ async def readiness_check() -> JSONResponse:
             "discovery_service": False,
             "settings": False,
         }
-        
+
         # Check FastMCP is importable
         try:
             from fastmcp import FastMCP
+
             checks["fastmcp"] = True
         except ImportError:
             logger.warning("FastMCP import failed")
-        
+
         # Check discovery service is accessible
         try:
-            from ..services.discovery_service import discovered_servers
             checks["discovery_service"] = True
         except Exception as e:
             logger.warning("Discovery service check failed", error=str(e))
-        
+
         # Check settings are accessible
         try:
             from ..core.config import settings
+
             if settings:
                 checks["settings"] = True
         except Exception as e:
             logger.warning("Settings check failed", error=str(e))
-        
+
         # All critical checks must pass
         all_ready = all(checks.values())
-        
+
         if all_ready:
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={"status": "ready", "checks": checks}
-            )
+            return JSONResponse(status_code=status.HTTP_200_OK, content={"status": "ready", "checks": checks})
         else:
             return JSONResponse(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={"status": "not ready", "checks": checks}
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={"status": "not ready", "checks": checks}
             )
     except Exception as e:
         logger.warning("Readiness check failed", error=str(e))
         return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"status": "not ready", "error": str(e)}
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={"status": "not ready", "error": str(e)}
         )
 
 
@@ -306,10 +308,7 @@ async def liveness_check() -> JSONResponse:
     Returns:
         JSON response with status
     """
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={"status": "alive"}
-    )
+    return JSONResponse(status_code=status.HTTP_200_OK, content={"status": "alive"})
 
 
 @router.get(
@@ -321,7 +320,7 @@ async def liveness_check() -> JSONResponse:
         200: {"description": "Metrics in Prometheus format"},
     },
 )
-async def metrics():
+async def metrics() -> Any:
     """
     Prometheus metrics endpoint.
 
@@ -331,20 +330,12 @@ async def metrics():
         Plain text response with Prometheus metrics
     """
     if not PROMETHEUS_AVAILABLE:
-        return PlainTextResponse(
-            content="# Prometheus client not available\n",
-            media_type=CONTENT_TYPE_LATEST
-        )
+        return PlainTextResponse(content="# Prometheus client not available\n", media_type=CONTENT_TYPE_LATEST)
 
     try:
-        return PlainTextResponse(
-            content=generate_latest().decode('utf-8'),
-            media_type=CONTENT_TYPE_LATEST
-        )
+        return PlainTextResponse(content=generate_latest().decode("utf-8"), media_type=CONTENT_TYPE_LATEST)
     except Exception as e:
         logger.error("Failed to generate metrics", error=str(e))
         return PlainTextResponse(
-            content=f"# Error generating metrics: {e}\n",
-            media_type=CONTENT_TYPE_LATEST,
-            status_code=500
+            content=f"# Error generating metrics: {e}\n", media_type=CONTENT_TYPE_LATEST, status_code=500
         )

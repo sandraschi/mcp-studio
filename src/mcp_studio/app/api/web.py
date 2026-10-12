@@ -1,19 +1,16 @@
 """Web interface routes for MCP Studio."""
 
-import logging
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
-from pathlib import Path
 
 from ...app.core.config import settings
+from ...app.core.enums import ServerStatus
 from ...app.core.logging_utils import get_logger
 from ...app.services.server_service import server_service
-from ...app.services.config_service import config_service
-from ...app.core.enums import ServerStatus
 
 # Set up logger
 logger = get_logger(__name__)
@@ -49,7 +46,7 @@ def get_template_context(request: Request) -> dict:
     }
 
 
-def get_dashboard_html(request: Request):
+def get_dashboard_html(request: Request) -> Any:
     """Helper to serve the refactored dashboard.html content."""
     # Strict priority: Check explicit locations for dashboard
     possible_paths = [
@@ -64,14 +61,12 @@ def get_dashboard_html(request: Request):
     for path in possible_paths:
         if path.exists():
             logger.info(f"Serving dashboard from: {path}")
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 html_content = f.read()
             # Replace VERSION variable
             return HTMLResponse(content=html_content.replace("{VERSION}", "0.2.1-beta"))
 
-    logger.warning(
-        "dashboard_new.html not found in any expected location, falling back to template"
-    )
+    logger.warning("dashboard_new.html not found in any expected location, falling back to template")
     return templates.TemplateResponse(
         "dashboard_new.html",
         {
@@ -83,19 +78,19 @@ def get_dashboard_html(request: Request):
 
 # Root route
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
-async def root(request: Request):
+async def root(request: Request) -> Any:
     return get_dashboard_html(request)
 
 
 # Catch-all for dashboard tabs (since it uses client-side routing, or if user refreshes on a tab)
 # Adding these explicit routes ensures we serve the dashboard HTML instead of 404
 @router.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
-async def dashboard(request: Request):
+async def dashboard(request: Request) -> Any:
     return get_dashboard_html(request)
 
 
 @router.get("/repos", response_class=HTMLResponse, include_in_schema=False)
-async def repos_page(request: Request):
+async def repos_page(request: Request) -> Any:
     return get_dashboard_html(request)
 
 
@@ -103,9 +98,9 @@ async def repos_page(request: Request):
 @router.get("/servers", response_class=HTMLResponse, include_in_schema=False)
 async def servers_list(
     request: Request,
-    status_filter: Optional[str] = Query(None, alias="status"),
-    search: Optional[str] = None,
-):
+    status_filter: str | None = Query(None, alias="status"),
+    search: str | None = None,
+) -> Any:
     """Servers list page with filtering and search."""
     # Get all servers from the server service
     servers = list(server_service.get_servers().values())
@@ -119,11 +114,7 @@ async def servers_list(
         servers = [
             s
             for s in servers
-            if (
-                search in s.name.lower()
-                or search in (s.description or "").lower()
-                or search in s.type.value.lower()
-            )
+            if (search in s.name.lower() or search in (s.description or "").lower() or search in s.type.value.lower())
         ]
 
     # Sort servers by status (online first) and then by name
@@ -139,15 +130,9 @@ async def servers_list(
     # Get status counts for the filter
     status_counts = {
         "all": len(server_service.get_servers()),
-        "online": len(
-            [s for s in server_service.get_servers().values() if s.status == ServerStatus.ONLINE]
-        ),
-        "offline": len(
-            [s for s in server_service.get_servers().values() if s.status == ServerStatus.OFFLINE]
-        ),
-        "error": len(
-            [s for s in server_service.get_servers().values() if s.status == ServerStatus.ERROR]
-        ),
+        "online": len([s for s in server_service.get_servers().values() if s.status == ServerStatus.ONLINE]),
+        "offline": len([s for s in server_service.get_servers().values() if s.status == ServerStatus.OFFLINE]),
+        "error": len([s for s in server_service.get_servers().values() if s.status == ServerStatus.ERROR]),
     }
 
     return templates.TemplateResponse(
@@ -166,7 +151,7 @@ async def servers_list(
 
 # Server detail route
 @router.get("/servers/{server_id}", response_class=HTMLResponse, include_in_schema=False)
-async def server_detail(request: Request, server_id: str, tab: str = "overview"):
+async def server_detail(request: Request, server_id: str, tab: str = "overview") -> Any:
     """Server detail page with tabbed interface."""
     # Get server from the server service
     server = server_service.get_server(server_id)
@@ -177,9 +162,9 @@ async def server_detail(request: Request, server_id: str, tab: str = "overview")
         )
 
     # Get tools if on the tools tab
-    tools = []
+    tools: list[Any] = []
     if tab == "tools":
-        tools = server_service.get_server_tools(server_id)
+        tools = await server_service.get_server_tools(server_id)
 
     # Get logs if on the logs tab (placeholder for now)
     logs = ""
@@ -205,7 +190,7 @@ async def server_detail(request: Request, server_id: str, tab: str = "overview")
 
 
 @router.post("/servers/{server_id}/start", include_in_schema=False)
-async def start_server(server_id: str):
+async def start_server(server_id: str) -> Any:
     """Start an MCP server."""
     server = server_service.get_server(server_id)
     if not server:
@@ -215,9 +200,7 @@ async def start_server(server_id: str):
         )
 
     if server.status == ServerStatus.ONLINE:
-        return RedirectResponse(
-            f"/servers/{server_id}?tab=overview", status_code=status.HTTP_303_SEE_OTHER
-        )
+        return RedirectResponse(f"/servers/{server_id}?tab=overview", status_code=status.HTTP_303_SEE_OTHER)
 
     success = await server_service.start_server(server_id)
     if not success:
@@ -226,13 +209,11 @@ async def start_server(server_id: str):
             detail=f"Failed to start server '{server_id}'",
         )
 
-    return RedirectResponse(
-        f"/servers/{server_id}?tab=overview", status_code=status.HTTP_303_SEE_OTHER
-    )
+    return RedirectResponse(f"/servers/{server_id}?tab=overview", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/servers/{server_id}/stop", include_in_schema=False)
-async def stop_server(server_id: str):
+async def stop_server(server_id: str) -> Any:
     """Stop an MCP server."""
     server = server_service.get_server(server_id)
     if not server:
@@ -242,9 +223,7 @@ async def stop_server(server_id: str):
         )
 
     if server.status == ServerStatus.OFFLINE:
-        return RedirectResponse(
-            f"/servers/{server_id}?tab=overview", status_code=status.HTTP_303_SEE_OTHER
-        )
+        return RedirectResponse(f"/servers/{server_id}?tab=overview", status_code=status.HTTP_303_SEE_OTHER)
 
     success = await server_service.stop_server(server_id)
     if not success:
@@ -253,13 +232,11 @@ async def stop_server(server_id: str):
             detail=f"Failed to stop server '{server_id}'",
         )
 
-    return RedirectResponse(
-        f"/servers/{server_id}?tab=overview", status_code=status.HTTP_303_SEE_OTHER
-    )
+    return RedirectResponse(f"/servers/{server_id}?tab=overview", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/servers/{server_id}/restart", include_in_schema=False)
-async def restart_server(server_id: str):
+async def restart_server(server_id: str) -> Any:
     """Restart an MCP server."""
     server = server_service.get_server(server_id)
     if not server:
@@ -280,17 +257,15 @@ async def restart_server(server_id: str):
             detail=f"Failed to restart server '{server_id}'",
         )
 
-    return RedirectResponse(
-        f"/servers/{server_id}?tab=overview", status_code=status.HTTP_303_SEE_OTHER
-    )
+    return RedirectResponse(f"/servers/{server_id}?tab=overview", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # Tools list route
 @router.get("/tools", response_class=HTMLResponse, include_in_schema=False)
-async def tools_list(request: Request):
+async def tools_list(request: Request) -> Any:
     """Tools list page."""
     # TODO: Fetch actual tools from the server service
-    tools = []
+    tools: list[Any] = []
 
     return templates.TemplateResponse(
         "tools/list.html",
@@ -304,7 +279,7 @@ async def tools_list(request: Request):
 
 # Tool detail route
 @router.get("/tools/{tool_name}", response_class=HTMLResponse, include_in_schema=False)
-async def tool_detail(request: Request, tool_name: str):
+async def tool_detail(request: Request, tool_name: str) -> Any:
     """Tool detail page."""
     # TODO: Fetch actual tool details from the server service
     tool = None
@@ -327,10 +302,10 @@ async def tool_detail(request: Request, tool_name: str):
 
 # Execute tool route
 @router.get("/tools/execute", response_class=HTMLResponse, include_in_schema=False)
-async def execute_tool(request: Request):
+async def execute_tool(request: Request) -> Any:
     """Execute tool page."""
     # TODO: Fetch available servers and tools for the form
-    servers = []
+    servers: list[Any] = []
 
     return templates.TemplateResponse(
         "tools/execute.html",
@@ -344,10 +319,10 @@ async def execute_tool(request: Request):
 
 # Templates list route
 @router.get("/templates", response_class=HTMLResponse, include_in_schema=False)
-async def templates_list(request: Request):
+async def templates_list(request: Request) -> Any:
     """Templates list page."""
     # TODO: Fetch actual templates from the database
-    templates_list = []
+    templates_list: list[Any] = []
 
     return templates.TemplateResponse(
         "templates/list.html",
@@ -361,7 +336,7 @@ async def templates_list(request: Request):
 
 # Clients list route
 @router.get("/clients", response_class=HTMLResponse, include_in_schema=False)
-async def clients_list(request: Request):
+async def clients_list(request: Request) -> Any:
     """Clients list page."""
     return templates.TemplateResponse(
         "clients/list.html",
@@ -374,7 +349,7 @@ async def clients_list(request: Request):
 
 # Client detail route
 @router.get("/clients/{client_id}", response_class=HTMLResponse, include_in_schema=False)
-async def client_detail(request: Request, client_id: str, tab: str = "overview"):
+async def client_detail(request: Request, client_id: str, tab: str = "overview") -> Any:
     """Client detail page with tabbed interface."""
     return templates.TemplateResponse(
         "clients/detail.html",
@@ -389,7 +364,7 @@ async def client_detail(request: Request, client_id: str, tab: str = "overview")
 
 # Settings route
 @router.get("/settings", response_class=HTMLResponse, include_in_schema=False)
-async def settings_page(request: Request):
+async def settings_page(request: Request) -> Any:
     """Settings page."""
     return templates.TemplateResponse(
         "settings/index.html",

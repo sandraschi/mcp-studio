@@ -3,22 +3,23 @@
 import logging
 import logging.config
 import sys
-from pathlib import Path
-from typing import Any, Dict, Optional
 
 import structlog
-from structlog.types import EventDict, Processor
+from structlog.types import EventDict
+
 
 def add_service_context(_: logging.Logger, __: str, event_dict: EventDict) -> EventDict:
     """Add service context to log events."""
     event_dict["service"] = "mcp-studio"
     return event_dict
 
+
 def drop_debug_logs(_: logging.Logger, __: str, event_dict: EventDict) -> EventDict:
     """Drop debug logs in production."""
     if event_dict.get("level") == "debug":
         raise structlog.DropEvent
     return event_dict
+
 
 def configure_logging(level: str = "INFO", json_logs: bool = False) -> None:
     """Configure structured logging with structlog.
