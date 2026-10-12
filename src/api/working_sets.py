@@ -2,11 +2,12 @@
 FastAPI endpoints for Working Set management
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
 import logging
 from pathlib import Path
+from typing import Any
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from working_sets.manager import WorkingSetManager
 
@@ -17,13 +18,10 @@ CLAUDE_CONFIG_PATH = "C:/Users/sandr/AppData/Roaming/Claude/claude_desktop_confi
 TEMPLATES_DIR = "templates"
 BACKUP_DIR = "C:/Users/sandr/AppData/Roaming/Claude/backup"
 
-manager = WorkingSetManager(
-    config_path=CLAUDE_CONFIG_PATH,
-    backup_dir=BACKUP_DIR, 
-    templates_dir=TEMPLATES_DIR
-)
+manager = WorkingSetManager(config_path=CLAUDE_CONFIG_PATH, backup_dir=BACKUP_DIR, templates_dir=TEMPLATES_DIR)
 
 router = APIRouter(prefix="/api/working-sets", tags=["working-sets"])
+
 
 # Pydantic models
 class WorkingSetResponse(BaseModel):
@@ -32,13 +30,15 @@ class WorkingSetResponse(BaseModel):
     description: str
     icon: str
     category: str
-    servers: List[Dict[str, Any]]
+    servers: list[dict[str, Any]]
     server_count: int
     is_current: bool
+
 
 class SwitchRequest(BaseModel):
     working_set_id: str
     create_backup: bool = True
+
 
 class BackupResponse(BaseModel):
     name: str
@@ -46,74 +46,78 @@ class BackupResponse(BaseModel):
     created: str
     size: int
 
+
 class PreviewResponse(BaseModel):
-    current_servers: List[str]
-    new_servers: List[str] 
-    added_servers: List[str]
-    removed_servers: List[str]
-    config_preview: Dict[str, Any]
+    current_servers: list[str]
+    new_servers: list[str]
+    added_servers: list[str]
+    removed_servers: list[str]
+    config_preview: dict[str, Any]
+
 
 class ValidationResponse(BaseModel):
     valid: bool
-    missing_servers: List[str]
-    available_servers: List[str]
-    working_set_servers: List[str]
-    error: Optional[str] = None
+    missing_servers: list[str]
+    available_servers: list[str]
+    working_set_servers: list[str]
+    error: str | None = None
 
-@router.get("/", response_model=List[WorkingSetResponse])
-async def list_working_sets():
+
+@router.get("/", response_model=list[WorkingSetResponse])
+async def list_working_sets() -> Any:
     """Get all available working sets with current status."""
     try:
         working_sets = manager.list_working_sets()
         current_working_set = manager.get_current_working_set()
-        
+
         response = []
         for ws in working_sets:
-            response.append(WorkingSetResponse(
-                name=ws["name"],
-                id=ws["id"],
-                description=ws["description"], 
-                icon=ws["icon"],
-                category=ws["category"],
-                servers=ws["servers"],
-                server_count=len(ws["servers"]),
-                is_current=(ws["id"] == current_working_set)
-            ))
-        
+            response.append(
+                WorkingSetResponse(
+                    name=ws["name"],
+                    id=ws["id"],
+                    description=ws["description"],
+                    icon=ws["icon"],
+                    category=ws["category"],
+                    servers=ws["servers"],
+                    server_count=len(ws["servers"]),
+                    is_current=(ws["id"] == current_working_set),
+                )
+            )
+
         return response
     except Exception as e:
         logger.error(f"Failed to list working sets: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/current")
-async def get_current_working_set():
+async def get_current_working_set() -> Any:
     """Get currently active working set."""
     try:
         current = manager.get_current_working_set()
         if current:
             working_set = manager.get_working_set(current)
-            return {
-                "working_set_id": current,
-                "working_set": working_set.to_dict() if working_set else None
-            }
+            return {"working_set_id": current, "working_set": working_set.to_dict() if working_set else None}
         return {"working_set_id": None, "working_set": None}
     except Exception as e:
         logger.error(f"Failed to get current working set: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/{working_set_id}")
-async def get_working_set(working_set_id: str):
+async def get_working_set(working_set_id: str) -> Any:
     """Get specific working set details."""
     try:
         working_set = manager.get_working_set(working_set_id)
         if not working_set:
             raise HTTPException(status_code=404, detail="Working set not found")
-        
+
         current_working_set = manager.get_current_working_set()
         response = working_set.to_dict()
-        response["is_current"] = (working_set_id == current_working_set)
+        response["is_current"] = working_set_id == current_working_set
         response["server_count"] = len(working_set.servers)
-        
+
         return response
     except HTTPException:
         raise
@@ -121,8 +125,9 @@ async def get_working_set(working_set_id: str):
         logger.error(f"Failed to get working set {working_set_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.post("/{working_set_id}/switch")
-async def switch_working_set(working_set_id: str, request: SwitchRequest = None):
+async def switch_working_set(working_set_id: str, request: SwitchRequest | None = None) -> Any:
     """Switch to specified working set with backup and rollback protection."""
     try:
         create_backup = request.create_backup if request else True
@@ -134,7 +139,7 @@ async def switch_working_set(working_set_id: str, request: SwitchRequest = None)
             "working_set_id": result["working_set_id"],
             "working_set_name": result["working_set_name"],
             "backup_created": result.get("backup_created"),
-            "servers_count": result["servers_count"]
+            "servers_count": result["servers_count"],
         }
 
     except ValueError as e:
@@ -144,10 +149,11 @@ async def switch_working_set(working_set_id: str, request: SwitchRequest = None)
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to switch to working set {working_set_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {e!s}")
+
 
 @router.get("/{working_set_id}/preview", response_model=PreviewResponse)
-async def preview_working_set(working_set_id: str):
+async def preview_working_set(working_set_id: str) -> Any:
     """Preview config changes for working set without applying."""
     try:
         preview = manager.preview_working_set_config(working_set_id)
@@ -158,8 +164,9 @@ async def preview_working_set(working_set_id: str):
         logger.error(f"Failed to preview working set {working_set_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/{working_set_id}/validate", response_model=ValidationResponse)
-async def validate_working_set(working_set_id: str):
+async def validate_working_set(working_set_id: str) -> Any:
     """Validate that working set can be applied."""
     try:
         validation = manager.validate_working_set(working_set_id)
@@ -168,8 +175,9 @@ async def validate_working_set(working_set_id: str):
         logger.error(f"Failed to validate working set {working_set_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/backups/list", response_model=List[BackupResponse])
-async def list_backups():
+
+@router.get("/backups/list", response_model=list[BackupResponse])
+async def list_backups() -> Any:
     """List all available config backups."""
     try:
         backups = manager.list_backups()
@@ -178,30 +186,25 @@ async def list_backups():
         logger.error(f"Failed to list backups: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.post("/backups/create")
-async def create_backup(name: Optional[str] = None):
+async def create_backup(name: str | None = None) -> Any:
     """Create backup of current config."""
     try:
         backup_file = manager.create_backup(name)
-        return {
-            "success": True,
-            "message": "Backup created successfully",
-            "backup_file": backup_file
-        }
+        return {"success": True, "message": "Backup created successfully", "backup_file": backup_file}
     except Exception as e:
         logger.error(f"Failed to create backup: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.post("/backups/{backup_name}/restore")
-async def restore_backup(backup_name: str):
+async def restore_backup(backup_name: str) -> Any:
     """Restore config from backup."""
     try:
         success = manager.restore_backup(backup_name)
         if success:
-            return {
-                "success": True,
-                "message": f"Restored backup: {backup_name}"
-            }
+            return {"success": True, "message": f"Restored backup: {backup_name}"}
         else:
             raise HTTPException(status_code=500, detail="Failed to restore backup")
     except FileNotFoundError as e:
@@ -210,19 +213,20 @@ async def restore_backup(backup_name: str):
         logger.error(f"Failed to restore backup {backup_name}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/status/health")
-async def health_check():
+async def health_check() -> Any:
     """Health check endpoint."""
     try:
         # Check if config file exists
         config_exists = Path(CLAUDE_CONFIG_PATH).exists()
-        
+
         # Check if templates are loaded
         working_sets = manager.list_working_sets()
-        
+
         # Check backup directory
         backup_dir_exists = Path(BACKUP_DIR).exists()
-        
+
         return {
             "healthy": True,
             "config_file_exists": config_exists,
@@ -230,11 +234,8 @@ async def health_check():
             "backup_dir_exists": backup_dir_exists,
             "claude_config_path": CLAUDE_CONFIG_PATH,
             "templates_dir": TEMPLATES_DIR,
-            "backup_dir": BACKUP_DIR
+            "backup_dir": BACKUP_DIR,
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        return {
-            "healthy": False,
-            "error": str(e)
-        }
+        return {"healthy": False, "error": str(e)}

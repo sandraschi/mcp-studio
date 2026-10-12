@@ -3,21 +3,24 @@ Repo Scanner API Routes for MCP Studio Dashboard.
 
 Provides REST endpoints for the repo scanner feature.
 """
-from typing import Optional
+
+import logging
+from typing import Any
 
 from fastapi import APIRouter, Query
 
-from ..tools.runt_analyzer import analyze_runts, get_repo_status
 from ..app.core.config import settings
+from ..tools.runt_analyzer import analyze_runts, get_repo_status
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/repos", tags=["repos"])
 
 
 @router.get("/")
 async def get_repos(
     scan_path: str = Query(default=None, description="Directory to scan"),
-    include_sota: bool = Query(default=True, description="Include SOTA repos in response")
-):
+    include_sota: bool = Query(default=True, description="Include SOTA repos in response"),
+) -> Any:
     """
     Get all MCP repositories with repo analysis.
 
@@ -29,25 +32,20 @@ async def get_repos(
     # Check if we have scan results
     results = repo_scanner.get_results()
     if results:
-        return {
-            "status": "success",
-            "data": results,
-            "count": len(results),
-            "scan_url": "/api/v1/repos/run_scan"
-        }
+        return {"status": "success", "data": results, "count": len(results), "scan_url": "/api/v1/repos/run_scan"}
     else:
         return {
             "status": "no_data",
             "message": "No scan data yet. Click 'START REPO SCAN' to analyze repositories.",
-            "scan_url": "/api/v1/repos/run_scan"
+            "scan_url": "/api/v1/repos/run_scan",
         }
 
 
 @router.post("/scan")
 async def start_repo_scan(
     scan_path: str = Query(default=None, description="Directory to scan"),
-    include_sota: bool = Query(default=True, description="Include SOTA repos in response")
-):
+    include_sota: bool = Query(default=True, description="Include SOTA repos in response"),
+) -> Any:
     """
     Start a repository scan in the background.
 
@@ -59,20 +57,22 @@ async def start_repo_scan(
 
     # Check if scan is already running
     from ..app.services.repo_scanner_service import repo_scanner
-    if hasattr(repo_scanner, 'scan_task') and repo_scanner.scan_task and repo_scanner.scan_task.is_alive():
+
+    if hasattr(repo_scanner, "scan_task") and repo_scanner.scan_task and repo_scanner.scan_task.is_alive():
         return {
             "status": "already_scanning",
             "message": "Scan already in progress. Use /api/v1/repos/progress to monitor.",
-            "progress_url": "/api/v1/repos/progress"
+            "progress_url": "/api/v1/repos/progress",
         }
 
     # Start background scan using daemon thread for true non-blocking
     import threading
 
-    def run_scan():
+    def run_scan() -> None:
         try:
             # Import here to avoid circular imports
             from ..tools.runt_analyzer import analyze_runts_sync
+
             result = analyze_runts_sync(scan_path=scan_path, include_sota=include_sota)
             # Cache the result
             repo_scanner.last_scan_results = result.get("runts", []) + result.get("sota_repos", [])
@@ -80,27 +80,27 @@ async def start_repo_scan(
             logger.error(f"Background scan failed: {e}")
         finally:
             # Clear the scan task reference
-            if hasattr(repo_scanner, 'scan_task'):
+            if hasattr(repo_scanner, "scan_task"):
                 repo_scanner.scan_task = None
 
     # Start daemon thread for scan (won't block main thread)
     scan_thread = threading.Thread(target=run_scan, daemon=True)
     scan_thread.start()
-    repo_scanner.scan_task = scan_thread
+    repo_scanner.scan_task = scan_thread  # type: ignore[attr-defined]
 
     # Return immediately - scan is running in background
     return {
         "status": "scan_started",
         "message": "Repository scan started in background. Use /api/v1/repos/progress to monitor.",
-        "progress_url": "/api/v1/repos/progress"
+        "progress_url": "/api/v1/repos/progress",
     }
 
 
 @router.post("/run_scan")
 async def run_repo_scan(
     scan_path: str = Query(default=None, description="Directory to scan"),
-    include_sota: bool = Query(default=True, description="Include SOTA repos in response")
-):
+    include_sota: bool = Query(default=True, description="Include SOTA repos in response"),
+) -> Any:
     """
     Start a repository scan.
 
@@ -111,12 +111,14 @@ async def run_repo_scan(
         scan_path = settings.REPOS_PATH
 
     # Start background scan using the repo scanner service
-    from ..app.services.repo_scanner_service import repo_scanner
     import threading
 
-    def run_scan():
+    from ..app.services.repo_scanner_service import repo_scanner
+
+    def run_scan() -> None:
         try:
             from pathlib import Path
+
             scan_path_obj = Path(scan_path)
             results = repo_scanner.scan_repos(scan_path_obj)
             # Store results for the get endpoint
@@ -125,26 +127,24 @@ async def run_repo_scan(
             print(f"Background scan failed: {e}")
         finally:
             # Clear any scan task reference
-            if hasattr(repo_scanner, 'scan_task'):
+            if hasattr(repo_scanner, "scan_task"):
                 repo_scanner.scan_task = None
 
     # Start daemon thread for scan (won't block main thread)
     scan_thread = threading.Thread(target=run_scan, daemon=True)
     scan_thread.start()
-    if hasattr(repo_scanner, 'scan_task'):
-        repo_scanner.scan_task = scan_thread
+    if hasattr(repo_scanner, "scan_task"):
+        repo_scanner.scan_task = scan_thread  # type: ignore[attr-defined]
 
     # Return immediately - scan is running in background
     return {
         "status": "scan_started",
-        "message": "Repository scan started in background. Check progress with /api/v1/repos/progress"
+        "message": "Repository scan started in background. Check progress with /api/v1/repos/progress",
     }
 
 
 @router.get("/summary")
-async def get_repos_summary(
-    scan_path: str = Query(default=None, description="Directory to scan")
-):
+async def get_repos_summary(scan_path: str = Query(default=None, description="Directory to scan")) -> Any:
     """
     Get summary statistics for repo analysis.
 
@@ -155,19 +155,20 @@ async def get_repos_summary(
         scan_path = settings.REPOS_PATH
 
     result = await analyze_runts(scan_path=scan_path, include_sota=False)
+    if isinstance(result, str):
+        return {"success": False, "summary": None, "scan_path": scan_path, "error": result}
     return {
         "success": result.get("success"),
         "summary": result.get("summary"),
         "scan_path": result.get("scan_path"),
-        "timestamp": result.get("timestamp")
+        "timestamp": result.get("timestamp"),
     }
 
 
 @router.get("/repo/{repo_name}")
 async def get_repo_details(
-    repo_name: str,
-    base_path: str = Query(default="D:/Dev/repos", description="Base path for repos")
-):
+    repo_name: str, base_path: str = Query(default="D:/Dev/repos", description="Base path for repos")
+) -> Any:
     """
     Get detailed SOTA status for a specific repository.
     """
@@ -177,19 +178,21 @@ async def get_repo_details(
 
 
 @router.get("/progress")
-async def get_scan_progress():
+async def get_scan_progress() -> Any:
     """Get real-time progress of the current scan."""
     from ..app.services.repo_scanner_service import repo_scanner
+
     return repo_scanner.get_progress()
 
 
 @router.get("/test")
-async def test_endpoint():
+async def test_endpoint() -> Any:
     """Simple test endpoint to verify routing works."""
     return {"message": "Repo scanner routes are working!", "timestamp": "2025-12-11"}
 
+
 @router.get("/thresholds")
-async def get_thresholds():
+async def get_thresholds() -> Any:
     """
     Get current SOTA thresholds and criteria for repo scanning.
     """
@@ -246,7 +249,7 @@ async def get_thresholds():
                 '"unknown error"',
                 '"oops"',
                 'raise Exception("short")',
-            ]
+            ],
         },
         "scoring": {
             "fastmcp_old": -20,
@@ -275,7 +278,6 @@ async def get_thresholds():
             "[BUG]": "Bug (3-4 issues)",
             "[MINOR]": "Minor (1-2 issues)",
             "[WARN]": "Warning (non-critical issues)",
-            "[OK]": "SOTA compliant"
-        }
+            "[OK]": "SOTA compliant",
+        },
     }
-

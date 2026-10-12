@@ -3,7 +3,8 @@ Repo Scanner API Routes for MCP Studio Dashboard.
 
 Provides REST endpoints for the repo scanner feature.
 """
-from typing import Optional
+
+from typing import Any
 
 from fastapi import APIRouter, Query
 
@@ -15,8 +16,8 @@ router = APIRouter(prefix="/repos", tags=["repos"])
 @router.get("/")
 async def get_repos(
     scan_path: str = Query(default="D:/Dev/repos", description="Directory to scan"),
-    include_sota: bool = Query(default=True, description="Include SOTA repos in response")
-):
+    include_sota: bool = Query(default=True, description="Include SOTA repos in response"),
+) -> Any:
     """
     Get all MCP repositories with repo analysis.
 
@@ -31,15 +32,13 @@ async def get_repos(
             "success": False,
             "error": f"Unexpected result type: {type(result)}",
             "scan_path": scan_path,
-            "timestamp": "2025-12-12"
+            "timestamp": "2025-12-12",
         }
     return result
 
 
 @router.get("/summary")
-async def get_repos_summary(
-    scan_path: str = Query(default="D:/Dev/repos", description="Directory to scan")
-):
+async def get_repos_summary(scan_path: str = Query(default="D:/Dev/repos", description="Directory to scan")) -> Any:
     """
     Get summary statistics for repo analysis.
 
@@ -52,21 +51,20 @@ async def get_repos_summary(
             "success": False,
             "error": f"Unexpected result type: {type(result)}",
             "scan_path": scan_path,
-            "timestamp": "2025-12-12"
+            "timestamp": "2025-12-12",
         }
     return {
         "success": result.get("success"),
         "summary": result.get("summary"),
         "scan_path": result.get("scan_path"),
-        "timestamp": result.get("timestamp")
+        "timestamp": result.get("timestamp"),
     }
 
 
 @router.get("/repo/{repo_name}")
 async def get_repo_details(
-    repo_name: str,
-    base_path: str = Query(default="D:/Dev/repos", description="Base path for repos")
-):
+    repo_name: str, base_path: str = Query(default="D:/Dev/repos", description="Base path for repos")
+) -> Any:
     """
     Get detailed SOTA status for a specific repository.
     """
@@ -76,12 +74,13 @@ async def get_repo_details(
 
 
 @router.get("/test")
-async def test_endpoint():
+async def test_endpoint() -> Any:
     """Simple test endpoint to verify routing works."""
     return {"message": "Repo scanner routes are working!", "timestamp": "2025-12-11"}
 
+
 @router.get("/thresholds")
-async def get_thresholds():
+async def get_thresholds() -> Any:
     """
     Get current SOTA thresholds and criteria for repo scanning.
     """
@@ -138,7 +137,7 @@ async def get_thresholds():
                 '"unknown error"',
                 '"oops"',
                 'raise Exception("short")',
-            ]
+            ],
         },
         "scoring": {
             "fastmcp_old": -20,
@@ -167,7 +166,6 @@ async def get_thresholds():
             "🐛": "Bug (3-4 issues)",
             "🐣": "Minor (1-2 issues)",
             "⚠️": "Warning (non-critical issues)",
-            "✅": "SOTA compliant"
-        }
+            "✅": "SOTA compliant",
+        },
     }
-
