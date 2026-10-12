@@ -4,72 +4,66 @@ Uses FastMCP 2.11+ for server connections and tool execution.
 """
 
 import asyncio
-import json
-import logging
-import os
-import signal
-import sys
-import uuid
-from dataclasses import asdict
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from datetime import UTC, datetime
+from typing import Any
 
-import aiofiles
 from fastapi import HTTPException, status
+
 # FastMCP doesn't have MCPClient - using alternative approach
 try:
     from fastmcp import FastMCP
-    MCPError = Exception  # Fallback if MCPError doesn't exist
+
+    MCPError: type[Exception] = Exception  # Fallback if MCPError doesn't exist
 except ImportError:
-    FastMCP = None
+    FastMCP = None  # type: ignore[assignment,misc]
     MCPError = Exception
 from pydantic import BaseModel, Field, field_validator
 
-from ..core.config import settings
-from ..core.enums import ServerStatus, ServerType
 from ..core.logging_utils import get_logger
 from ..core.stdio import StdioTransport
 
 logger = get_logger(__name__)
 
+
 class MCPServerConfig(BaseModel):
     """Configuration for an MCP server."""
+
     id: str = Field(..., description="Unique identifier for the server")
     name: str = Field(..., description="Display name for the server")
     command: str = Field(..., description="Command to start the server")
-    args: List[str] = Field(default_factory=list, description="Command line arguments")
-    cwd: Optional[str] = Field(None, description="Working directory")
-    env: Optional[Dict[str, str]] = Field(None, description="Environment variables")
+    args: list[str] = Field(default_factory=list, description="Command line arguments")
+    cwd: str | None = Field(None, description="Working directory")
+    env: dict[str, str] | None = Field(None, description="Environment variables")
     source: str = Field("unknown", description="Source of this configuration")
     auto_start: bool = Field(True, description="Whether to start this server automatically")
-    
-    @field_validator('id')
+
+    @field_validator("id")
     @classmethod
-    def validate_id(cls, v):
+    def validate_id(cls, v: Any) -> Any:
         if not v or not isinstance(v, str):
             raise ValueError("Server ID must be a non-empty string")
         return v
 
+
 class MCPDiscoveryService:
     """Service for discovering and managing MCP servers."""
-    
-    def __init__(self):
-        self.servers: Dict[str, 'MCPClient'] = {}
-        self.server_configs: Dict[str, MCPServerConfig] = {}
+
+    def __init__(self) -> None:
+        self.servers: dict[str, Any] = {}
+        self.server_configs: dict[str, MCPServerConfig] = {}
         self.discovery_running = False
-        self._discovery_task: Optional[asyncio.Task] = None
+        self._discovery_task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
-    
+
     async def start_discovery(self) -> None:
         """Start the discovery service."""
         if self.discovery_running:
             return
-            
+
         self.discovery_running = True
         self._discovery_task = asyncio.create_task(self._discovery_loop())
         logger.info("MCP Discovery Service started")
-    
+
     async def stop_discovery(self) -> None:
         """Stop the discovery service and clean up resources."""
         self.discovery_running = False
@@ -79,86 +73,70 @@ class MCPDiscoveryService:
                 await self._discovery_task
             except asyncio.CancelledError:
                 pass
-        
+
         # Clean up all server connections
         for server_id in list(self.servers.keys()):
             await self._disconnect_server(server_id)
-        
+
         logger.info("MCP Discovery Service stopped")
-    
+
     async def add_server(self, config: MCPServerConfig) -> bool:
         """Add a new MCP server configuration."""
         async with self._lock:
             if config.id in self.server_configs:
                 logger.warning(f"Server with ID {config.id} already exists")
                 return False
-                
+
             self.server_configs[config.id] = config
             logger.info(f"Added MCP server {config.name} (ID: {config.id})")
-            
+
             # Auto-start the server if configured to do so
             if config.auto_start:
                 await self._connect_server(config.id)
-                
+
             return True
-    
+
     async def remove_server(self, server_id: str) -> bool:
         """Remove an MCP server and disconnect it."""
         async with self._lock:
             if server_id not in self.server_configs:
                 return False
-                
+
             await self._disconnect_server(server_id)
             del self.server_configs[server_id]
             logger.info(f"Removed MCP server {server_id}")
             return True
-    
-    async def get_servers(self) -> List[Dict[str, Any]]:
+
+    async def get_servers(self) -> list[dict[str, Any]]:
         """Get information about all discovered servers."""
         servers = []
-        for server_id, client in self.servers.items():
+        for server_id, _client in self.servers.items():
             try:
                 server_info = await self._get_server_info(server_id)
                 servers.append(server_info)
             except Exception as e:
                 logger.error(f"Failed to get info for server {server_id}: {e}")
-                servers.append({
-                    "id": server_id,
-                    "status": "error",
-                    "error": str(e)
-                })
+                servers.append({"id": server_id, "status": "error", "error": str(e)})
         return servers
-    
-    async def execute_tool(
-        self, 
-        server_id: str, 
-        tool_name: str, 
-        parameters: Dict[str, Any]
-    ) -> Dict[str, Any]:
+
+    async def execute_tool(self, server_id: str, tool_name: str, parameters: dict[str, Any]) -> dict[str, Any]:
         """Execute a tool on an MCP server."""
         if server_id not in self.servers:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Server {server_id} not found"
-            )
-            
-        client = self.servers[server_id]
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Server {server_id} not found")
+
+        self.servers[server_id]
         try:
             # TODO: Implement actual tool execution
             # For now, return a placeholder
             return {"status": "success", "result": {"message": "Tool execution not yet implemented"}}
         except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(e)
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         except Exception as e:
             logger.error(f"Error executing tool {tool_name}: {e}", exc_info=True)
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to execute tool: {str(e)}"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to execute tool: {e!s}"
             )
-    
+
     async def _discovery_loop(self) -> None:
         """Background task for server discovery and health checks."""
         while self.discovery_running:
@@ -167,87 +145,82 @@ class MCPDiscoveryService:
                 for server_id in list(self.server_configs.keys()):
                     if server_id not in self.servers:
                         await self._connect_server(server_id)
-                
+
                 # Check server health
                 await self._check_server_health()
-                
+
             except Exception as e:
                 logger.error(f"Error in discovery loop: {e}", exc_info=True)
-            
+
             # Wait before next iteration
             await asyncio.sleep(30)  # Check every 30 seconds
-    
+
     async def _connect_server(self, server_id: str) -> bool:
         """Connect to an MCP server."""
         if server_id in self.servers:
             return True  # Already connected
-            
+
         config = self.server_configs.get(server_id)
         if not config:
             logger.error(f"No config found for server {server_id}")
             return False
-            
+
         try:
             # Create transport for the server
-            transport = StdioTransport(
-                command=config.command,
-                args=config.args,
-                cwd=config.cwd,
-                env=config.env
-            )
-            
+            StdioTransport(command=config.command, args=config.args, cwd=config.cwd, env=config.env)
+
             # Create MCP client using FastMCP
             # Note: FastMCP doesn't have MCPClient, using alternative approach
             # For now, we'll skip the connection and just mark as configured
             # TODO: Implement proper MCP client connection using available FastMCP APIs
-            client = None  # Placeholder - actual implementation needed
-            
+            client: Any = None  # Placeholder - actual implementation needed
+
             # Verify connection by listing tools
             tools = await client.list_tools()
             logger.info(f"Connected to MCP server {config.name} with {len(tools)} tools")
-            
+
             # Store the client
             self.servers[server_id] = client
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to connect to MCP server {config.name}: {e}", exc_info=True)
             return False
-    
+
     async def _disconnect_server(self, server_id: str) -> None:
         """Disconnect from an MCP server."""
         if server_id not in self.servers:
             return
-            
+
         client = self.servers[server_id]
         try:
             # TODO: Implement actual disconnect
-            if hasattr(client, 'disconnect'):
+            if hasattr(client, "disconnect"):
                 await client.disconnect()
         except Exception as e:
             logger.error(f"Error disconnecting from server {server_id}: {e}")
         finally:
             if server_id in self.servers:
                 del self.servers[server_id]
-    
-    async def _get_server_info(self, server_id: str) -> Dict[str, Any]:
+
+    async def _get_server_info(self, server_id: str) -> dict[str, Any]:
         """Get information about a server."""
         if server_id not in self.server_configs:
             raise ValueError(f"Unknown server: {server_id}")
-            
+
         config = self.server_configs[server_id]
         client = self.servers.get(server_id)
-        
+
         info = {
             "id": server_id,
             "name": config.name,
             "source": config.source,
             "status": "online" if client else "offline",
             "tools": [],
-            "last_seen": datetime.now(timezone.utc).isoformat(),
-            "config": config.dict()
+            "last_seen": datetime.now(UTC).isoformat(),
+            "config": config.dict(),
         }
-        
+
         if client:
             try:
                 # TODO: Implement actual tool listing
@@ -257,9 +230,9 @@ class MCPDiscoveryService:
                 logger.error(f"Failed to list tools for server {server_id}: {e}")
                 info["error"] = str(e)
                 info["status"] = "error"
-        
+
         return info
-    
+
     async def _check_server_health(self) -> None:
         """Check the health of all connected servers."""
         for server_id in list(self.servers.keys()):
@@ -273,16 +246,20 @@ class MCPDiscoveryService:
                 logger.warning(f"Server {server_id} is not responding: {e}")
                 await self._disconnect_server(server_id)
 
+
 # Global instance for easy access
 discovery_service = MCPDiscoveryService()
 
-async def start_discovery():
+
+async def start_discovery() -> None:
     """Start the MCP discovery service."""
     await discovery_service.start_discovery()
 
-async def stop_discovery():
+
+async def stop_discovery() -> None:
     """Stop the MCP discovery service."""
     await discovery_service.stop_discovery()
+
 
 def get_discovery_service() -> MCPDiscoveryService:
     """Get the global discovery service instance."""

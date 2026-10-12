@@ -19,9 +19,9 @@ Austrian precision: If it uses MCP, we support it! 🇦🇹
 
 import json
 import os
-from pathlib import Path
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 HOST_APPDATA = Path("/host/appdata")
 HOST_HOME = Path("/host/home")
@@ -39,9 +39,9 @@ class MCPServerInfo:
     id: str
     name: str
     command: str
-    args: List[str]
-    cwd: Optional[str] = None
-    env: Optional[Dict[str, str]] = None
+    args: list[str]
+    cwd: str | None = None
+    env: dict[str, str] | None = None
     source: str = ""  # Which client this came from
     estimated_tools: int = 20
 
@@ -49,17 +49,17 @@ class MCPServerInfo:
 class MCPClientZoo:
     """Parser for MCP configurations from ALL known MCP clients."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the client zoo."""
-        self.servers: Dict[str, MCPServerInfo] = {}
-        self.sources_found: List[str] = []
+        self.servers: dict[str, MCPServerInfo] = {}
+        self.sources_found: list[str] = []
         self.settings_manager = ClientSettingsManager()
 
     # ═══════════════════════════════════════════════════════════════
     # CLAUDE DESKTOP (Anthropic Official)
     # ═══════════════════════════════════════════════════════════════
 
-    def parse_claude_desktop(self) -> List[MCPServerInfo]:
+    def parse_claude_desktop(self) -> list[MCPServerInfo]:
         """Parse Claude Desktop MCP configuration."""
         paths = [
             Path(os.environ.get("APPDATA", "")) / "Claude" / "claude_desktop_config.json",
@@ -76,7 +76,7 @@ class MCPClientZoo:
     # CURSOR IDE
     # ═══════════════════════════════════════════════════════════════
 
-    def parse_cursor_ide(self) -> List[MCPServerInfo]:
+    def parse_cursor_ide(self) -> list[MCPServerInfo]:
         """Parse Cursor IDE MCP configuration."""
         paths = [
             Path(os.environ.get("APPDATA", ""))
@@ -110,7 +110,7 @@ class MCPClientZoo:
     # WINDSURF IDE
     # ═══════════════════════════════════════════════════════════════
 
-    def parse_windsurf_ide(self) -> List[MCPServerInfo]:
+    def parse_windsurf_ide(self) -> list[MCPServerInfo]:
         """Parse Windsurf IDE MCP configuration."""
         paths = [
             Path(os.environ.get("APPDATA", ""))
@@ -135,7 +135,7 @@ class MCPClientZoo:
     # CLINE (VSCode Extension - formerly Claude Dev)
     # ═══════════════════════════════════════════════════════════════
 
-    def parse_cline(self) -> List[MCPServerInfo]:
+    def parse_cline(self) -> list[MCPServerInfo]:
         """Parse Cline (formerly Claude Dev) VSCode extension MCP configuration."""
         paths = [
             # Current Cline paths
@@ -202,7 +202,7 @@ class MCPClientZoo:
     # ROO-CLINE (Windsurf's Cline Fork)
     # ═══════════════════════════════════════════════════════════════
 
-    def parse_roo_cline(self) -> List[MCPServerInfo]:
+    def parse_roo_cline(self) -> list[MCPServerInfo]:
         """Parse Roo-Cline (Windsurf's Cline fork) MCP configuration."""
         paths = [
             Path(os.environ.get("APPDATA", ""))
@@ -221,7 +221,7 @@ class MCPClientZoo:
     # CONTINUE.DEV (VSCode Extension)
     # ═══════════════════════════════════════════════════════════════
 
-    def parse_continue_dev(self) -> List[MCPServerInfo]:
+    def parse_continue_dev(self) -> list[MCPServerInfo]:
         """Parse Continue.dev VSCode extension MCP configuration."""
         paths = [
             # Primary Continue config
@@ -234,13 +234,7 @@ class MCPClientZoo:
             / "globalStorage"
             / "continue.continue"
             / "config.json",
-            Path.home()
-            / ".config"
-            / "Code"
-            / "User"
-            / "globalStorage"
-            / "continue.continue"
-            / "config.json",  # Linux
+            Path.home() / ".config" / "Code" / "User" / "globalStorage" / "continue.continue" / "config.json",  # Linux
             Path.home()
             / "Library"
             / "Application Support"
@@ -270,17 +264,13 @@ class MCPClientZoo:
     # LM STUDIO
     # ═══════════════════════════════════════════════════════════════
 
-    def parse_lm_studio(self) -> List[MCPServerInfo]:
+    def parse_lm_studio(self) -> list[MCPServerInfo]:
         """Parse LM Studio MCP configuration."""
         paths = [
-            Path.home() / ".lmstudio" / "mcp.json",                      # User's preferred location
+            Path.home() / ".lmstudio" / "mcp.json",  # User's preferred location
             Path(os.environ.get("APPDATA", "")) / "LM Studio" / "mcp_config.json",
-            Path.home() / ".lmstudio" / "mcp_config.json",             # Alternative user location
-            Path.home()
-            / "Library"
-            / "Application Support"
-            / "LM Studio"
-            / "mcp_config.json",  # Mac
+            Path.home() / ".lmstudio" / "mcp_config.json",  # Alternative user location
+            Path.home() / "Library" / "Application Support" / "LM Studio" / "mcp_config.json",  # Mac
         ]
 
         return self._parse_standard_format(paths, "lm-studio")
@@ -289,7 +279,7 @@ class MCPClientZoo:
     # ANTIGRAVITY IDE
     # ═══════════════════════════════════════════════════════════════
 
-    def parse_antigravity_ide(self) -> List[MCPServerInfo]:
+    def parse_antigravity_ide(self) -> list[MCPServerInfo]:
         """Parse Antigravity IDE MCP configuration."""
         paths = [
             Path(os.environ.get("APPDATA", "")) / "Antigravity" / "mcp_config.json",
@@ -302,11 +292,7 @@ class MCPClientZoo:
             Path.home() / ".config" / "antigravity" / "mcp.json",
             Path.home() / ".antigravity" / "mcp_config.json",
             Path.home() / ".antigravity" / "mcp.json",
-            Path.home()
-            / "Library"
-            / "Application Support"
-            / "Antigravity"
-            / "mcp_config.json",  # Mac
+            Path.home() / "Library" / "Application Support" / "Antigravity" / "mcp_config.json",  # Mac
             # User's actual config location
             Path.home() / ".gemini" / "antigravity" / "mcp_config.json",
             # Docker Host Mounts
@@ -324,7 +310,7 @@ class MCPClientZoo:
     # ZED EDITOR
     # ═══════════════════════════════════════════════════════════════
 
-    def parse_zed_editor(self) -> List[MCPServerInfo]:
+    def parse_zed_editor(self) -> list[MCPServerInfo]:
         """Parse Zed Editor MCP configuration."""
         paths = [
             # Primary Zed config locations
@@ -349,18 +335,13 @@ class MCPClientZoo:
     # VSCODE (Generic)
     # ═══════════════════════════════════════════════════════════════
 
-    def parse_vscode_generic(self) -> List[MCPServerInfo]:
+    def parse_vscode_generic(self) -> list[MCPServerInfo]:
         """Parse generic VSCode MCP configuration from various MCP extensions."""
         paths = [
             # Standard VSCode User settings
             Path(os.environ.get("APPDATA", "")) / "Code" / "User" / "settings.json",
             Path.home() / ".config" / "Code" / "User" / "settings.json",  # Linux
-            Path.home()
-            / "Library"
-            / "Application Support"
-            / "Code"
-            / "User"
-            / "settings.json",  # Mac
+            Path.home() / "Library" / "Application Support" / "Code" / "User" / "settings.json",  # Mac
             # VSCode Insiders
             Path(os.environ.get("APPDATA", "")) / "Code - Insiders" / "User" / "settings.json",
             Path.home() / ".config" / "Code - Insiders" / "User" / "settings.json",
@@ -381,7 +362,7 @@ class MCPClientZoo:
     # HELPERS
     # ═══════════════════════════════════════════════════════════════
 
-    def _parse_standard_format(self, paths: List[Path], source: str) -> List[MCPServerInfo]:
+    def _parse_standard_format(self, paths: list[Path], source: str) -> list[MCPServerInfo]:
         """
         Parse standard MCP config format (mcpServers).
 
@@ -397,7 +378,7 @@ class MCPClientZoo:
             try:
                 logger.debug(f"Checking {source} config", path=str(config_path))
 
-                with open(config_path, "r", encoding="utf-8") as f:
+                with open(config_path, encoding="utf-8") as f:
                     config = json.load(f)
 
                 # Look for mcpServers key
@@ -420,22 +401,18 @@ class MCPClientZoo:
                     servers.append(server)
 
                 if servers:
-                    logger.info(
-                        f"Parsed {len(servers)} MCP servers from {source}", path=str(config_path)
-                    )
+                    logger.info(f"Parsed {len(servers)} MCP servers from {source}", path=str(config_path))
                     return servers
 
             except json.JSONDecodeError as e:
-                logger.warning(
-                    f"Invalid JSON in {source} config", path=str(config_path), error=str(e)
-                )
+                logger.warning(f"Invalid JSON in {source} config", path=str(config_path), error=str(e))
             except Exception as e:
                 logger.debug(f"Error parsing {source} config", path=str(config_path), error=str(e))
 
         logger.debug(f"No {source} MCP config found")
         return []
 
-    def _parse_continue_format(self, paths: List[Path], source: str) -> List[MCPServerInfo]:
+    def _parse_continue_format(self, paths: list[Path], source: str) -> list[MCPServerInfo]:
         """
         Parse Continue.dev specific format.
 
@@ -446,7 +423,7 @@ class MCPClientZoo:
                 continue
 
             try:
-                with open(config_path, "r", encoding="utf-8") as f:
+                with open(config_path, encoding="utf-8") as f:
                     config = json.load(f)
 
                 servers = []
@@ -481,9 +458,7 @@ class MCPClientZoo:
                         servers.append(server)
 
                 if servers:
-                    logger.info(
-                        f"Parsed {len(servers)} MCP servers from {source}", path=str(config_path)
-                    )
+                    logger.info(f"Parsed {len(servers)} MCP servers from {source}", path=str(config_path))
                     return servers
 
             except Exception as e:
@@ -492,7 +467,7 @@ class MCPClientZoo:
         logger.debug(f"No {source} MCP config found")
         return []
 
-    def _parse_vscode_settings(self, paths: List[Path], source: str) -> List[MCPServerInfo]:
+    def _parse_vscode_settings(self, paths: list[Path], source: str) -> list[MCPServerInfo]:
         """
         Parse VSCode settings.json files which may contain MCP configurations.
 
@@ -505,7 +480,7 @@ class MCPClientZoo:
             try:
                 logger.debug(f"Checking {source} settings", path=str(config_path))
 
-                with open(config_path, "r", encoding="utf-8") as f:
+                with open(config_path, encoding="utf-8") as f:
                     settings = json.load(f)
 
                 servers = []
@@ -548,18 +523,14 @@ class MCPClientZoo:
                     return servers
 
             except json.JSONDecodeError as e:
-                logger.warning(
-                    f"Invalid JSON in {source} settings", path=str(config_path), error=str(e)
-                )
+                logger.warning(f"Invalid JSON in {source} settings", path=str(config_path), error=str(e))
             except Exception as e:
-                logger.debug(
-                    f"Error parsing {source} settings", path=str(config_path), error=str(e)
-                )
+                logger.debug(f"Error parsing {source} settings", path=str(config_path), error=str(e))
 
         logger.debug(f"No {source} MCP settings found")
         return []
 
-    def _parse_zed_settings(self, paths: List[Path], source: str) -> List[MCPServerInfo]:
+    def _parse_zed_settings(self, paths: list[Path], source: str) -> list[MCPServerInfo]:
         """
         Parse Zed Editor settings.json files which contain MCP configs in "context_servers" section.
 
@@ -572,13 +543,13 @@ class MCPClientZoo:
             try:
                 logger.info(f"Checking Zed settings: {config_path} (exists: True)")
 
-                with open(config_path, "r", encoding="utf-8") as f:
+                with open(config_path, encoding="utf-8") as f:
                     content = f.read()
 
                 # Remove comments (lines starting with //) before parsing JSON
-                lines = content.split('\n')
-                json_lines = [line for line in lines if not line.strip().startswith('//')]
-                json_content = '\n'.join(json_lines)
+                lines = content.split("\n")
+                json_lines = [line for line in lines if not line.strip().startswith("//")]
+                json_content = "\n".join(json_lines)
 
                 settings = json.loads(json_content)
 
@@ -607,20 +578,18 @@ class MCPClientZoo:
                     return servers
 
             except json.JSONDecodeError as e:
-                logger.warning(
-                    f"Invalid JSON in Zed settings", path=str(config_path), error=str(e)
-                )
+                logger.warning("Invalid JSON in Zed settings", path=str(config_path), error=str(e))
             except Exception as e:
-                logger.debug(f"Error parsing Zed settings", path=str(config_path), error=str(e))
+                logger.debug("Error parsing Zed settings", path=str(config_path), error=str(e))
 
-        logger.debug(f"No Zed MCP settings found")
+        logger.debug("No Zed MCP settings found")
         return []
 
     # ═══════════════════════════════════════════════════════════════
     # SCAN ALL CLIENTS
     # ═══════════════════════════════════════════════════════════════
 
-    def scan_all_clients(self) -> Dict[str, List[MCPServerInfo]]:
+    def scan_all_clients(self) -> dict[str, list[MCPServerInfo]]:
         """
         Scan ALL known MCP clients and return discovered servers.
 
@@ -662,7 +631,7 @@ class MCPClientZoo:
                 logger.warning(f"Error parsing {client_name}", error=str(e))
 
         logger.info(
-            f"[SUCCESS] Client Zoo scan complete",
+            "[SUCCESS] Client Zoo scan complete",
             total_servers=total_servers,
             sources=len(self.sources_found),
             found_in=self.sources_found,
@@ -670,7 +639,7 @@ class MCPClientZoo:
 
         return results
 
-    def discover_client_settings(self, client_id: str) -> Optional[Any]:
+    def discover_client_settings(self, client_id: str) -> Any | None:
         """
         Discover and parse settings from a client configuration file(s).
 
@@ -682,7 +651,7 @@ class MCPClientZoo:
         """
         return self.settings_manager.discover_client_settings(client_id)
 
-    def get_client_settings(self, client_id: str) -> Optional[Dict[str, Any]]:
+    def get_client_settings(self, client_id: str) -> dict[str, Any] | None:
         """
         Get all settings for a client, organized by category.
 
@@ -713,7 +682,7 @@ class MCPClientZoo:
         """
         return self.settings_manager.update_setting(client_id, key, value, create_backup)
 
-    def _get_client_config_path(self, client_id: str) -> Optional[Path]:
+    def _get_client_config_path(self, client_id: str) -> Path | None:
         """
         Get the configuration file path for a client.
 
@@ -738,7 +707,7 @@ class MCPClientZoo:
         logger.warning(f"Config path not found for client: {client_id}")
         return None
 
-    def get_setting_categories(self) -> Dict[str, Dict[str, Any]]:
+    def get_setting_categories(self) -> dict[str, dict[str, Any]]:
         """
         Get information about available setting categories.
 
@@ -747,7 +716,7 @@ class MCPClientZoo:
         """
         return self.settings_manager.get_setting_categories()
 
-    def get_all_servers(self) -> List[MCPServerInfo]:
+    def get_all_servers(self) -> list[MCPServerInfo]:
         """
         Get deduplicated list of all MCP servers from all clients.
 
@@ -759,7 +728,7 @@ class MCPClientZoo:
         # Deduplicate servers (same command+args = same server)
         unique_servers = {}
 
-        for source, servers in results.items():
+        for _source, servers in results.items():
             for server in servers:
                 # Create unique key based on command and args
                 key = f"{server.command}:{':'.join(server.args)}"
@@ -772,14 +741,14 @@ class MCPClientZoo:
                     existing.source += f", {server.source}"
 
         logger.info(
-            f"Deduplicated servers",
+            "Deduplicated servers",
             total=len(unique_servers),
             original=sum(len(s) for s in results.values()),
         )
 
         return list(unique_servers.values())
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """
         Get summary of all discovered MCP clients and servers.
 
@@ -801,7 +770,7 @@ class MCPClientZoo:
 
         return summary
 
-    def get_client_config_path(self, client_id: str) -> Optional[Path]:
+    def get_client_config_path(self, client_id: str) -> Path | None:
         """
         Get the config file path for a specific client.
 
@@ -838,11 +807,7 @@ class MCPClientZoo:
                 # Docker Host Mounts
                 HOST_APPDATA / "Claude" / "claude_desktop_config.json",
                 HOST_HOME / ".config" / "Claude" / "claude_desktop_config.json",
-                HOST_HOME
-                / "Library"
-                / "Application Support"
-                / "Claude"
-                / "claude_desktop_config.json",
+                HOST_HOME / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json",
             ]
         elif client_id == "cursor-ide":
             paths = [
@@ -885,10 +850,7 @@ class MCPClientZoo:
             paths = [
                 Path(os.environ.get("APPDATA", "")) / "Antigravity" / "mcp_config.json",
                 Path(os.environ.get("APPDATA", "")) / "Antigravity" / "mcp.json",
-                Path(os.environ.get("APPDATA", ""))
-                / "GitKraken"
-                / "Antigravity"
-                / "mcp_config.json",
+                Path(os.environ.get("APPDATA", "")) / "GitKraken" / "Antigravity" / "mcp_config.json",
                 Path.home() / ".config" / "antigravity" / "mcp_config.json",
                 Path.home() / ".config" / "antigravity" / "mcp.json",
                 Path.home() / ".antigravity" / "mcp_config.json",
@@ -928,7 +890,7 @@ class MCPClientZoo:
 # ═══════════════════════════════════════════════════════════════
 
 
-def discover_all_mcp_clients() -> Dict[str, Any]:
+def discover_all_mcp_clients() -> dict[str, Any]:
     """
     Discover MCP servers from ALL known MCP clients.
 
@@ -939,7 +901,7 @@ def discover_all_mcp_clients() -> Dict[str, Any]:
     return zoo.get_summary()
 
 
-def get_all_mcp_servers() -> List[MCPServerInfo]:
+def get_all_mcp_servers() -> list[MCPServerInfo]:
     """
     Get deduplicated list of all MCP servers from all clients.
 
@@ -960,13 +922,13 @@ if __name__ == "__main__":
 
     summary = discover_all_mcp_clients()
 
-    print(f"\n[STATS] SUMMARY:")
+    print("\n[STATS] SUMMARY:")
     print(f"  Total Clients:  {summary['total_clients']}")
     print(f"  Total Servers:  {summary['total_servers']}")
     print(f"  Unique Servers: {summary['unique_servers']}")
     print(f"  Sources Found:  {', '.join(summary['clients_found'])}")
 
-    print(f"\nBREAKDOWN:")
+    print("\nBREAKDOWN:")
     for client, data in summary["breakdown"].items():
         print(f"\n  {client.upper()}: {data['count']} servers")
         for server_name in data["servers"]:

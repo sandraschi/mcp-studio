@@ -5,10 +5,8 @@ Information about all known MCP clients including descriptions,
 homepages, GitHub repos, and capabilities.
 """
 
-from dataclasses import dataclass
-from typing import Dict, List, Optional
-import subprocess
-import platform
+from dataclasses import dataclass, field
+
 import psutil
 
 from ..core.logging_utils import get_logger
@@ -19,23 +17,24 @@ logger = get_logger(__name__)
 @dataclass
 class MCPClientMetadata:
     """Metadata for an MCP client."""
+
     id: str
     name: str
     short_description: str
     full_description: str
-    homepage: Optional[str] = None
-    github: Optional[str] = None
-    documentation: Optional[str] = None
+    homepage: str | None = None
+    github: str | None = None
+    documentation: str | None = None
     platform: str = "Cross-platform"  # Windows, Mac, Linux, Cross-platform
     client_type: str = "Desktop"  # Desktop, IDE, Extension, Library
     status: str = "Active"  # Active, Deprecated, Beta
-    features: List[str] = None
+    features: list[str] = field(default_factory=list)
     installed: bool = False  # Whether this client is detected as installed
     running: bool = False  # Whether this client process is currently running
     server_count: int = 0  # Number of MCP servers configured
-    process_names: List[str] = None  # Process names to check for running status
+    process_names: list[str] = field(default_factory=list)  # Process names to check for running status
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.features is None:
             self.features = []
         if self.process_names is None:
@@ -46,7 +45,7 @@ class MCPClientMetadata:
 # CLIENT METADATA DATABASE
 # ═══════════════════════════════════════════════════════════════
 
-MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
+MCP_CLIENT_DATABASE: dict[str, MCPClientMetadata] = {
     "claude-desktop": MCPClientMetadata(
         id="claude-desktop",
         name="Claude Desktop",
@@ -63,11 +62,10 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
             "Native MCP support",
             "Secure stdio transport",
             "Production-ready",
-            "Auto-updates"
+            "Auto-updates",
         ],
-        process_names=["Claude.exe", "Claude"]
+        process_names=["Claude.exe", "Claude"],
     ),
-    
     "cursor-ide": MCPClientMetadata(
         id="cursor-ide",
         name="Cursor IDE",
@@ -79,16 +77,9 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
         platform="Cross-platform",
         client_type="IDE",
         status="Active",
-        features=[
-            "AI-first editor",
-            "VSCode-based",
-            "Integrated AI chat",
-            "MCP tool support",
-            "Code generation"
-        ],
-        process_names=["Cursor.exe", "Cursor"]
+        features=["AI-first editor", "VSCode-based", "Integrated AI chat", "MCP tool support", "Code generation"],
+        process_names=["Cursor.exe", "Cursor"],
     ),
-    
     "windsurf-ide": MCPClientMetadata(
         id="windsurf-ide",
         name="Windsurf IDE",
@@ -105,11 +96,10 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
             "Advanced code completion",
             "MCP support via Roo-Cline",
             "Multi-file editing",
-            "Cascade chat"
+            "Cascade chat",
         ],
-        process_names=["Windsurf.exe", "Windsurf"]
+        process_names=["Windsurf.exe", "Windsurf"],
     ),
-    
     "cline-vscode": MCPClientMetadata(
         id="cline-vscode",
         name="Cline",
@@ -126,10 +116,9 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
             "Claude AI in editor",
             "MCP tool support",
             "File operations",
-            "Terminal access"
-        ]
+            "Terminal access",
+        ],
     ),
-    
     "roo-cline": MCPClientMetadata(
         id="roo-cline",
         name="Roo-Cline",
@@ -146,10 +135,9 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
             "Enhanced Cline features",
             "MCP tool support",
             "Cascade workflows",
-            "Multi-agent coordination"
-        ]
+            "Multi-agent coordination",
+        ],
     ),
-    
     "continue-dev": MCPClientMetadata(
         id="continue-dev",
         name="Continue.dev",
@@ -166,10 +154,9 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
             "Multi-model support",
             "VSCode + JetBrains",
             "MCP integration",
-            "Customizable prompts"
-        ]
+            "Customizable prompts",
+        ],
     ),
-    
     "lm-studio": MCPClientMetadata(
         id="lm-studio",
         name="LM Studio",
@@ -181,15 +168,8 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
         platform="Cross-platform",
         client_type="Desktop",
         status="Active",
-        features=[
-            "Run local models",
-            "No API keys needed",
-            "Privacy-focused",
-            "MCP tool support",
-            "Model marketplace"
-        ]
+        features=["Run local models", "No API keys needed", "Privacy-focused", "MCP tool support", "Model marketplace"],
     ),
-    
     "antigravity-ide": MCPClientMetadata(
         id="antigravity-ide",
         name="Antigravity IDE",
@@ -206,11 +186,10 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
             "AI-powered coding",
             "MCP support",
             "Advanced code completion",
-            "Built-in Git tools"
+            "Built-in Git tools",
         ],
-        process_names=["Antigravity.exe", "Antigravity"]
+        process_names=["Antigravity.exe", "Antigravity"],
     ),
-    
     "zed-editor": MCPClientMetadata(
         id="zed-editor",
         name="Zed Editor",
@@ -222,16 +201,9 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
         platform="Cross-platform",
         client_type="IDE",
         status="Active",
-        features=[
-            "Built in Rust",
-            "Collaborative editing",
-            "AI assistance",
-            "MCP support",
-            "Lightning fast"
-        ],
-        process_names=["zed.exe", "zed"]
+        features=["Built in Rust", "Collaborative editing", "AI assistance", "MCP support", "Lightning fast"],
+        process_names=["zed.exe", "zed"],
     ),
-    
     "vscode-generic": MCPClientMetadata(
         id="vscode-generic",
         name="VSCode",
@@ -248,8 +220,8 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
             "Massive extension ecosystem",
             "MCP extensions available",
             "Open-source core",
-            "Cross-platform"
-        ]
+            "Cross-platform",
+        ],
     ),
 }
 
@@ -258,20 +230,21 @@ MCP_CLIENT_DATABASE: Dict[str, MCPClientMetadata] = {
 # HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════
 
-def get_client_metadata(client_id: str) -> Optional[MCPClientMetadata]:
+
+def get_client_metadata(client_id: str) -> MCPClientMetadata | None:
     """
     Get metadata for a specific MCP client.
-    
+
     Args:
         client_id: Client identifier (e.g., "claude-desktop")
-        
+
     Returns:
         Client metadata or None if not found
     """
     return MCP_CLIENT_DATABASE.get(client_id)
 
 
-def _detect_running_processes() -> Dict[str, bool]:
+def _detect_running_processes() -> dict[str, bool]:
     """
     Detect which MCP clients are currently running by checking process names.
 
@@ -283,12 +256,9 @@ def _detect_running_processes() -> Dict[str, bool]:
     try:
         # Get all running processes
         processes = []
-        for proc in psutil.process_iter(['pid', 'name', 'exe']):
+        for proc in psutil.process_iter(["pid", "name", "exe"]):
             try:
-                processes.append({
-                    'name': proc.info['name'] or '',
-                    'exe': proc.info['exe'] or ''
-                })
+                processes.append({"name": proc.info["name"] or "", "exe": proc.info["exe"] or ""})
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
 
@@ -299,12 +269,12 @@ def _detect_running_processes() -> Dict[str, bool]:
             if client.process_names:
                 for process_name in client.process_names:
                     # Check exact matches
-                    if any(p['name'].lower() == process_name.lower() for p in processes):
+                    if any(p["name"].lower() == process_name.lower() for p in processes):
                         running = True
                         break
 
                     # Check if process name is contained in exe path (for cases where exe is full path)
-                    if any(process_name.lower() in (p['exe'] or '').lower() for p in processes):
+                    if any(process_name.lower() in (p["exe"] or "").lower() for p in processes):
                         running = True
                         break
 
@@ -319,7 +289,7 @@ def _detect_running_processes() -> Dict[str, bool]:
     return running_clients
 
 
-def get_all_clients() -> List[MCPClientMetadata]:
+def get_all_clients() -> list[MCPClientMetadata]:
     """
     Get metadata for all known MCP clients with installation and running status.
 
@@ -367,97 +337,91 @@ def get_all_clients() -> List[MCPClientMetadata]:
     return clients
 
 
-def get_clients_by_type(client_type: str) -> List[MCPClientMetadata]:
+def get_clients_by_type(client_type: str) -> list[MCPClientMetadata]:
     """
     Get all clients of a specific type.
-    
+
     Args:
         client_type: Type of client (Desktop, IDE, Extension, Library)
-        
+
     Returns:
         List of matching clients
     """
-    return [
-        client for client in MCP_CLIENT_DATABASE.values()
-        if client.client_type == client_type
-    ]
+    return [client for client in MCP_CLIENT_DATABASE.values() if client.client_type == client_type]
 
 
-def get_active_clients() -> List[MCPClientMetadata]:
+def get_active_clients() -> list[MCPClientMetadata]:
     """
     Get all active (non-deprecated) clients.
-    
+
     Returns:
         List of active clients
     """
-    return [
-        client for client in MCP_CLIENT_DATABASE.values()
-        if client.status == "Active"
-    ]
+    return [client for client in MCP_CLIENT_DATABASE.values() if client.status == "Active"]
 
 
 def format_client_info(client_id: str, format: str = "text") -> str:
     """
     Format client information for display.
-    
+
     Args:
         client_id: Client identifier
         format: Output format ("text" or "markdown")
-        
+
     Returns:
         Formatted client information
     """
     client = get_client_metadata(client_id)
     if not client:
         return f"Unknown client: {client_id}"
-    
+
     if format == "markdown":
         lines = [
             f"# {client.name}",
-            f"",
+            "",
             f"{client.full_description}",
-            f"",
+            "",
             f"**Type:** {client.client_type}",
             f"**Platform:** {client.platform}",
             f"**Status:** {client.status}",
-            f"",
+            "",
         ]
-        
+
         if client.homepage:
             lines.append(f"[WEB] **Homepage:** {client.homepage}")
         if client.github:
             lines.append(f"[COMPUTER] **GitHub:** {client.github}")
         if client.documentation:
             lines.append(f"📚 **Docs:** {client.documentation}")
-        
+
         if client.features:
-            lines.append(f"")
-            lines.append(f"**Features:**")
+            lines.append("")
+            lines.append("**Features:**")
             for feature in client.features:
                 lines.append(f"- {feature}")
-        
+
         return "\n".join(lines)
-    
+
     else:  # text format
         lines = [
             f"{client.name}",
             f"{'=' * len(client.name)}",
-            f"",
+            "",
             f"{client.short_description}",
-            f"",
+            "",
             f"Type: {client.client_type}",
             f"Platform: {client.platform}",
             f"Status: {client.status}",
-            f"",
+            "",
         ]
-        
+
         if client.homepage:
             lines.append(f"Homepage: {client.homepage}")
         if client.github:
             lines.append(f"GitHub: {client.github}")
         if client.documentation:
             lines.append(f"Documentation: {client.documentation}")
-        
+
         return "\n".join(lines)
 
 
@@ -468,9 +432,9 @@ def format_client_info(client_id: str, format: str = "text") -> str:
 if __name__ == "__main__":
     print("\nMCP CLIENT METADATA DATABASE\n")
     print("=" * 70)
-    
+
     print(f"\n[STATS] TOTAL CLIENTS: {len(MCP_CLIENT_DATABASE)}\n")
-    
+
     # Group by type
     for client_type in ["Desktop", "IDE", "Extension"]:
         clients = get_clients_by_type(client_type)
@@ -485,7 +449,6 @@ if __name__ == "__main__":
                 if client.github:
                     print(f"  [COMPUTER] {client.github}")
                 print(f"  Features: {', '.join(client.features[:3])}...")
-    
+
     print("\n" + "=" * 70)
     print("Database loaded!\n")
-

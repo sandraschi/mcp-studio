@@ -1,29 +1,24 @@
 """Service for managing MCP server connections and tool execution."""
 
 import asyncio
-import json
 import os
-import uuid
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any
 
 from fastapi import HTTPException, status
 from fastmcp import FastMCP
+from pydantic import ValidationError
 
-from ...app.core.logging_utils import get_logger
-from ...app.core.types import (
-    MCPServerConfig,
-    ToolExecutionRequest as ToolExecutionRequestType,
-    ToolExecutionResult as ToolExecutionResultType
-)
 from ...app.core.config import settings
-from ...app.core.stdio import StdioTransport, transport_manager
 from ...app.core.enums import ServerStatus, ServerType
+from ...app.core.logging_utils import get_logger
+from ...app.core.stdio import transport_manager
+from ...app.core.types import MCPServerConfig
+from ...app.models.mcp import MCPServer
 from ...app.models.server import Server
-from ..models.mcp import MCPTool, MCPToolParameter
 
 logger = get_logger(__name__)
+
 
 class ServerService:
     """
@@ -36,12 +31,12 @@ class ServerService:
 
     def __init__(self) -> None:
         """Initialize the server service with empty server and client registries."""
-        self.servers: Dict[str, Server] = {}
-        self.clients: Dict[str, FastMCP] = {}
+        self.servers: dict[str, Server] = {}
+        self.clients: dict[str, FastMCP] = {}
         self._lock: asyncio.Lock = asyncio.Lock()
         logger.info("Initialized ServerService")
 
-    async def register_server(self, server_id: str, config: Dict[str, Any]) -> Server:
+    async def register_server(self, server_id: str, config: dict[str, Any]) -> Server:
         """Register a new MCP server from configuration.
 
         Args:
@@ -71,52 +66,43 @@ class ServerService:
             if server_id in self.servers:
                 error_msg = f"Server with ID '{server_id}' already exists"
                 logger.warning(error_msg)
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=error_msg
-                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
 
             try:
                 # Create server instance from config with validation
                 server = Server(
                     id=server_id,
-                    name=config.get('name', f"Server-{server_id}"),
+                    name=config.get("name", f"Server-{server_id}"),
                     type=self._detect_server_type(config),
                     status=ServerStatus.OFFLINE,
-                    command=config.get('command', []),
-                    args=config.get('args', []),
-                    cwd=config.get('cwd'),
-                    env=config.get('env', {}),
-                    description=config.get('description', '')
+                    command=config.get("command", []),
+                    args=config.get("args", []),
+                    cwd=config.get("cwd"),
+                    env=config.get("env", {}),
+                    description=config.get("description", ""),
                 )
 
                 # Add to server registry
                 self.servers[server_id] = server
                 logger.info(
-                    "Registered new server",
-                    server_id=server_id,
-                    server_name=server.name,
-                    server_type=server.type
+                    "Registered new server", server_id=server_id, server_name=server.name, server_type=server.type
                 )
                 return server
 
             except ValidationError as e:
-                error_msg = f"Invalid server configuration: {str(e)}"
-                logger.error(error_msg, errors=e.errors() if hasattr(e, 'errors') else str(e))
+                error_msg = f"Invalid server configuration: {e!s}"
+                logger.error(error_msg, errors=e.errors() if hasattr(e, "errors") else str(e))
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail={"error": "Validation failed", "details": str(e)}
+                    detail={"error": "Validation failed", "details": str(e)},
                 ) from e
 
             except Exception as e:
-                error_msg = f"Failed to register server '{server_id}': {str(e)}"
+                error_msg = f"Failed to register server '{server_id}': {e!s}"
                 logger.error(error_msg, exc_info=True)
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=error_msg
-                ) from e
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg) from e
 
-    def _detect_server_type(self, config: Dict[str, Any]) -> ServerType:
+    def _detect_server_type(self, config: dict[str, Any]) -> ServerType:
         """Detect the server type from its configuration.
 
         This method attempts to determine the server type from the configuration.
@@ -147,8 +133,7 @@ class ServerService:
                 return server_type
             except ValueError:
                 logger.warning(
-                    "Invalid server type specified, attempting to infer from command",
-                    specified_type=server_type_str
+                    "Invalid server type specified, attempting to infer from command", specified_type=server_type_str
                 )
 
         # If type is not specified or invalid, try to infer from command
@@ -171,11 +156,7 @@ class ServerService:
         else:
             detected_type = ServerType.UNKNOWN
 
-        logger.info(
-            "Inferred server type from command",
-            command=cmd,
-            detected_type=detected_type
-        )
+        logger.info("Inferred server type from command", command=cmd, detected_type=detected_type)
         return detected_type
 
     async def unregister_server(self, server_id: str) -> bool:
@@ -218,48 +199,31 @@ class ServerService:
                             await client.close()
                     except Exception as e:
                         logger.error(
-                            "Error closing client connection",
-                            server_id=server_id,
-                            error=str(e),
-                            exc_info=True
+                            "Error closing client connection", server_id=server_id, error=str(e), exc_info=True
                         )
 
                 # Close transport if transport manager is available
-                if hasattr(transport_manager, 'close_transport'):
+                if hasattr(transport_manager, "close_transport"):
                     try:
                         logger.debug("Closing transport", server_id=server_id)
                         await transport_manager.close_transport(server_id)
                     except Exception as e:
-                        logger.error(
-                            "Error closing transport",
-                            server_id=server_id,
-                            error=str(e),
-                            exc_info=True
-                        )
+                        logger.error("Error closing transport", server_id=server_id, error=str(e), exc_info=True)
                         # Continue with unregistration even if transport close fails
 
                 # Remove the server from the registry
                 del self.servers[server_id]
 
-                logger.info(
-                    "Successfully unregistered server",
-                    server_id=server_id,
-                    server_name=server_name
-                )
+                logger.info("Successfully unregistered server", server_id=server_id, server_name=server_name)
                 return True
 
             except Exception as e:
-                error_msg = f"Failed to unregister server '{server_id}': {str(e)}"
-                logger.error(
-                    error_msg,
-                    server_id=server_id,
-                    error=str(e),
-                    exc_info=True
-                )
+                error_msg = f"Failed to unregister server '{server_id}': {e!s}"
+                logger.error(error_msg, server_id=server_id, error=str(e), exc_info=True)
                 # Don't raise the exception, just log it and continue
                 return False
 
-    def get_server(self, server_id: str) -> Optional[Server]:
+    def get_server(self, server_id: str) -> Server | None:
         """Retrieve a server by its unique identifier.
 
         This is a thread-safe method that returns a copy of the server object
@@ -296,7 +260,7 @@ class ServerService:
         logger.debug("Server not found", server_id=server_id)
         return None
 
-    def get_servers(self) -> Dict[str, Server]:
+    def get_servers(self) -> dict[str, Server]:
         """Retrieve a copy of all registered servers.
 
         This method returns a deep copy of the internal server registry to ensure
@@ -325,19 +289,14 @@ class ServerService:
             try:
                 servers_copy[server_id] = server.copy(deep=True)
             except Exception as e:
-                logger.error(
-                    "Failed to copy server data",
-                    server_id=server_id,
-                    error=str(e),
-                    exc_info=True
-                )
+                logger.error("Failed to copy server data", server_id=server_id, error=str(e), exc_info=True)
                 # If copy fails, return the original (but still make a shallow copy)
                 servers_copy[server_id] = server.copy()
 
         logger.debug("Retrieved all servers", server_count=len(servers_copy))
         return servers_copy
 
-    async def get_server_tools(self, server_id: str) -> List[Dict[str, Any]]:
+    async def get_server_tools(self, server_id: str) -> list[dict[str, Any]]:
         """Get tools provided by a server.
 
         Args:
@@ -353,18 +312,12 @@ class ServerService:
         if not server:
             error_msg = f"Server with ID '{server_id}' not found"
             logger.warning(error_msg)
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=error_msg
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_msg)
 
         if server.status != ServerStatus.ONLINE:
             error_msg = f"Server '{server_id}' is not online (status: {server.status})"
             logger.warning(error_msg)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_msg
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
 
         try:
             # Create server config
@@ -374,53 +327,39 @@ class ServerService:
                 path=server.command[0] if server.command else None,
                 args=server.args,
                 cwd=server.cwd,
-                env=server.env
+                env=server.env,
             )
 
             # Get transport for the server with timeout
             try:
                 transport = await asyncio.wait_for(
-                    transport_manager.get_transport(server_config),
-                    timeout=settings.TRANSPORT_TIMEOUT
+                    transport_manager.get_transport(server_config), timeout=settings.TRANSPORT_TIMEOUT
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 error_msg = f"Timeout while connecting to server '{server_id}'"
                 logger.error(error_msg)
-                raise HTTPException(
-                    status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                    detail=error_msg
-                )
+                raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=error_msg)
 
-            if not transport or not hasattr(transport, 'client') or not transport.client:
+            if not transport or not hasattr(transport, "client") or not transport.client:
                 error_msg = f"Failed to connect to server '{server_id}': No transport or client available"
                 logger.error(error_msg)
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail=error_msg
-                )
+                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=error_msg)
 
             # Get tools from the server with timeout
             try:
                 tools_response = await asyncio.wait_for(
-                    transport.client.call("tools/list"),
-                    timeout=settings.TOOL_EXECUTION_TIMEOUT
+                    transport.client.call("tools/list"), timeout=settings.TOOL_EXECUTION_TIMEOUT
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 error_msg = f"Timeout while fetching tools from server '{server_id}'"
                 logger.error(error_msg)
-                raise HTTPException(
-                    status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                    detail=error_msg
-                )
+                raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=error_msg)
 
             # Validate response format
             if not isinstance(tools_response, dict) or "tools" not in tools_response:
                 error_msg = f"Invalid response format from server '{server_id}'"
                 logger.error(error_msg, response=tools_response)
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=error_msg
-                )
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
 
             tools = tools_response.get("tools", [])
             logger.info("Retrieved tools from server", server_id=server_id, tool_count=len(tools))
@@ -431,19 +370,11 @@ class ServerService:
             raise
 
         except Exception as e:
-            error_msg = f"Failed to get tools from server '{server_id}': {str(e)}"
-            logger.error(
-                error_msg,
-                server_id=server_id,
-                error=str(e),
-                exc_info=True
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=error_msg
-            )
+            error_msg = f"Failed to get tools from server '{server_id}': {e!s}"
+            logger.error(error_msg, server_id=server_id, error=str(e), exc_info=True)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
 
-    async def execute_tool(self, server_id: str, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_tool(self, server_id: str, tool_name: str, parameters: dict[str, Any]) -> dict[str, Any]:
         """Execute a tool on the specified server.
 
         Args:
@@ -460,30 +391,19 @@ class ServerService:
         This method provides comprehensive error handling for async operations,
         including timeouts, connection errors, and invalid responses.
         """
-        logger.info(
-            "Executing tool",
-            server_id=server_id,
-            tool_name=tool_name,
-            parameters=parameters
-        )
+        logger.info("Executing tool", server_id=server_id, tool_name=tool_name, parameters=parameters)
 
         # Get server with validation
         server = self.servers.get(server_id)
         if not server:
             error_msg = f"Server with ID '{server_id}' not found"
             logger.warning(error_msg)
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=error_msg
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_msg)
 
         if server.status != ServerStatus.ONLINE:
             error_msg = f"Server '{server_id}' is not online (status: {server.status})"
             logger.warning(error_msg)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_msg
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
 
         # Create MCP server configuration
         mcp_server = MCPServer(
@@ -492,64 +412,47 @@ class ServerService:
             path=server.command[0] if server.command else None,
             args=server.args,
             cwd=server.cwd,
-            env=server.env
+            env=server.env,
         )
 
         try:
             # Get transport with timeout
             try:
                 transport = await asyncio.wait_for(
-                    transport_manager.get_transport(mcp_server),
-                    timeout=settings.TRANSPORT_TIMEOUT
+                    transport_manager.get_transport(mcp_server), timeout=settings.TRANSPORT_TIMEOUT
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 error_msg = f"Timeout while connecting to server '{server_id}'"
                 logger.error(error_msg)
-                raise HTTPException(
-                    status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                    detail=error_msg
-                )
+                raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=error_msg)
 
             if not transport or not transport.client:
                 error_msg = f"Failed to connect to server '{server_id}': No transport or client available"
                 logger.error(error_msg)
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail=error_msg
-                )
+                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=error_msg)
 
             # Execute the tool with timeout
             try:
                 result = await asyncio.wait_for(
-                    transport.client.call(
-                        "tools/execute",
-                        tool=tool_name,
-                        parameters=parameters
-                    ),
-                    timeout=settings.TOOL_EXECUTION_TIMEOUT
+                    transport.client.call("tools/execute", tool=tool_name, parameters=parameters),
+                    timeout=settings.TOOL_EXECUTION_TIMEOUT,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 error_msg = f"Tool execution timed out for '{tool_name}' on server '{server_id}'"
                 logger.error(error_msg)
-                raise HTTPException(
-                    status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                    detail=error_msg
-                )
+                raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=error_msg)
 
             # Validate response format
             if not isinstance(result, dict):
                 error_msg = f"Invalid response format from server '{server_id}': {type(result).__name__} received, expected dict"
                 logger.error(error_msg, response=result)
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=error_msg
-                )
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
 
             logger.info(
                 "Tool executed successfully",
                 server_id=server_id,
                 tool_name=tool_name,
-                result=result.get('status', 'unknown')
+                result=result.get("status", "unknown"),
             )
             return result
 
@@ -558,18 +461,9 @@ class ServerService:
             raise
 
         except Exception as e:
-            error_msg = f"Failed to execute tool '{tool_name}' on server '{server_id}': {str(e)}"
-            logger.error(
-                error_msg,
-                server_id=server_id,
-                tool_name=tool_name,
-                error=str(e),
-                exc_info=True
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=error_msg
-            )
+            error_msg = f"Failed to execute tool '{tool_name}' on server '{server_id}': {e!s}"
+            logger.error(error_msg, server_id=server_id, tool_name=tool_name, error=str(e), exc_info=True)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
 
     async def start_server(self, server_id: str) -> bool:
         """Start an MCP server.
@@ -585,10 +479,7 @@ class ServerService:
         """
         server = self.servers.get(server_id)
         if not server:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Server with ID '{server_id}' not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Server with ID '{server_id}' not found")
 
         if server.status == ServerStatus.ONLINE:
             logger.warning("Server is already running", server_id=server_id)
@@ -607,11 +498,11 @@ class ServerService:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                limit=1024 * 1024  # 1MB buffer
+                limit=1024 * 1024,  # 1MB buffer
             )
 
             if process.returncode is not None and process.returncode != 0:
-                error = await process.stderr.read()
+                error = await process.stderr.read() if process.stderr is not None else b""
                 raise RuntimeError(
                     f"Server process failed to start with return code {process.returncode}: {error.decode()}"
                 )
@@ -620,14 +511,16 @@ class ServerService:
             max_attempts = 10
             for attempt in range(max_attempts):
                 try:
-                    transport = await transport_manager.get_transport(MCPServer(
-                        id=server.id,
-                        name=server.name,
-                        path=server.command[0] if server.command else None,
-                        args=server.args,
-                        cwd=server.cwd,
-                        env=server.env
-                    ))
+                    transport = await transport_manager.get_transport(
+                        MCPServer(
+                            id=server.id,
+                            name=server.name,
+                            path=server.command[0] if server.command else None,
+                            args=server.args,
+                            cwd=server.cwd,
+                            env=server.env,
+                        )
+                    )
 
                     if transport and transport.client:
                         # Try to ping the server
@@ -646,15 +539,9 @@ class ServerService:
 
         except Exception as e:
             server.status = ServerStatus.ERROR
-            logger.error(
-                "Failed to start server",
-                server_id=server_id,
-                error=str(e),
-                exc_info=True
-            )
+            logger.error("Failed to start server", server_id=server_id, error=str(e), exc_info=True)
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to start server '{server_id}': {str(e)}"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to start server '{server_id}': {e!s}"
             )
 
     async def stop_server(self, server_id: str) -> bool:
@@ -701,33 +588,25 @@ class ServerService:
                     if hasattr(client, "close"):
                         await client.close()
                 except Exception as e:
-                    logger.warning(
-                        "Error closing client connection",
-                        server_id=server_id,
-                        error=str(e)
-                    )
+                    logger.warning("Error closing client connection", server_id=server_id, error=str(e))
 
             # Close the transport
-            if hasattr(transport_manager, 'close_transport'):
+            if hasattr(transport_manager, "close_transport"):
                 try:
                     await transport_manager.close_transport(server_id)
                 except Exception as e:
-                    logger.warning(
-                        "Error closing transport",
-                        server_id=server_id,
-                        error=str(e)
-                    )
+                    logger.warning("Error closing transport", server_id=server_id, error=str(e))
 
             # Terminate the server process if it's still running
-            transport = getattr(transport_manager, 'transports', {}).get(server_id)
-            if transport and hasattr(transport, 'process') and transport.process:
+            transport = getattr(transport_manager, "transports", {}).get(server_id)
+            if transport and hasattr(transport, "process") and transport.process:
                 try:
                     # Try to terminate gracefully first
                     transport.process.terminate()
                     try:
                         # Wait for the process to terminate
                         await asyncio.wait_for(transport.process.wait(), timeout=5.0)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         # Force kill if it doesn't terminate in time
                         transport.process.kill()
                         await transport.process.wait()
@@ -735,12 +614,7 @@ class ServerService:
                     # Process already terminated
                     pass
                 except Exception as e:
-                    logger.warning(
-                        "Error stopping server process",
-                        server_id=server_id,
-                        error=str(e),
-                        exc_info=True
-                    )
+                    logger.warning("Error stopping server process", server_id=server_id, error=str(e), exc_info=True)
 
             # Update status
             server.status = ServerStatus.OFFLINE
@@ -749,18 +623,16 @@ class ServerService:
 
         except Exception as e:
             server.status = ServerStatus.ERROR
-            logger.error(
-                "Failed to stop server",
-                server_id=server_id,
-                error=str(e),
-                exc_info=True
-            )
+            logger.error("Failed to stop server", server_id=server_id, error=str(e), exc_info=True)
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to stop server '{server_id}': {str(e)}"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to stop server '{server_id}': {e!s}"
             )
 
-    async def execute_tool(self, server_id: str, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    # FIXME(BUG-078 typing pass): redefines execute_tool from earlier in this class; this later
+    # definition is the one Python actually binds, the earlier one is dead code.
+    async def execute_tool(  # type: ignore[no-redef]
+        self, server_id: str, tool_name: str, parameters: dict[str, Any]
+    ) -> dict[str, Any]:
         """Execute a tool on the specified server with comprehensive error handling.
 
         This method handles the entire tool execution flow including:
@@ -804,48 +676,31 @@ class ServerService:
                 print(f"Error executing tool: {e.detail}")
             ```
         """
-        logger.info(
-            "Executing tool",
-            server_id=server_id,
-            tool_name=tool_name,
-            parameters=parameters
-        )
+        logger.info("Executing tool", server_id=server_id, tool_name=tool_name, parameters=parameters)
 
         # Input validation
         if not tool_name or not isinstance(tool_name, str):
             error_msg = "Invalid tool name"
             logger.warning(error_msg, tool_name=tool_name)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_msg
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
 
         if not isinstance(parameters, dict):
             error_msg = "Parameters must be a dictionary"
             logger.warning(error_msg, parameters=parameters)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_msg
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
 
         # Get the server
         server = self.get_server(server_id)
         if not server:
             error_msg = f"Server with ID '{server_id}' not found"
             logger.warning(error_msg)
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=error_msg
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_msg)
 
         # Check if server is online
         if server.status != ServerStatus.ONLINE:
             error_msg = f"Server '{server_id}' is not online (status: {server.status.value})"
             logger.warning(error_msg)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=error_msg
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error_msg)
 
         try:
             # Create server config
@@ -855,44 +710,32 @@ class ServerService:
                 path=server.command[0] if server.command else None,
                 args=server.args,
                 cwd=server.cwd,
-                env=server.env
+                env=server.env,
             )
 
             # Get transport with timeout
             try:
                 transport = await asyncio.wait_for(
-                    transport_manager.get_transport(server_config),
-                    timeout=settings.TRANSPORT_TIMEOUT
+                    transport_manager.get_transport(server_config), timeout=settings.TRANSPORT_TIMEOUT
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 error_msg = f"Connection to server '{server_id}' timed out after {settings.TRANSPORT_TIMEOUT} seconds"
                 logger.error(error_msg)
-                raise HTTPException(
-                    status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                    detail=error_msg
-                )
+                raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=error_msg)
 
-            if not transport or not hasattr(transport, 'client') or not transport.client:
+            if not transport or not hasattr(transport, "client") or not transport.client:
                 error_msg = f"Failed to connect to server '{server_id}': No transport or client available"
                 logger.error(error_msg)
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail=error_msg
-                )
+                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=error_msg)
 
             # Execute the tool with timeout
             start_time = datetime.utcnow()
             try:
-                logger.debug("Executing tool on server",
-                           server_id=server_id,
-                           tool_name=tool_name)
+                logger.debug("Executing tool on server", server_id=server_id, tool_name=tool_name)
 
                 result = await asyncio.wait_for(
-                    transport.client.call("tools/execute", {
-                        "name": tool_name,
-                        "parameters": parameters or {}
-                    }),
-                    timeout=settings.TOOL_EXECUTION_TIMEOUT
+                    transport.client.call("tools/execute", {"name": tool_name, "parameters": parameters or {}}),
+                    timeout=settings.TOOL_EXECUTION_TIMEOUT,
                 )
 
                 execution_time = (datetime.utcnow() - start_time).total_seconds()
@@ -908,7 +751,7 @@ class ServerService:
                     "Tool executed successfully",
                     server_id=server_id,
                     tool_name=tool_name,
-                    execution_time=execution_time
+                    execution_time=execution_time,
                 )
 
                 # Return formatted response
@@ -920,35 +763,22 @@ class ServerService:
                         "tool_name": tool_name,
                         "execution_time": execution_time,
                         "timestamp": start_time.isoformat(),
-                        "server_metadata": result.get("metadata", {})
-                    }
+                        "server_metadata": result.get("metadata", {}),
+                    },
                 }
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 execution_time = (datetime.utcnow() - start_time).total_seconds()
                 error_msg = f"Tool execution timed out after {settings.TOOL_EXECUTION_TIMEOUT} seconds"
-                logger.error(
-                    error_msg,
-                    server_id=server_id,
-                    tool_name=tool_name,
-                    execution_time=execution_time
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                    detail=error_msg
-                )
+                logger.error(error_msg, server_id=server_id, tool_name=tool_name, execution_time=execution_time)
+                raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=error_msg)
 
             except Exception as e:
                 logger.error(
-                    "Tool execution failed",
-                    server_id=server_id,
-                    tool_name=tool_name,
-                    error=str(e),
-                    exc_info=True
+                    "Tool execution failed", server_id=server_id, tool_name=tool_name, error=str(e), exc_info=True
                 )
                 raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Tool execution failed: {str(e)}"
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Tool execution failed: {e!s}"
                 )
 
         except HTTPException:
@@ -956,20 +786,11 @@ class ServerService:
             raise
 
         except Exception as e:
-            error_msg = f"Unexpected error executing tool '{tool_name}': {str(e)}"
-            logger.error(
-                error_msg,
-                server_id=server_id,
-                tool_name=tool_name,
-                error=str(e),
-                exc_info=True
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=error_msg
-            )
+            error_msg = f"Unexpected error executing tool '{tool_name}': {e!s}"
+            logger.error(error_msg, server_id=server_id, tool_name=tool_name, error=str(e), exc_info=True)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
 
-    async def get_server_status(self, server_id: str) -> Dict[str, Any]:
+    async def get_server_status(self, server_id: str) -> dict[str, Any]:
         """Get the detailed status of a server.
 
         This method provides comprehensive status information about a server, including:
@@ -1020,36 +841,33 @@ class ServerService:
         if not server:
             error_msg = f"Server with ID '{server_id}' not found"
             logger.warning(error_msg)
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=error_msg
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error_msg)
 
         try:
             # Prepare basic status information
-            status_info: Dict[str, Any] = {
+            status_info: dict[str, Any] = {
                 "server_id": server.id,
                 "name": server.name,
-                "type": server.type.value if hasattr(server, 'type') else "unknown",
+                "type": server.type.value if hasattr(server, "type") else "unknown",
                 "status": server.status.value,
                 "health": "ok",  # Default health status
-                "metadata": {}
+                "metadata": {},
             }
 
             # Add description if available
-            if hasattr(server, 'description') and server.description:
+            if hasattr(server, "description") and server.description:
                 status_info["description"] = server.description
 
             # Check server status and set health accordingly
             if server.status == ServerStatus.ERROR:
                 status_info["health"] = "error"
-                if hasattr(server, 'last_error') and server.last_error:
+                if hasattr(server, "last_error") and server.last_error:
                     status_info["last_error"] = server.last_error
             elif server.status in [ServerStatus.STARTING, ServerStatus.STOPPING]:
                 status_info["health"] = "warning"
 
             # Add uptime if available
-            if hasattr(server, 'started_at') and server.started_at:
+            if hasattr(server, "started_at") and server.started_at:
                 uptime = (datetime.utcnow() - server.started_at).total_seconds()
                 status_info["uptime"] = int(uptime)
 
@@ -1057,50 +875,42 @@ class ServerService:
             if server.status == ServerStatus.ONLINE:
                 # Try to get transport for additional connection details
                 try:
-                    transport = await transport_manager.get_transport(MCPServerConfig(
-                        id=server.id,
-                        name=server.name,
-                        path=server.command[0] if server.command else None,
-                        args=server.args or [],
-                        cwd=server.cwd or os.getcwd(),
-                        env=server.env or {}
-                    ))
+                    transport = await transport_manager.get_transport(
+                        MCPServerConfig(
+                            id=server.id,
+                            name=server.name,
+                            path=server.command[0] if server.command else None,
+                            args=server.args or [],
+                            cwd=server.cwd or os.getcwd(),
+                            env=server.env or {},
+                        )
+                    )
 
-                    if transport and hasattr(transport, 'get_connection_info'):
+                    if transport and hasattr(transport, "get_connection_info"):
                         try:
                             conn_info = await transport.get_connection_info()
                             if conn_info:
                                 status_info["connection_info"] = conn_info
                         except Exception as e:
-                            logger.warning(
-                                "Failed to get connection info",
-                                server_id=server_id,
-                                error=str(e)
-                            )
+                            logger.warning("Failed to get connection info", server_id=server_id, error=str(e))
 
                     # Add resource usage if available
-                    if hasattr(transport, 'get_resource_usage'):
+                    if transport is not None and hasattr(transport, "get_resource_usage"):
                         try:
                             resources = await transport.get_resource_usage()
                             if resources:
                                 status_info["resources"] = resources
                         except Exception as e:
-                            logger.warning(
-                                "Failed to get resource usage",
-                                server_id=server_id,
-                                error=str(e)
-                            )
+                            logger.warning("Failed to get resource usage", server_id=server_id, error=str(e))
                 except Exception as e:
-                    logger.warning(
-                        "Failed to get transport for status check",
-                        server_id=server_id,
-                        error=str(e)
-                    )
+                    logger.warning("Failed to get transport for status check", server_id=server_id, error=str(e))
 
-            logger.debug("Retrieved server status",
-                       server_id=server_id,
-                       status=status_info["status"],
-                       health=status_info["health"])
+            logger.debug(
+                "Retrieved server status",
+                server_id=server_id,
+                status=status_info["status"],
+                health=status_info["health"],
+            )
 
             return status_info
 
@@ -1109,17 +919,9 @@ class ServerService:
             raise
 
         except Exception as e:
-            error_msg = f"Failed to get status for server '{server_id}': {str(e)}"
-            logger.error(
-                error_msg,
-                server_id=server_id,
-                error=str(e),
-                exc_info=True
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=error_msg
-            )
+            error_msg = f"Failed to get status for server '{server_id}': {e!s}"
+            logger.error(error_msg, server_id=server_id, error=str(e), exc_info=True)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error_msg)
 
     async def _connect_server(self, server_id: str) -> bool:
         """Establish a connection to an MCP server.
@@ -1164,37 +966,29 @@ class ServerService:
                 path=server.command[0] if server.command else None,
                 args=server.args or [],
                 cwd=server.cwd or os.getcwd(),
-                env=server.env or {}
+                env=server.env or {},
             )
 
             # Update status to connecting
-            server.status = ServerStatus.CONNECTING
+            server.status = ServerStatus.STARTING  # ServerStatus has no CONNECTING member
             logger.debug("Initiating connection to server", server_id=server_id)
 
             # Get transport with timeout
             try:
                 transport = await asyncio.wait_for(
-                    transport_manager.get_transport(server_config),
-                    timeout=settings.TRANSPORT_TIMEOUT
+                    transport_manager.get_transport(server_config), timeout=settings.TRANSPORT_TIMEOUT
                 )
 
                 # Verify the transport and client are valid
-                if transport and hasattr(transport, 'client') and transport.client:
+                if transport and hasattr(transport, "client") and transport.client:
                     # Test the connection with a ping
                     try:
-                        await asyncio.wait_for(
-                            transport.client.call("ping"),
-                            timeout=settings.TRANSPORT_TIMEOUT
-                        )
+                        await asyncio.wait_for(transport.client.call("ping"), timeout=settings.TRANSPORT_TIMEOUT)
                         server.status = ServerStatus.ONLINE
                         logger.info("Successfully connected to server", server_id=server_id)
                         return True
-                    except (asyncio.TimeoutError, Exception) as e:
-                        logger.warning(
-                            "Server connection test failed",
-                            server_id=server_id,
-                            error=str(e)
-                        )
+                    except (TimeoutError, Exception) as e:
+                        logger.warning("Server connection test failed", server_id=server_id, error=str(e))
 
                 # If we get here, the connection wasn't successful
                 server.status = ServerStatus.ERROR
@@ -1202,24 +996,19 @@ class ServerService:
                     "Failed to establish connection to server",
                     server_id=server_id,
                     has_transport=transport is not None,
-                    has_client=hasattr(transport, 'client') if transport else False
+                    has_client=hasattr(transport, "client") if transport else False,
                 )
                 return False
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 error_msg = f"Connection to server '{server_id}' timed out after {settings.TRANSPORT_TIMEOUT} seconds"
                 logger.error(error_msg)
                 server.status = ServerStatus.ERROR
                 return False
 
         except Exception as e:
-            error_msg = f"Unexpected error connecting to server '{server_id}': {str(e)}"
-            logger.error(
-                error_msg,
-                server_id=server_id,
-                error=str(e),
-                exc_info=True
-            )
+            error_msg = f"Unexpected error connecting to server '{server_id}': {e!s}"
+            logger.error(error_msg, server_id=server_id, error=str(e), exc_info=True)
             server.status = ServerStatus.ERROR
             return False
 
@@ -1258,8 +1047,10 @@ class ServerService:
             self.clients.clear()
             self.servers.clear()
 
+
 # Global server service instance
 server_service = ServerService()
+
 
 # Initialize the server service when the module is imported
 async def init_server_service() -> None:
@@ -1271,13 +1062,14 @@ async def init_server_service() -> None:
         # Register all servers from the config
         for server_id, config in config_service.get_all_servers().items():
             try:
-                await server_service.register_server(server_id, config)
+                await server_service.register_server(server_id, dict(config))
                 logger.info("Registered MCP server", server_id=server_id)
             except Exception as e:
                 logger.error("Failed to register MCP server", server_id=server_id, error=str(e))
 
     except Exception as e:
         logger.error("Failed to initialize server service", error=str(e))
+
 
 # Initialization will be called from lifespan handler, not at import time
 # This prevents "no running event loop" errors

@@ -1,33 +1,53 @@
-import asyncio
 import json
-import logging
 import os
 import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any
 
 # Prometheus client
 try:
-    from prometheus_client import Counter, Histogram, Gauge
+    from prometheus_client import Counter, Gauge, Histogram
+
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
+
     # Dummy classes to prevent errors
-    class Counter:
-        def __init__(self, *args, **kwargs): pass
-        def labels(self, *args, **kwargs): return self
-        def inc(self): pass
-    class Histogram:
-        def __init__(self, *args, **kwargs): pass
-        def labels(self, *args, **kwargs): return self
-        def observe(self, value): pass
-    class Gauge:
-        def __init__(self, *args, **kwargs): pass
-        def set(self, value): pass
-        def inc(self): pass
-        def dec(self): pass
+    class Counter:  # type: ignore[no-redef]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def labels(self, *args: Any, **kwargs: Any) -> Any:
+            return self
+
+        def inc(self) -> None:
+            pass
+
+    class Histogram:  # type: ignore[no-redef]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def labels(self, *args: Any, **kwargs: Any) -> Any:
+            return self
+
+        def observe(self, value: Any) -> None:
+            pass
+
+    class Gauge:  # type: ignore[no-redef]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def set(self, value: Any) -> None:
+            pass
+
+        def inc(self) -> None:
+            pass
+
+        def dec(self) -> None:
+            pass
+
 
 from ..core.config import settings
 from ..core.logging_utils import get_logger
@@ -37,33 +57,24 @@ logger = get_logger(__name__)
 # Prometheus metrics for repo scanning
 if PROMETHEUS_AVAILABLE:
     SCAN_DURATION = Histogram(
-        'mcp_scan_duration_seconds',
-        'Duration of repository scan operations',
-        ['operation'],
-        buckets=[1, 5, 10, 30, 60, 120, 300]
+        "mcp_scan_duration_seconds",
+        "Duration of repository scan operations",
+        ["operation"],
+        buckets=[1, 5, 10, 30, 60, 120, 300],
     )
 
-    SCAN_REPOS_FOUND = Counter(
-        'mcp_scan_repos_found_total',
-        'Total number of MCP repositories found'
-    )
+    SCAN_REPOS_FOUND = Counter("mcp_scan_repos_found_total", "Total number of MCP repositories found")
 
-    SCAN_REPOS_SKIPPED = Counter(
-        'mcp_scan_repos_skipped_total',
-        'Total number of repositories skipped'
-    )
+    SCAN_REPOS_SKIPPED = Counter("mcp_scan_repos_skipped_total", "Total number of repositories skipped")
 
-    SCAN_ERRORS = Counter(
-        'mcp_scan_errors_total',
-        'Total number of scan errors'
-    )
+    SCAN_ERRORS = Counter("mcp_scan_errors_total", "Total number of scan errors")
 
 
 class RepoScannerService:
     """Service for scanning repositories to detect MCP servers and fullstack features."""
 
-    def __init__(self):
-        self.scan_progress = {
+    def __init__(self) -> None:
+        self.scan_progress: dict[str, Any] = {
             "status": "idle",
             "total": 0,
             "current": "",
@@ -73,21 +84,21 @@ class RepoScannerService:
             "errors": 0,
             "activity_log": [],
         }
-        self.last_scan_results: List[Dict[str, Any]] = []
+        self.last_scan_results: list[dict[str, Any]] = []
 
-    def get_progress(self) -> Dict[str, Any]:
+    def get_progress(self) -> dict[str, Any]:
         """Get current scan progress."""
         progress = self.scan_progress.copy()
         # Include recent errors if available
-        if hasattr(self, 'recent_errors') and self.recent_errors:
-            progress['recent_errors'] = self.recent_errors[-3:]  # Last 3 errors
+        if hasattr(self, "recent_errors") and self.recent_errors:
+            progress["recent_errors"] = self.recent_errors[-3:]  # Last 3 errors
         return progress
 
-    def get_results(self) -> List[Dict[str, Any]]:
+    def get_results(self) -> list[dict[str, Any]]:
         """Get results of the last scan."""
         return self.last_scan_results
 
-    def log_scan(self, message: str, is_error: bool = False):
+    def log_scan(self, message: str, is_error: bool = False) -> None:
         """Log a message to the scan activity log and actual logs."""
         timestamp = datetime.now().strftime("%H:%M:%S")
         formatted_msg = f"{timestamp} | {message}"
@@ -109,9 +120,9 @@ class RepoScannerService:
         else:
             logger.info(f"[SCAN] {message}")
 
-    def scan_repos(self, scan_path: Optional[Path] = None) -> List[Dict[str, Any]]:
+    def scan_repos(self, scan_path: Path | None = None) -> list[dict[str, Any]]:
         """Scan all repositories for MCP servers."""
-        results = []
+        results: list[Any] = []
         try:
             repos_dir = scan_path or Path(settings.REPOS_PATH)
             self.log_scan(f"Using repos directory: {repos_dir}")
@@ -151,10 +162,9 @@ class RepoScannerService:
                     self.log_scan(f"Analyzing {repo_path.name}...")
 
                     # Add timeout for individual repo analysis (30 seconds)
-                    import asyncio
                     import concurrent.futures
 
-                    def analyze_with_timeout():
+                    def analyze_with_timeout() -> Any:
                         return self.analyze_repo(repo_path)
 
                     # Run analysis with timeout
@@ -188,7 +198,7 @@ class RepoScannerService:
 
                         self.log_scan(f"  [SKIP] {repo_path.name} (not MCP/fullstack repo)")
                 except Exception as e:
-                    error_msg = f"[ERROR] {repo_path.name}: {str(e)}"
+                    error_msg = f"[ERROR] {repo_path.name}: {e!s}"
                     self.log_scan(error_msg, is_error=True)
                     logger.error(f"Error analyzing {repo_path.name}: {e}", exc_info=True)
 
@@ -196,14 +206,10 @@ class RepoScannerService:
                     self.scan_progress["errors"] += 1
 
                     # Add error to activity log
-                    error_entry = {
-                        "repo": repo_path.name,
-                        "error": str(e),
-                        "timestamp": datetime.now().isoformat()
-                    }
+                    error_entry = {"repo": repo_path.name, "error": str(e), "timestamp": datetime.now().isoformat()}
 
                     # Store last few errors for debugging
-                    if not hasattr(self, 'recent_errors'):
+                    if not hasattr(self, "recent_errors"):
                         self.recent_errors = []
                     self.recent_errors.append(error_entry)
                     if len(self.recent_errors) > 5:
@@ -221,15 +227,15 @@ class RepoScannerService:
             return results
 
         except Exception as e:
-            error_msg = f"CRITICAL FAILURE: {str(e)}"
+            error_msg = f"CRITICAL FAILURE: {e!s}"
             self.log_scan(error_msg, is_error=True)
             logger.error(f"Critical scanner failure: {e}", exc_info=True)
             self.scan_progress["status"] = "failed"
             return []
 
-    def analyze_repo(self, repo_path: Path) -> Optional[Dict[str, Any]]:
+    def analyze_repo(self, repo_path: Path) -> dict[str, Any] | None:
         """Analyze a single MCP repository."""
-        info = {
+        info: dict[str, Any] = {
             "name": repo_path.name,
             "path": str(repo_path),
             "fastmcp_version": None,
@@ -275,9 +281,7 @@ class RepoScannerService:
             fs_features = self.detect_fullstack_features(repo_path)
             info.update(fs_features)
         except Exception as e:
-            self.log_scan(
-                f"Error detecting stack features for {repo_path.name}: {e}", is_error=True
-            )
+            self.log_scan(f"Error detecting stack features for {repo_path.name}: {e}", is_error=True)
             # Continue with defaults
 
         # Check for requirements.txt or pyproject.toml
@@ -326,11 +330,9 @@ class RepoScannerService:
                 for file in files:
                     if file.endswith(".py"):
                         try:
-                            content = (Path(root) / file).read_text(
-                                encoding="utf-8", errors="ignore"
-                            )
+                            content = (Path(root) / file).read_text(encoding="utf-8", errors="ignore")
                             tool_count += len(tool_pattern.findall(content))
-                        except:
+                        except Exception:
                             pass
         except Exception:
             pass
@@ -357,9 +359,9 @@ class RepoScannerService:
 
         return info
 
-    def detect_fullstack_features(self, repo_path: Path) -> Dict[str, Any]:
+    def detect_fullstack_features(self, repo_path: Path) -> dict[str, Any]:
         """Detect fullstack capabilities (frontend, backend, infra, docs)."""
-        features = {
+        features: dict[str, Any] = {
             "is_fullstack": False,
             "frontend": [],
             "backend": [],
@@ -373,7 +375,7 @@ class RepoScannerService:
         package_json = repo_path / "package.json"
         if package_json.exists():
             try:
-                with open(package_json, "r", encoding="utf-8") as f:
+                with open(package_json, encoding="utf-8") as f:
                     pkg = json.load(f)
                     deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
 
@@ -393,7 +395,7 @@ class RepoScannerService:
                         features["frontend"].append("Tailwind")
                     if "typescript" in deps:
                         features["frontend"].append("TypeScript")
-            except:
+            except Exception:
                 pass
 
         # Simple file checks
@@ -425,20 +427,18 @@ class RepoScannerService:
         # Node Backend (Express/Nest)
         if package_json.exists():
             try:
-                with open(package_json, "r", encoding="utf-8") as f:
+                with open(package_json, encoding="utf-8") as f:
                     pkg = json.load(f)
                     deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
                     if "express" in deps:
                         features["backend"].append("Express")
                     if "nestjs" in deps:
                         features["backend"].append("NestJS")
-            except:
+            except Exception:
                 pass
 
         # --- Infrastructure ---
-        if (repo_path / "docker-compose.yml").exists() or (
-            repo_path / "docker-compose.yaml"
-        ).exists():
+        if (repo_path / "docker-compose.yml").exists() or (repo_path / "docker-compose.yaml").exists():
             features["infrastructure"].append("Docker Compose")
         if (repo_path / "Dockerfile").exists():
             features["infrastructure"].append("Dockerfile")
@@ -471,7 +471,7 @@ class RepoScannerService:
                     stderr=subprocess.DEVNULL,
                 )
                 features["git"]["dirty"] = bool(status.strip())
-            except:
+            except Exception:
                 pass
 
         # --- Runtime (Docker) ---
@@ -490,7 +490,7 @@ class RepoScannerService:
                         features["runtime"]["container_id"] = cid
                         features["runtime"]["name"] = name
                         break
-        except:
+        except Exception:
             pass
 
         # Decision
@@ -498,11 +498,7 @@ class RepoScannerService:
         has_backend = len(features["backend"]) > 0
         has_docker = "Docker Compose" in features["infrastructure"]
 
-        if (
-            (has_frontend and has_backend)
-            or (has_frontend and has_docker)
-            or (has_backend and has_docker)
-        ):
+        if (has_frontend and has_backend) or (has_frontend and has_docker) or (has_backend and has_docker):
             features["is_fullstack"] = True
         elif (repo_path / "package.json").exists() and (repo_path / "requirements.txt").exists():
             features["is_fullstack"] = True
