@@ -4,8 +4,9 @@ Settings API Routes for MCP Studio.
 Provides endpoints for managing application settings.
 """
 
-from typing import Dict, Any
-from fastapi import APIRouter, HTTPException
+from typing import Any
+
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from ..app.core.config import settings, update_settings
@@ -18,6 +19,7 @@ router = APIRouter()
 
 class SettingsResponse(BaseModel):
     """Response model for settings."""
+
     repos_path: str = Field(..., description="Root directory for repository scanning")
     repo_scan_depth: int = Field(..., description="How deep to scan subdirectories")
     repo_scan_exclude: list[str] = Field(..., description="Directories to exclude from scanning")
@@ -31,6 +33,7 @@ class SettingsResponse(BaseModel):
 
 class SettingsUpdate(BaseModel):
     """Request model for updating settings."""
+
     repos_path: str = Field(None, description="Root directory for repository scanning")
     repo_scan_depth: int = Field(None, description="How deep to scan subdirectories")
     repo_scan_exclude: list[str] = Field(None, description="Directories to exclude from scanning")
@@ -39,7 +42,7 @@ class SettingsUpdate(BaseModel):
 
 
 @router.get("/", response_model=SettingsResponse)
-async def get_settings():
+async def get_settings() -> Any:
     """
     Get current application settings.
 
@@ -59,13 +62,13 @@ async def get_settings():
 
 
 @router.put("/")
-async def update_settings_endpoint(settings_update: SettingsUpdate):
+async def update_settings_endpoint(settings_update: SettingsUpdate) -> Any:
     """
     Update application settings.
 
     Only updates the provided fields.
     """
-    updates = {}
+    updates: dict[str, Any] = {}
 
     if settings_update.repos_path is not None:
         updates["REPOS_PATH"] = settings_update.repos_path
@@ -91,7 +94,7 @@ async def update_settings_endpoint(settings_update: SettingsUpdate):
 
 
 @router.post("/reset")
-async def reset_settings():
+async def reset_settings() -> Any:
     """
     Reset all settings to defaults.
 
@@ -101,6 +104,3 @@ async def reset_settings():
     # about what gets reset and handle persistence properly
     logger.warning("Settings reset requested - this is not fully implemented yet")
     return {"message": "Settings reset not fully implemented yet"}
-
-
-

@@ -2,26 +2,27 @@
 API endpoints for MCP client information.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, status
+from fastapi import status as http_status
 from pydantic import BaseModel, Field
 
+from ..core.logging_utils import get_logger
 from ..services.mcp_client_metadata import (
-    get_client_metadata,
-    get_all_clients,
-    get_clients_by_type,
-    get_active_clients,
     format_client_info,
-    MCPClientMetadata
+    get_all_clients,
+    get_client_metadata,
+    get_clients_by_type,
 )
 from ..services.mcp_client_zoo import MCPClientZoo
-from ..core.logging_utils import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)
 
 # Lazy-loaded singleton to prevent blocking on module import
-_client_zoo: Optional[MCPClientZoo] = None
+_client_zoo: MCPClientZoo | None = None
+
 
 def get_client_zoo() -> MCPClientZoo:
     """Get or create the client zoo."""
@@ -33,17 +34,18 @@ def get_client_zoo() -> MCPClientZoo:
 
 class ClientInfoResponse(BaseModel):
     """Response model for client information."""
+
     id: str = Field(..., description="Client identifier")
     name: str = Field(..., description="Client name")
     short_description: str = Field(..., description="Short description")
     full_description: str = Field(..., description="Full description")
-    homepage: Optional[str] = Field(None, description="Homepage URL")
-    github: Optional[str] = Field(None, description="GitHub repository URL")
-    documentation: Optional[str] = Field(None, description="Documentation URL")
+    homepage: str | None = Field(None, description="Homepage URL")
+    github: str | None = Field(None, description="GitHub repository URL")
+    documentation: str | None = Field(None, description="Documentation URL")
     platform: str = Field(..., description="Platform (Windows, Mac, Linux, Cross-platform)")
     client_type: str = Field(..., description="Client type (Desktop, IDE, Extension)")
     status: str = Field(..., description="Status (Active, Deprecated, Beta)")
-    features: List[str] = Field(default_factory=list, description="Key features")
+    features: list[str] = Field(default_factory=list, description="Key features")
     installed: bool = Field(False, description="Whether this client is detected as installed")
     running: bool = Field(False, description="Whether this client process is currently running")
     server_count: int = Field(0, description="Number of MCP servers configured")
@@ -51,8 +53,9 @@ class ClientInfoResponse(BaseModel):
 
 class ClientsListResponse(BaseModel):
     """Response model for list of clients."""
+
     total: int = Field(..., description="Total number of clients")
-    clients: List[ClientInfoResponse] = Field(..., description="List of clients")
+    clients: list[ClientInfoResponse] = Field(..., description="List of clients")
 
 
 @router.get(
@@ -62,16 +65,16 @@ class ClientsListResponse(BaseModel):
     description="Get information about all known MCP clients supported by MCP Studio",
 )
 async def list_clients(
-    client_type: Optional[str] = None,
-    status: Optional[str] = None,
+    client_type: str | None = None,
+    status: str | None = None,
 ) -> ClientsListResponse:
     """
     List all known MCP clients with their metadata.
-    
+
     Args:
         client_type: Filter by type (Desktop, IDE, Extension, Library)
         status: Filter by status (Active, Deprecated, Beta)
-        
+
     Returns:
         List of MCP clients with metadata
     """
@@ -87,7 +90,7 @@ async def list_clients(
             clients = get_all_clients()
 
         logger.info(f"Found {len(clients)} clients")
-        
+
         # Convert to response models
         client_responses = [
             ClientInfoResponse(
@@ -108,17 +111,16 @@ async def list_clients(
             )
             for client in clients
         ]
-        
+
         return ClientsListResponse(
             total=999,  # Test if this changes
-            clients=client_responses
+            clients=client_responses,
         )
-        
+
     except Exception as e:
         logger.error("Failed to list clients", error=str(e), exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list clients: {str(e)}"
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to list clients: {e!s}"
         )
 
 
@@ -131,22 +133,19 @@ async def list_clients(
 async def get_client(client_id: str) -> ClientInfoResponse:
     """
     Get detailed information about a specific MCP client.
-    
+
     Args:
         client_id: Client identifier (e.g., "claude-desktop", "cursor-ide")
-        
+
     Returns:
         Client metadata with full details
     """
     try:
         client = get_client_metadata(client_id)
-        
+
         if not client:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Client '{client_id}' not found"
-            )
-        
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Client '{client_id}' not found")
+
         return ClientInfoResponse(
             id=client.id,
             name=client.name,
@@ -163,14 +162,13 @@ async def get_client(client_id: str) -> ClientInfoResponse:
             running=client.running,
             server_count=client.server_count,
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to get client info", client_id=client_id, error=str(e), exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get client info: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get client info: {e!s}"
         )
 
 
@@ -179,34 +177,30 @@ async def get_client(client_id: str) -> ClientInfoResponse:
     summary="Get client information as markdown",
     description="Get formatted markdown documentation for a client",
 )
-async def get_client_markdown(client_id: str) -> Dict[str, str]:
+async def get_client_markdown(client_id: str) -> dict[str, str]:
     """
     Get client information formatted as markdown.
-    
+
     Args:
         client_id: Client identifier
-        
+
     Returns:
         Markdown-formatted client information
     """
     try:
         markdown = format_client_info(client_id, format="markdown")
-        
+
         if markdown.startswith("Unknown client"):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Client '{client_id}' not found"
-            )
-        
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Client '{client_id}' not found")
+
         return {"markdown": markdown}
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Failed to format client info", client_id=client_id, error=str(e), exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to format client info: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to format client info: {e!s}"
         )
 
 
@@ -215,34 +209,34 @@ async def get_client_markdown(client_id: str) -> Dict[str, str]:
     summary="Get client statistics",
     description="Get summary statistics about supported MCP clients",
 )
-async def get_client_stats() -> Dict[str, Any]:
+async def get_client_stats() -> dict[str, Any]:
     """
     Get summary statistics about supported MCP clients.
-    
+
     Returns:
         Statistics about clients (counts by type, status, etc.)
     """
     try:
         all_clients = get_all_clients()
-        
+
         # Count by type
-        by_type = {}
+        by_type: dict[str, Any] = {}
         for client in all_clients:
             client_type = client.client_type
             by_type[client_type] = by_type.get(client_type, 0) + 1
-        
+
         # Count by status
-        by_status = {}
+        by_status: dict[str, Any] = {}
         for client in all_clients:
             client_status = client.status
             by_status[client_status] = by_status.get(client_status, 0) + 1
-        
+
         # Count by platform
-        by_platform = {}
+        by_platform: dict[str, Any] = {}
         for client in all_clients:
             platform = client.platform
             by_platform[platform] = by_platform.get(platform, 0) + 1
-        
+
         return {
             "total_clients": len(all_clients),
             "by_type": by_type,
@@ -250,12 +244,11 @@ async def get_client_stats() -> Dict[str, Any]:
             "by_platform": by_platform,
             "client_ids": [client.id for client in all_clients],
         }
-        
+
     except Exception as e:
         logger.error("Failed to get client stats", error=str(e), exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get client stats: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get client stats: {e!s}"
         )
 
 
@@ -264,13 +257,13 @@ async def get_client_stats() -> Dict[str, Any]:
     summary="Get servers for a client",
     description="Get list of MCP servers configured for a specific client",
 )
-async def get_client_servers(client_id: str) -> Dict[str, Any]:
+async def get_client_servers(client_id: str) -> dict[str, Any]:
     """
     Get MCP servers configured for a specific client.
-    
+
     Args:
         client_id: Client identifier
-        
+
     Returns:
         List of servers configured for the client
     """
@@ -278,7 +271,7 @@ async def get_client_servers(client_id: str) -> Dict[str, Any]:
         # Scan client to get servers
         results = get_client_zoo().scan_all_clients()
         servers = results.get(client_id, [])
-        
+
         return {
             "client_id": client_id,
             "servers": [
@@ -296,8 +289,7 @@ async def get_client_servers(client_id: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error("Failed to get client servers", client_id=client_id, error=str(e), exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get client servers: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get client servers: {e!s}"
         )
 
 
@@ -338,7 +330,7 @@ async def get_client_servers(client_id: str) -> Dict[str, Any]:
     summary="Get client tools",
     description="Get all tools available from MCP servers configured for a client",
 )
-async def get_client_tools(client_id: str) -> Dict[str, Any]:
+async def get_client_tools(client_id: str) -> dict[str, Any]:
     """
     Get tools from all MCP servers configured for a client.
 
@@ -350,7 +342,6 @@ async def get_client_tools(client_id: str) -> Dict[str, Any]:
     """
     try:
         from ..services.mcp_client_zoo import MCPClientZoo
-        from ..core.stdio import StdioTransport
         from ..services.mcp_discovery_service import MCPDiscoveryService
 
         # Get the servers configured for this client
@@ -363,7 +354,7 @@ async def get_client_tools(client_id: str) -> Dict[str, Any]:
             return {"client_id": client_id, "tools": [], "total_tools": 0, "servers_count": 0}
 
         all_tools = []
-        discovery_service = MCPDiscoveryService()
+        MCPDiscoveryService()
 
         # For each server, try to connect and get its tools
         for server in client_servers:
@@ -372,6 +363,7 @@ async def get_client_tools(client_id: str) -> Dict[str, Any]:
 
                 # Create server config
                 from ..services.mcp_discovery_service import MCPServerConfig
+
                 config = MCPServerConfig(
                     id=f"{client_id}:{server.id}",
                     name=server.name,
@@ -379,7 +371,7 @@ async def get_client_tools(client_id: str) -> Dict[str, Any]:
                     args=server.args,
                     cwd=server.cwd,
                     env=server.env,
-                    source=client_id
+                    source=client_id,
                 )
 
                 # Try to connect and get tools
@@ -394,13 +386,15 @@ async def get_client_tools(client_id: str) -> Dict[str, Any]:
             except Exception as e:
                 logger.warning(f"Failed to get tools for server {server.name}: {e}")
                 # Add a placeholder tool indicating connection failed
-                all_tools.append({
-                    "name": "connection_error",
-                    "description": f"Failed to connect to {server.name}: {str(e)}",
-                    "server_name": server.name,
-                    "server_id": server.id,
-                    "inputSchema": {"type": "object", "properties": {}}
-                })
+                all_tools.append(
+                    {
+                        "name": "connection_error",
+                        "description": f"Failed to connect to {server.name}: {e!s}",
+                        "server_name": server.name,
+                        "server_id": server.id,
+                        "inputSchema": {"type": "object", "properties": {}},
+                    }
+                )
                 continue
 
         logger.info(f"Total tools collected for client {client_id}: {len(all_tools)}")
@@ -414,12 +408,11 @@ async def get_client_tools(client_id: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error("Failed to get client tools", client_id=client_id, error=str(e), exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get client tools: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get client tools: {e!s}"
         )
 
 
-async def _get_server_tools(config) -> List[Dict[str, Any]]:
+async def _get_server_tools(config: Any) -> list[dict[str, Any]]:
     """
     Connect to an MCP server and get its available tools.
 
@@ -429,18 +422,13 @@ async def _get_server_tools(config) -> List[Dict[str, Any]]:
     Returns:
         List of tool definitions from the server
     """
-    import asyncio
     import json
+
     from ..core.stdio import StdioTransport
 
     try:
         # Create transport for the server
-        transport = StdioTransport(
-            command=config.command,
-            args=config.args,
-            cwd=config.cwd,
-            env=config.env
-        )
+        transport = StdioTransport(command=config.command, args=config.args, cwd=config.cwd, env=config.env)
 
         # Start the server process
         await transport.start()
@@ -454,11 +442,8 @@ async def _get_server_tools(config) -> List[Dict[str, Any]]:
                 "params": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {},
-                    "clientInfo": {
-                        "name": "mcp-studio-tools-discovery",
-                        "version": "1.0.0"
-                    }
-                }
+                    "clientInfo": {"name": "mcp-studio-tools-discovery", "version": "1.0.0"},
+                },
             }
 
             await transport.send(json.dumps(init_request))
@@ -470,20 +455,17 @@ async def _get_server_tools(config) -> List[Dict[str, Any]]:
             if "error" in init_data:
                 logger.warning(f"Server {config.name} initialize error: {init_data['error']}")
                 # Return basic info even if initialize fails
-                return [{
-                    "name": "server_info",
-                    "description": f"Server {config.name} (connection issues)",
-                    "inputSchema": {"type": "object", "properties": {}},
-                    "enabled": False  # Disabled when connection fails
-                }]
+                return [
+                    {
+                        "name": "server_info",
+                        "description": f"Server {config.name} (connection issues)",
+                        "inputSchema": {"type": "object", "properties": {}},
+                        "enabled": False,  # Disabled when connection fails
+                    }
+                ]
 
             # Send tools/list request
-            tools_request = {
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "tools/list",
-                "params": {}
-            }
+            tools_request = {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
 
             await transport.send(json.dumps(tools_request))
 
@@ -499,12 +481,14 @@ async def _get_server_tools(config) -> List[Dict[str, Any]]:
             tools = []
             if "result" in tools_data and "tools" in tools_data["result"]:
                 for tool in tools_data["result"]["tools"]:
-                    tools.append({
-                        "name": tool.get("name", "unknown"),
-                        "description": tool.get("description", ""),
-                        "inputSchema": tool.get("inputSchema", {"type": "object", "properties": {}}),
-                        "enabled": True  # Default to enabled for now
-                    })
+                    tools.append(
+                        {
+                            "name": tool.get("name", "unknown"),
+                            "description": tool.get("description", ""),
+                            "inputSchema": tool.get("inputSchema", {"type": "object", "properties": {}}),
+                            "enabled": True,  # Default to enabled for now
+                        }
+                    )
 
             logger.info(f"Successfully retrieved {len(tools)} tools from {config.name}")
             return tools
@@ -519,12 +503,14 @@ async def _get_server_tools(config) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.warning(f"Failed to connect to MCP server {config.name}: {e}")
         # Return a placeholder tool indicating the server is not accessible
-        return [{
-            "name": "server_unavailable",
-            "description": f"Server {config.name} is not currently accessible",
-            "inputSchema": {"type": "object", "properties": {}},
-            "enabled": False  # Disabled when server is unreachable
-        }]
+        return [
+            {
+                "name": "server_unavailable",
+                "description": f"Server {config.name} is not currently accessible",
+                "inputSchema": {"type": "object", "properties": {}},
+                "enabled": False,  # Disabled when server is unreachable
+            }
+        ]
 
 
 @router.post(
@@ -532,11 +518,7 @@ async def _get_server_tools(config) -> List[Dict[str, Any]]:
     summary="Toggle tool enablement",
     description="Enable or disable a specific tool for a client",
 )
-async def toggle_tool(
-    client_id: str,
-    tool_name: str,
-    request: Dict[str, bool]
-) -> Dict[str, Any]:
+async def toggle_tool(client_id: str, tool_name: str, request: dict[str, bool]) -> dict[str, Any]:
     """
     Toggle the enabled/disabled status of a specific tool.
     """
@@ -553,51 +535,45 @@ async def toggle_tool(
             "client_id": client_id,
             "tool_name": tool_name,
             "enabled": enabled,
-            "message": f"Tool {tool_name} {'enabled' if enabled else 'disabled'} successfully"
+            "message": f"Tool {tool_name} {'enabled' if enabled else 'disabled'} successfully",
         }
 
     except Exception as e:
         logger.error(f"Failed to toggle tool {tool_name} for client {client_id}", error=str(e), exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to toggle tool: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to toggle tool: {e!s}")
 
 
 # ═══════════════════════════════════════════════════════════════
 # SETTINGS MANAGEMENT ENDPOINTS
 # ═══════════════════════════════════════════════════════════════
 
+
 @router.get(
     "/settings/categories",
     summary="Get setting categories",
-    description="Get information about available client setting categories"
+    description="Get information about available client setting categories",
 )
-async def get_setting_categories() -> Dict[str, Any]:
+async def get_setting_categories() -> dict[str, Any]:
     """
     Get all available setting categories with descriptions and icons.
     """
     try:
         zoo = get_client_zoo()
         categories = zoo.get_setting_categories()
-        return {
-            "categories": categories,
-            "total": len(categories)
-        }
+        return {"categories": categories, "total": len(categories)}
     except Exception as e:
         logger.error("Failed to get setting categories", error=str(e), exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get setting categories: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get setting categories: {e!s}"
         )
 
 
 @router.get(
     "/{client_id}/settings",
     summary="Get client settings",
-    description="Get all editable settings for a specific client, organized by category"
+    description="Get all editable settings for a specific client, organized by category",
 )
-async def get_client_settings(client_id: str) -> Dict[str, Any]:
+async def get_client_settings(client_id: str) -> dict[str, Any]:
     """
     Get all settings for a client, organized by category.
     """
@@ -608,7 +584,7 @@ async def get_client_settings(client_id: str) -> Dict[str, Any]:
         if settings is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Client '{client_id}' not found or has no accessible settings"
+                detail=f"Client '{client_id}' not found or has no accessible settings",
             )
 
         return settings
@@ -618,17 +594,16 @@ async def get_client_settings(client_id: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error("Failed to get client settings", client_id=client_id, error=str(e), exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get client settings: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get client settings: {e!s}"
         )
 
 
 @router.get(
     "/{client_id}/settings/{setting_key}",
     summary="Get specific client setting",
-    description="Get a specific setting for a client"
+    description="Get a specific setting for a client",
 )
-async def get_client_setting(client_id: str, setting_key: str) -> Dict[str, Any]:
+async def get_client_setting(client_id: str, setting_key: str) -> dict[str, Any]:
     """
     Get a specific setting for a client.
     """
@@ -644,7 +619,7 @@ async def get_client_setting(client_id: str, setting_key: str) -> Dict[str, Any]
         if setting is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Setting '{setting_key}' not found for client '{client_id}'"
+                detail=f"Setting '{setting_key}' not found for client '{client_id}'",
             )
 
         return setting
@@ -652,24 +627,22 @@ async def get_client_setting(client_id: str, setting_key: str) -> Dict[str, Any]
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to get client setting", client_id=client_id, setting_key=setting_key, error=str(e), exc_info=True)
+        logger.error(
+            "Failed to get client setting", client_id=client_id, setting_key=setting_key, error=str(e), exc_info=True
+        )
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get client setting: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get client setting: {e!s}"
         )
 
 
 @router.put(
     "/{client_id}/settings/{setting_key}",
     summary="Update client setting",
-    description="Update a specific setting for a client with automatic backup"
+    description="Update a specific setting for a client with automatic backup",
 )
 async def update_client_setting(
-    client_id: str,
-    setting_key: str,
-    value: Any,
-    create_backup: bool = True
-) -> Dict[str, Any]:
+    client_id: str, setting_key: str, value: Any, create_backup: bool = True
+) -> dict[str, Any]:
     """
     Update a specific setting for a client.
 
@@ -683,7 +656,7 @@ async def update_client_setting(
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to update setting '{setting_key}' for client '{client_id}'"
+                detail=f"Failed to update setting '{setting_key}' for client '{client_id}'",
             )
 
         # Return updated setting info
@@ -694,25 +667,26 @@ async def update_client_setting(
             "message": f"Setting '{setting_key}' updated successfully",
             "client_id": client_id,
             "setting": updated_setting,
-            "backup_created": create_backup
+            "backup_created": create_backup,
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Failed to update client setting", client_id=client_id, setting_key=setting_key, error=str(e), exc_info=True)
+        logger.error(
+            "Failed to update client setting", client_id=client_id, setting_key=setting_key, error=str(e), exc_info=True
+        )
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update client setting: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update client setting: {e!s}"
         )
 
 
 @router.post(
     "/{client_id}/settings/discover",
     summary="Discover client settings",
-    description="Force discovery/re-discovery of settings for a client"
+    description="Force discovery/re-discovery of settings for a client",
 )
-async def discover_client_settings(client_id: str) -> Dict[str, Any]:
+async def discover_client_settings(client_id: str) -> dict[str, Any]:
     """
     Discover or re-discover settings for a client.
     """
@@ -723,7 +697,7 @@ async def discover_client_settings(client_id: str) -> Dict[str, Any]:
         if config is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Client '{client_id}' not found or config file not accessible"
+                detail=f"Client '{client_id}' not found or config file not accessible",
             )
 
         settings_info = zoo.get_client_settings(client_id)
@@ -734,7 +708,7 @@ async def discover_client_settings(client_id: str) -> Dict[str, Any]:
             "client_id": client_id,
             "settings_count": settings_info["total_settings"] if settings_info else 0,
             "editable_count": settings_info["editable_settings"] if settings_info else 0,
-            "config_path": str(config.config_path)
+            "config_path": str(config.config_path),
         }
 
     except HTTPException:
@@ -742,8 +716,7 @@ async def discover_client_settings(client_id: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error("Failed to discover client settings", client_id=client_id, error=str(e), exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to discover client settings: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to discover client settings: {e!s}"
         )
 
 
@@ -754,4 +727,3 @@ async def discover_client_settings(client_id: str) -> Dict[str, Any]:
 # )
 # async def get_client_config(client_id: str) -> Dict[str, Any]:
 #     """Working sets functionality temporarily disabled."""
-
