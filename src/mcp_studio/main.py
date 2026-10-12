@@ -5,11 +5,9 @@ including routing, middleware, and event handlers.
 """
 
 import asyncio
-import signal
-import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any
 
 import fastapi
 import fastapi.middleware.cors
@@ -19,12 +17,9 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .app.core.config import settings
-from .app.core.logging_utils import get_logger, configure_uvicorn_logging
 from .app.api import router as api_router
-from .app.api.endpoints import mcp_servers as mcp_servers_router
-from .app.api.endpoints import repos as repos_router
-from .app.services.mcp_discovery_service import discovery_service, start_discovery, stop_discovery
+from .app.core.config import settings
+from .app.core.logging_utils import configure_uvicorn_logging, get_logger
 
 # Configure logging
 configure_uvicorn_logging()
@@ -41,7 +36,7 @@ except ImportError:
 
 # Lifespan event handler
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> Any:
     """Handle application startup and shutdown."""
     # Startup
     logger.info("Starting MCP Studio...")
@@ -101,7 +96,7 @@ app.add_middleware(
 
 # Add request logging middleware
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
+async def log_requests(request: Request, call_next: Any) -> Any:
     """Log all incoming requests and responses."""
     # Skip logging for health checks and static files
     if request.url.path in ["/api/health", "/api/health/", "/static/", "/favicon.ico"]:
@@ -147,7 +142,7 @@ async def log_requests(request: Request, call_next):
 
 # Add exception handlers
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> Any:
     """Handle request validation errors."""
     logger.warning(
         "Request validation failed",
@@ -166,7 +161,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
+async def global_exception_handler(request: Request, exc: Exception) -> Any:
     """Handle all other exceptions."""
     logger.error(
         "Unhandled exception",
@@ -191,6 +186,7 @@ app.include_router(api_router, prefix="/api")
 try:
     logger.info("Attempting to include clients router...")
     from .app.api.clients import router as clients_router
+
     logger.info(f"Clients router has {len(clients_router.routes)} routes before inclusion")
     app.include_router(clients_router, prefix="/api/v1/clients", tags=["clients"])
     logger.info(f"Clients router included with {len(clients_router.routes)} routes at prefix /api/v1/clients")

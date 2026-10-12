@@ -3,33 +3,27 @@ Runt Analyzer Tool for MCP Studio.
 
 Scans MCP repositories and identifies "runts" - repos that need SOTA upgrades.
 """
+
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import structlog
 
 from .decorators import ToolCategory, tool
-from .runt_analyzer_rules import (
-    evaluate_rules,
-    calculate_sota_score,
-    SOTA_RULES,
-    RuleCategory,
-    RuleSeverity,
-    get_rules_by_category,
-    get_rule_by_id,
-)
 from .repo_detail_collector import collect_repo_details
+from .runt_analyzer_rules import (
+    calculate_sota_score,
+    evaluate_rules,
+)
 from .scan_cache import (
-    get_cached_scan,
+    cache_repo_status,
     cache_scan_result,
     get_cached_repo_status,
-    cache_repo_status,
-    clear_cache,
-    get_cache_stats,
+    get_cached_scan,
 )
-from .scan_formatter import format_scan_result_markdown, format_repo_status_markdown
+from .scan_formatter import format_repo_status_markdown, format_scan_result_markdown
 
 logger = structlog.get_logger(__name__)
 
@@ -49,32 +43,32 @@ PYTEST_MARKERS = ["pytest", "test_", "_test.py"]  # Evidence of pytest usage
 
 # Logging patterns (good)
 LOGGING_PATTERNS = [
-    r'import\s+logging',
-    r'import\s+structlog',
-    r'from\s+logging\s+import',
-    r'from\s+structlog\s+import',
-    r'logger\s*=\s*logging\.getLogger',
-    r'logger\s*=\s*structlog\.get_logger',
+    r"import\s+logging",
+    r"import\s+structlog",
+    r"from\s+logging\s+import",
+    r"from\s+structlog\s+import",
+    r"logger\s*=\s*logging\.getLogger",
+    r"logger\s*=\s*structlog\.get_logger",
 ]
 
 # Bad patterns (print/console in non-test code)
 BAD_STDOUT_PATTERNS = [
-    r'^\s*print\s*\(',  # print() calls
-    r'console\.log\s*\(',  # JS-style logging
-    r'sys\.stdout\.write\s*\(',  # Direct stdout writes
+    r"^\s*print\s*\(",  # print() calls
+    r"console\.log\s*\(",  # JS-style logging
+    r"sys\.stdout\.write\s*\(",  # Direct stdout writes
 ]
 
 # Error handling patterns (bad)
 BAD_ERROR_PATTERNS = [
-    r'except\s*:',  # Bare except (catches everything including KeyboardInterrupt)
-    r'except\s+Exception\s*:',  # Broad exception without handling
+    r"except\s*:",  # Bare except (catches everything including KeyboardInterrupt)
+    r"except\s+Exception\s*:",  # Broad exception without handling
 ]
 
 # Good error handling patterns
 GOOD_ERROR_PATTERNS = [
-    r'except\s+\w+Error',  # Specific exception types
-    r'logger\.\w+\(.*error',  # Logging errors
-    r'raise\s+\w+Error',  # Re-raising specific errors
+    r"except\s+\w+Error",  # Specific exception types
+    r"logger\.\w+\(.*error",  # Logging errors
+    r"raise\s+\w+Error",  # Re-raising specific errors
 ]
 
 # Non-informative error messages (lazy/useless)
@@ -101,20 +95,59 @@ LAZY_ERROR_MESSAGES = [
 
 # Keywords indicating heavy/jumbo MCPs (database, virtualization, etc.)
 JUMBO_INDICATORS = [
-    "database", "postgres", "mysql", "sqlite", "mongo", "redis",  # Databases
-    "docker", "kubernetes", "k8s", "container", "virtualization",  # Virtualization
-    "virtualbox", "vmware", "qemu", "hyperv",  # VMs
-    "davinci", "resolve", "premiere", "video", "render",  # Heavy video
-    "blender", "3d", "modeling",  # 3D software
-    "ai-", "llm-", "ml-", "machine-learning",  # AI/ML heavy
-    "obs", "stream", "broadcast",  # Streaming
+    "database",
+    "postgres",
+    "mysql",
+    "sqlite",
+    "mongo",
+    "redis",  # Databases
+    "docker",
+    "kubernetes",
+    "k8s",
+    "container",
+    "virtualization",  # Virtualization
+    "virtualbox",
+    "vmware",
+    "qemu",
+    "hyperv",  # VMs
+    "davinci",
+    "resolve",
+    "premiere",
+    "video",
+    "render",  # Heavy video
+    "blender",
+    "3d",
+    "modeling",  # 3D software
+    "ai-",
+    "llm-",
+    "ml-",
+    "machine-learning",  # AI/ML heavy
+    "obs",
+    "stream",
+    "broadcast",  # Streaming
 ]
 
 # Keywords indicating mini/chipmunk MCPs (simple, single-purpose)
 CHIPMUNK_INDICATORS = [
-    "txt", "text", "generator", "simple", "mini", "tiny", "lite",
-    "basic", "hello", "echo", "demo", "example", "starter", "template",
-    "clipboard", "timer", "counter", "converter", "calculator",
+    "txt",
+    "text",
+    "generator",
+    "simple",
+    "mini",
+    "tiny",
+    "lite",
+    "basic",
+    "hello",
+    "echo",
+    "demo",
+    "example",
+    "starter",
+    "template",
+    "clipboard",
+    "timer",
+    "counter",
+    "converter",
+    "calculator",
 ]
 
 # Zoo animal classification based on tool count and complexity
@@ -171,28 +204,29 @@ ZOO_ANIMALS = {
     Results are cached to avoid re-scanning on every request.""",
     category=ToolCategory.DISCOVERY,
     tags=["runt", "analyzer", "sota", "upgrade"],
-    estimated_runtime="2-10s"
+    estimated_runtime="2-10s",
 )
 def analyze_runts_sync(
-    scan_path: Optional[str] = None,
+    scan_path: str | None = None,
     max_depth: int = 1,
     include_sota: bool = True,
     format: str = "json",
     use_cache: bool = True,
-):
+) -> Any:
     """Synchronous wrapper for analyze_runts."""
     import asyncio
+
     return asyncio.run(analyze_runts(scan_path, max_depth, include_sota, format, use_cache))
 
 
 async def analyze_runts(
-    scan_path: Optional[str] = None,
+    scan_path: str | None = None,
     max_depth: int = 1,
     include_sota: bool = True,
     format: str = "json",
     use_cache: bool = True,
-    cache_ttl: int = 3600
-) -> Union[Dict[str, Any], str]:
+    cache_ttl: int = 3600,
+) -> dict[str, Any] | str:
     """
     Analyze MCP repositories to identify runts needing upgrades.
 
@@ -210,8 +244,9 @@ async def analyze_runts(
     # Use default scan_path if not provided
     if scan_path is None:
         from mcp_studio.app.core.config import DEFAULT_REPOS_PATH
+
         scan_path = DEFAULT_REPOS_PATH
-    
+
     # Check cache first
     if use_cache:
         cached = get_cached_scan(scan_path, max_depth, cache_ttl)
@@ -219,24 +254,21 @@ async def analyze_runts(
             if format == "markdown":
                 return format_scan_result_markdown(cached)
             return cached
-    
-    runts: List[Dict[str, Any]] = []
-    sota_repos: List[Dict[str, Any]] = []
+
+    runts: list[dict[str, Any]] = []
+    sota_repos: list[dict[str, Any]] = []
 
     path = Path(scan_path).expanduser().resolve()
     if not path.exists():
-        error_result = {
-            "success": False,
-            "error": f"Path does not exist: {scan_path}",
-            "timestamp": time.time()
-        }
+        error_result = {"success": False, "error": f"Path does not exist: {scan_path}", "timestamp": time.time()}
         if format == "markdown":
             return f"# Scan Failed\n\n**Error:** {error_result['error']}\n"
         return error_result
 
     import asyncio
+
     for item in path.iterdir():
-        if not item.is_dir() or item.name.startswith('.'):
+        if not item.is_dir() or item.name.startswith("."):
             continue
 
         # Small delay to reduce terminal spam and CPU usage
@@ -261,22 +293,22 @@ async def analyze_runts(
             "sota": len(sota_repos),
             "runt_threshold": f"FastMCP < {FASTMCP_RUNT_THRESHOLD}",
             "portmanteau_threshold": f"> {TOOL_PORTMANTEAU_THRESHOLD} tools",
-            "sota_version": FASTMCP_LATEST
+            "sota_version": FASTMCP_LATEST,
         },
         "runts": runts,
         "sota_repos": sota_repos if include_sota else [],
         "scan_path": scan_path,
-        "timestamp": time.time()
+        "timestamp": time.time(),
     }
-    
+
     # Cache the result
     if use_cache:
         cache_scan_result(scan_path, max_depth, result)
-    
+
     # Return in requested format
     if format == "markdown":
         return format_scan_result_markdown(result)
-    
+
     return result
 
 
@@ -291,18 +323,15 @@ async def analyze_runts(
     - Specific upgrade recommendations
     - Detailed repository structure, dependencies, tools, and configuration
     - All information needed for AI to answer questions about the repo without re-analysis
-    
+
     Results are cached to avoid re-scanning on every request.""",
     category=ToolCategory.DISCOVERY,
     tags=["repo", "status", "sota"],
-    estimated_runtime="2-5s"
+    estimated_runtime="2-5s",
 )
 async def get_repo_status(
-    repo_path: str,
-    format: str = "json",
-    use_cache: bool = True,
-    cache_ttl: int = 3600
-) -> Union[Dict[str, Any], str]:
+    repo_path: str, format: str = "json", use_cache: bool = True, cache_ttl: int = 3600
+) -> dict[str, Any] | str:
     """
     Get detailed SOTA status for a specific repository.
 
@@ -322,25 +351,17 @@ async def get_repo_status(
             if format == "markdown":
                 return format_repo_status_markdown(cached)
             return cached
-    
+
     path = Path(repo_path).expanduser().resolve()
     if not path.exists():
-        error_result = {
-            "success": False,
-            "error": f"Repository not found: {repo_path}",
-            "timestamp": time.time()
-        }
+        error_result = {"success": False, "error": f"Repository not found: {repo_path}", "timestamp": time.time()}
         if format == "markdown":
             return f"# Repository Status Failed\n\n**Error:** {error_result['error']}\n"
         return error_result
 
     repo_info = _analyze_repo(path)
     if not repo_info:
-        error_result = {
-            "success": False,
-            "error": f"Not an MCP repository: {repo_path}",
-            "timestamp": time.time()
-        }
+        error_result = {"success": False, "error": f"Not an MCP repository: {repo_path}", "timestamp": time.time()}
         if format == "markdown":
             return f"# Repository Status Failed\n\n**Error:** {error_result['error']}\n"
         return error_result
@@ -350,18 +371,18 @@ async def get_repo_status(
     repo_info["sota_score"] = _calculate_sota_score(repo_info)
     repo_info["upgrade_priority"] = _determine_priority(repo_info)
     repo_info["timestamp"] = time.time()
-    
+
     # Add comprehensive repository details for AI consumption
     try:
         repo_info["details"] = collect_repo_details(path)
     except Exception as e:
         logger.warning(f"Failed to collect detailed repo info: {e}")
         repo_info["details"] = None
-    
+
     # Cache the result
     if use_cache:
         cache_repo_status(repo_path, repo_info)
-    
+
     # Return in requested format
     if format == "markdown":
         return format_repo_status_markdown(repo_info)
@@ -369,9 +390,9 @@ async def get_repo_status(
     return repo_info
 
 
-def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
+def _analyze_repo(repo_path: Path) -> dict[str, Any] | None:
     """Analyze a repository for MCP status."""
-    info = {
+    info: dict[str, Any] = {
         "name": repo_path.name,
         "path": str(repo_path),
         "fastmcp_version": None,
@@ -402,7 +423,7 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         "status_color": "green",
         "status_label": "SOTA",
         "zoo_class": "unknown",
-        "zoo_animal": "🦔"  # Default: hedgehog (unknown size)
+        "zoo_animal": "🦔",  # Default: hedgehog (unknown size)
     }
 
     # Check for requirements.txt or pyproject.toml
@@ -415,8 +436,8 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     for config_file in [req_file, pyproject_file]:
         if config_file.exists():
             try:
-                content = config_file.read_text(encoding='utf-8')
-                match = re.search(r'fastmcp.*?(\d+\.\d+\.?\d*)', content, re.IGNORECASE)
+                content = config_file.read_text(encoding="utf-8")
+                match = re.search(r"fastmcp.*?(\d+\.\d+\.?\d*)", content, re.IGNORECASE)
                 if match:
                     fastmcp_version = match.group(1)
                     break
@@ -460,23 +481,23 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                 if "test" in str(py_file).lower() or "__pycache__" in str(py_file):
                     continue
                 try:
-                    content = py_file.read_text(encoding='utf-8')
+                    content = py_file.read_text(encoding="utf-8")
                     for pattern in tool_patterns:
                         tool_count += len(re.findall(pattern, content))
-                    
+
                     # Check for help tool
                     if re.search(r'(def\s+help|def\s+get_help|"help"|\'help\')\s*\(', content, re.IGNORECASE):
                         info["has_help_tool"] = True
-                    
+
                     # Check for status tool
                     if re.search(r'(def\s+status|def\s+get_status|"status"|\'status\')\s*\(', content, re.IGNORECASE):
                         info["has_status_tool"] = True
-                    
+
                     # Check for proper multiline docstrings (triple quotes with newlines)
                     # Pattern: function def followed by triple-quoted docstring with Args/Returns
                     docstring_matches = re.findall(
                         r'@(?:app|mcp)\.tool.*?\n\s*(?:async\s+)?def\s+\w+[^:]+:\s*\n\s*"""[\s\S]*?(?:Args:|Returns:|Examples:)[\s\S]*?"""',
-                        content
+                        content,
                     )
                     if docstring_matches:
                         proper_docstrings += len(docstring_matches)
@@ -489,8 +510,7 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     bare_except_count = 0
     lazy_error_count = 0
     has_logging = False
-    has_good_errors = True
-    
+
     for src_dir in src_dirs:
         if src_dir.exists():
             for py_file in src_dir.rglob("*.py"):
@@ -498,38 +518,38 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                 is_test_file = "test" in str(py_file).lower()
                 if "__pycache__" in str(py_file):
                     continue
-                    
+
                 try:
-                    content = py_file.read_text(encoding='utf-8')
+                    content = py_file.read_text(encoding="utf-8")
                     content_lower = content.lower()
-                    
+
                     # Check for logging setup (only need to find it once)
                     if not has_logging:
                         for pattern in LOGGING_PATTERNS:
                             if re.search(pattern, content):
                                 has_logging = True
                                 break
-                    
+
                     # Check for print statements in non-test files
                     if not is_test_file:
                         for pattern in BAD_STDOUT_PATTERNS:
                             matches = re.findall(pattern, content, re.MULTILINE)
                             print_count += len(matches)
-                    
+
                     # Check for bare except clauses
                     for pattern in BAD_ERROR_PATTERNS:
                         matches = re.findall(pattern, content)
                         bare_except_count += len(matches)
-                    
+
                     # Check for lazy/non-informative error messages
                     if not is_test_file:
                         for pattern in LAZY_ERROR_MESSAGES:
                             matches = re.findall(pattern, content_lower, re.IGNORECASE)
                             lazy_error_count += len(matches)
-                        
+
                 except Exception:
                     pass
-    
+
     info["has_proper_logging"] = has_logging
     info["print_statement_count"] = print_count
     info["bare_except_count"] = bare_except_count
@@ -538,20 +558,21 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
 
     info["tool_count"] = tool_count
     # Consider proper docstrings if >50% of tools have them
-    info["has_proper_docstrings"] = (proper_docstrings > 0 and 
-                                      (total_tools_checked == 0 or proper_docstrings / max(tool_count, 1) > 0.5))
+    info["has_proper_docstrings"] = proper_docstrings > 0 and (
+        total_tools_checked == 0 or proper_docstrings / max(tool_count, 1) > 0.5
+    )
 
     # Check CI
     ci_dir = repo_path / ".github" / "workflows"
     if ci_dir.exists():
         info["has_ci"] = True
         info["ci_workflows"] = len(list(ci_dir.glob("*.yml")))
-        
+
         # Check for ruff in CI
         for workflow in ci_dir.glob("*.yml"):
             try:
-                ci_content = workflow.read_text(encoding='utf-8').lower()
-                if 'ruff' in ci_content:
+                ci_content = workflow.read_text(encoding="utf-8").lower()
+                if "ruff" in ci_content:
                     info["has_ruff"] = True
                     break
             except Exception:
@@ -563,12 +584,12 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             if (repo_path / ruff_file).exists():
                 info["has_ruff"] = True
                 break
-        
+
         # Check pyproject.toml for [tool.ruff]
         if not info["has_ruff"] and pyproject_file.exists():
             try:
-                pyproject_content = pyproject_file.read_text(encoding='utf-8')
-                if '[tool.ruff]' in pyproject_content:
+                pyproject_content = pyproject_file.read_text(encoding="utf-8")
+                if "[tool.ruff]" in pyproject_content:
                     info["has_ruff"] = True
             except Exception:
                 pass
@@ -579,21 +600,21 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         test_dir = repo_path / test_dir_name
         if test_dir.exists():
             info["has_tests"] = True
-            
+
             # Check for unit tests
             unit_dir = test_dir / "unit"
             if unit_dir.exists() and any(unit_dir.glob("test_*.py")):
                 info["has_unit_tests"] = True
-            
+
             # Check for integration tests
             integration_dir = test_dir / "integration"
             if integration_dir.exists() and any(integration_dir.glob("test_*.py")):
                 info["has_integration_tests"] = True
-            
+
             # Count test files
             test_file_count += len(list(test_dir.rglob("test_*.py")))
             test_file_count += len(list(test_dir.rglob("*_test.py")))
-    
+
     info["test_file_count"] = test_file_count
 
     # Check for pytest configuration
@@ -601,12 +622,12 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     pyproject_pytest = False
     if pyproject_file.exists():
         try:
-            pyproject_content = pyproject_file.read_text(encoding='utf-8')
-            if '[tool.pytest' in pyproject_content:
+            pyproject_content = pyproject_file.read_text(encoding="utf-8")
+            if "[tool.pytest" in pyproject_content:
                 pyproject_pytest = True
         except Exception:
             pass
-    
+
     if pytest_ini.exists() or pyproject_pytest:
         info["has_pytest_config"] = True
 
@@ -615,12 +636,12 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     pyproject_coverage = False
     if pyproject_file.exists():
         try:
-            pyproject_content = pyproject_file.read_text(encoding='utf-8')
-            if '[tool.coverage' in pyproject_content:
+            pyproject_content = pyproject_file.read_text(encoding="utf-8")
+            if "[tool.coverage" in pyproject_content:
                 pyproject_coverage = True
         except Exception:
             pass
-    
+
     if coveragerc.exists() or pyproject_coverage:
         info["has_coverage_config"] = True
 
@@ -630,24 +651,24 @@ def _analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     return info
 
 
-def _evaluate_runt_status(info: Dict[str, Any], fastmcp_version: str) -> None:
+def _evaluate_runt_status(info: dict[str, Any], fastmcp_version: str) -> None:
     """Evaluate if repo is a runt using rule-based system."""
     # Ensure fastmcp_version is in info for rule evaluation
     if fastmcp_version:
         info["fastmcp_version"] = fastmcp_version
-    
+
     # Evaluate all rules
     rule_result = evaluate_rules(info)
-    
+
     # Update info with rule evaluation results
     info["is_runt"] = rule_result["is_runt"]
     info["runt_reasons"] = rule_result["runt_reasons"]
     info["recommendations"] = rule_result["recommendations"]
-    
+
     # Set status emoji, color, and label based on severity
     violation_count = rule_result["violation_count"]
     critical_count = rule_result["critical_count"]
-    
+
     if info["is_runt"]:
         # RED - Real runts
         info["status_color"] = "red"
@@ -671,19 +692,19 @@ def _evaluate_runt_status(info: Dict[str, Any], fastmcp_version: str) -> None:
             info["status_emoji"] = "✅"
             info["status_color"] = "green"
             info["status_label"] = "SOTA"
-    
+
     # Store rule evaluation details for debugging
     info["_rule_evaluation"] = {
         "violations": rule_result["violations"],
         "critical_violations": rule_result["critical_violations"],
         "score_deduction": rule_result["score_deduction"],
     }
-    
+
     # Add zoo classification
     _classify_zoo_animal(info)
 
 
-def _classify_zoo_animal(info: Dict[str, Any]) -> None:
+def _classify_zoo_animal(info: dict[str, Any]) -> None:
     """Classify repo into MCP Zoo animal size category."""
     name_lower = info.get("name", "").lower()
     tool_count = info.get("tool_count", 0)
@@ -715,12 +736,12 @@ def _classify_zoo_animal(info: Dict[str, Any]) -> None:
         info["zoo_animal"] = "🐿️"
 
 
-def _calculate_sota_score(info: Dict[str, Any]) -> int:
+def _calculate_sota_score(info: dict[str, Any]) -> int:
     """Calculate SOTA compliance score (0-100) using rule-based system."""
     return calculate_sota_score(info, base_score=100)
 
 
-def _determine_priority(info: Dict[str, Any]) -> str:
+def _determine_priority(info: dict[str, Any]) -> str:
     """Determine upgrade priority based on runt reasons."""
     reasons = len(info.get("runt_reasons", []))
     if reasons == 0:
@@ -731,4 +752,3 @@ def _determine_priority(info: Dict[str, Any]) -> str:
         return "medium"
     else:
         return "high"
-

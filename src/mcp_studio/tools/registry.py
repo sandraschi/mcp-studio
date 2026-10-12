@@ -8,15 +8,14 @@ discovers, validates, and registers MCP tools with FastMCP instances.
 import asyncio
 import importlib
 import inspect
-import logging
 import time
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
+from collections.abc import Callable
+from typing import Any
 
 import structlog
 from fastmcp import FastMCP
 
-from .decorators import ToolMetadata, get_tool_metadata, list_tools_in_module
+from .decorators import ToolMetadata, get_tool_metadata
 
 logger = structlog.get_logger(__name__)
 
@@ -24,13 +23,13 @@ logger = structlog.get_logger(__name__)
 class ToolRegistry:
     """Central registry for managing MCP tools with FastMCP integration."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the tool registry."""
-        self.tools: Dict[str, Callable] = {}
-        self.metadata: Dict[str, ToolMetadata] = {}
-        self.categories: Dict[str, List[str]] = {}
-        self.modules: Set[str] = set()
-        self.fastmcp_instances: List[FastMCP] = []
+        self.tools: dict[str, Callable] = {}
+        self.metadata: dict[str, ToolMetadata] = {}
+        self.categories: dict[str, list[str]] = {}
+        self.modules: set[str] = set()
+        self.fastmcp_instances: list[FastMCP] = []
         self._initialized = False
         self._lock = asyncio.Lock()
 
@@ -54,15 +53,10 @@ class ToolRegistry:
                 total_tools=len(self.tools),
                 categories=len(self.categories),
                 modules=len(self.modules),
-                init_time_ms=round(init_time * 1000, 2)
+                init_time_ms=round(init_time * 1000, 2),
             )
 
-    async def register_tool(
-        self,
-        func: Callable,
-        name: Optional[str] = None,
-        force: bool = False
-    ) -> bool:
+    async def register_tool(self, func: Callable, name: str | None = None, force: bool = False) -> bool:
         """Register a single tool function.
 
         Args:
@@ -80,7 +74,7 @@ class ToolRegistry:
             logger.warning(
                 "Tool already registered, skipping",
                 tool_name=tool_name,
-                existing_module=getattr(self.tools[tool_name], '__module__', 'unknown')
+                existing_module=getattr(self.tools[tool_name], "__module__", "unknown"),
             )
             return False
 
@@ -90,7 +84,7 @@ class ToolRegistry:
             logger.warning(
                 "Function is not a valid MCP tool (missing metadata)",
                 function_name=func.__name__,
-                module=func.__module__
+                module=func.__module__,
             )
             return False
 
@@ -110,7 +104,7 @@ class ToolRegistry:
             self.categories[category].append(tool_name)
 
         # Track module
-        if hasattr(func, '__module__'):
+        if hasattr(func, "__module__"):
             self.modules.add(func.__module__)
 
         logger.info(
@@ -119,7 +113,7 @@ class ToolRegistry:
             category=category,
             module=func.__module__,
             deprecated=metadata.deprecated,
-            experimental=metadata.experimental
+            experimental=metadata.experimental,
         )
 
         return True
@@ -147,10 +141,7 @@ class ToolRegistry:
                 attr = getattr(module, attr_name)
 
                 # Check if this is a tool function
-                if (callable(attr) and
-                    hasattr(attr, '_mcp_is_tool') and
-                    hasattr(attr, '_mcp_tool_metadata')):
-
+                if callable(attr) and hasattr(attr, "_mcp_is_tool") and hasattr(attr, "_mcp_tool_metadata"):
                     if await self.register_tool(attr, force=force):
                         registered_count += 1
 
@@ -160,28 +151,21 @@ class ToolRegistry:
                 "Module registration completed",
                 module_name=module_name,
                 tools_registered=registered_count,
-                registration_time_ms=round(registration_time * 1000, 2)
+                registration_time_ms=round(registration_time * 1000, 2),
             )
 
             return registered_count
 
         except ImportError as e:
-            logger.error(
-                "Failed to import module for tool registration",
-                module_name=module_name,
-                error=str(e)
-            )
+            logger.error("Failed to import module for tool registration", module_name=module_name, error=str(e))
             return 0
         except Exception as e:
-            logger.error(
-                "Error during module registration",
-                module_name=module_name,
-                error=str(e),
-                exc_info=True
-            )
+            logger.error("Error during module registration", module_name=module_name, error=str(e), exc_info=True)
             return 0
 
-    async def register_with_fastmcp(self, mcp: FastMCP, tool_filter: Optional[Callable[[str, ToolMetadata], bool]] = None) -> int:
+    async def register_with_fastmcp(
+        self, mcp: FastMCP, tool_filter: Callable[[str, ToolMetadata], bool] | None = None
+    ) -> int:
         """Register all tools with a FastMCP instance.
 
         Args:
@@ -208,10 +192,7 @@ class ToolRegistry:
 
             try:
                 # Register with FastMCP using the tool decorator
-                mcp.tool(
-                    name=metadata.name,
-                    description=metadata.description
-                )(func)
+                mcp.tool(name=metadata.name, description=metadata.description)(func)
 
                 registered_count += 1
 
@@ -219,16 +200,11 @@ class ToolRegistry:
                     "Tool registered with FastMCP",
                     tool_name=tool_name,
                     category=metadata.category.value,
-                    deprecated=metadata.deprecated
+                    deprecated=metadata.deprecated,
                 )
 
             except Exception as e:
-                logger.error(
-                    "Failed to register tool with FastMCP",
-                    tool_name=tool_name,
-                    error=str(e),
-                    exc_info=True
-                )
+                logger.error("Failed to register tool with FastMCP", tool_name=tool_name, error=str(e), exc_info=True)
 
         # Track this FastMCP instance
         if mcp not in self.fastmcp_instances:
@@ -240,12 +216,12 @@ class ToolRegistry:
             "FastMCP registration completed",
             tools_registered=registered_count,
             total_tools=len(self.tools),
-            registration_time_ms=round(registration_time * 1000, 2)
+            registration_time_ms=round(registration_time * 1000, 2),
         )
 
         return registered_count
 
-    def get_tool(self, name: str) -> Optional[Callable]:
+    def get_tool(self, name: str) -> Callable | None:
         """Get a tool function by name.
 
         Args:
@@ -256,7 +232,7 @@ class ToolRegistry:
         """
         return self.tools.get(name)
 
-    def get_metadata(self, name: str) -> Optional[ToolMetadata]:
+    def get_metadata(self, name: str) -> ToolMetadata | None:
         """Get metadata for a tool.
 
         Args:
@@ -268,11 +244,8 @@ class ToolRegistry:
         return self.metadata.get(name)
 
     def list_tools(
-        self,
-        category: Optional[str] = None,
-        include_deprecated: bool = True,
-        include_experimental: bool = True
-    ) -> List[str]:
+        self, category: str | None = None, include_deprecated: bool = True, include_experimental: bool = True
+    ) -> list[str]:
         """List all registered tools.
 
         Args:
@@ -302,7 +275,7 @@ class ToolRegistry:
 
         return sorted(tools)
 
-    def get_tools_by_category(self) -> Dict[str, List[str]]:
+    def get_tools_by_category(self) -> dict[str, list[str]]:
         """Get tools organized by category.
 
         Returns:
@@ -310,13 +283,13 @@ class ToolRegistry:
         """
         return dict(self.categories)
 
-    def get_registry_stats(self) -> Dict[str, Any]:
+    def get_registry_stats(self) -> dict[str, Any]:
         """Get statistics about the tool registry.
 
         Returns:
             Dictionary containing registry statistics
         """
-        stats = {
+        stats: dict[str, Any] = {
             "total_tools": len(self.tools),
             "total_categories": len(self.categories),
             "total_modules": len(self.modules),
@@ -325,7 +298,7 @@ class ToolRegistry:
             "categories": {},
             "deprecated_tools": 0,
             "experimental_tools": 0,
-            "tools_by_author": {}
+            "tools_by_author": {},
         }
 
         # Category breakdown
@@ -347,7 +320,7 @@ class ToolRegistry:
 
         return stats
 
-    async def validate_all_tools(self) -> Dict[str, Any]:
+    async def validate_all_tools(self) -> dict[str, Any]:
         """Validate all registered tools.
 
         Returns:
@@ -356,12 +329,12 @@ class ToolRegistry:
         logger.info("Validating all registered tools", total_tools=len(self.tools))
         start_time = time.time()
 
-        validation_results = {
+        validation_results: dict[str, Any] = {
             "total_tools": len(self.tools),
             "valid_tools": 0,
             "invalid_tools": 0,
             "errors": {},
-            "warnings": {}
+            "warnings": {},
         }
 
         for tool_name, func in self.tools.items():
@@ -385,7 +358,7 @@ class ToolRegistry:
             "Tool validation completed",
             valid_tools=validation_results["valid_tools"],
             invalid_tools=validation_results["invalid_tools"],
-            validation_time_ms=validation_results["validation_time_ms"]
+            validation_time_ms=validation_results["validation_time_ms"],
         )
 
         return validation_results
@@ -396,12 +369,12 @@ class ToolRegistry:
 
         # List of modules to scan for tools
         tool_modules = [
-            'mcp_studio.tools.server',
-            'mcp_studio.tools.discovery',
-            'mcp_studio.tools.utility',
-            'mcp_studio.tools.development',
-            'mcp_studio.tools.data',
-            'mcp_studio.tools.files'
+            "mcp_studio.tools.server",
+            "mcp_studio.tools.discovery",
+            "mcp_studio.tools.utility",
+            "mcp_studio.tools.development",
+            "mcp_studio.tools.data",
+            "mcp_studio.tools.files",
         ]
 
         total_registered = 0
@@ -411,16 +384,10 @@ class ToolRegistry:
                 count = await self.register_module(module_name)
                 total_registered += count
             except Exception as e:
-                logger.warning(
-                    "Failed to auto-discover tools in module",
-                    module_name=module_name,
-                    error=str(e)
-                )
+                logger.warning("Failed to auto-discover tools in module", module_name=module_name, error=str(e))
 
         logger.info(
-            "Auto-discovery completed",
-            total_tools_registered=total_registered,
-            modules_scanned=len(tool_modules)
+            "Auto-discovery completed", total_tools_registered=total_registered, modules_scanned=len(tool_modules)
         )
 
     async def _validate_tool(self, func: Callable, metadata: ToolMetadata) -> bool:
@@ -443,9 +410,7 @@ class ToolRegistry:
             sig = inspect.signature(func)
             if len(sig.parameters) > 20:  # Reasonable limit
                 logger.warning(
-                    "Tool has many parameters, may be complex",
-                    tool_name=metadata.name,
-                    param_count=len(sig.parameters)
+                    "Tool has many parameters, may be complex", tool_name=metadata.name, param_count=len(sig.parameters)
                 )
 
             # Check for required metadata fields
@@ -457,11 +422,8 @@ class ToolRegistry:
                 logger.warning("Tool has empty description", tool_name=metadata.name)
 
             # Validate tool name format
-            if not metadata.name.replace('_', '').replace('-', '').isalnum():
-                logger.error(
-                    "Tool name contains invalid characters",
-                    tool_name=metadata.name
-                )
+            if not metadata.name.replace("_", "").replace("-", "").isalnum():
+                logger.error("Tool name contains invalid characters", tool_name=metadata.name)
                 return False
 
             # Check for async compatibility if needed
@@ -471,12 +433,7 @@ class ToolRegistry:
             return True
 
         except Exception as e:
-            logger.error(
-                "Tool validation failed",
-                tool_name=metadata.name,
-                error=str(e),
-                exc_info=True
-            )
+            logger.error("Tool validation failed", tool_name=metadata.name, error=str(e), exc_info=True)
             return False
 
 
@@ -486,12 +443,13 @@ registry = ToolRegistry()
 
 # Convenience functions
 
+
 async def initialize_registry() -> None:
     """Initialize the global tool registry."""
     await registry.initialize()
 
 
-async def register_tool(func: Callable, name: Optional[str] = None, force: bool = False) -> bool:
+async def register_tool(func: Callable, name: str | None = None, force: bool = False) -> bool:
     """Register a tool with the global registry."""
     return await registry.register_tool(func, name, force)
 
@@ -501,39 +459,35 @@ async def register_module(module_name: str, force: bool = False) -> int:
     return await registry.register_module(module_name, force)
 
 
-async def register_with_fastmcp(
-    mcp: FastMCP,
-    tool_filter: Optional[Callable[[str, ToolMetadata], bool]] = None
-) -> int:
+async def register_with_fastmcp(mcp: FastMCP, tool_filter: Callable[[str, ToolMetadata], bool] | None = None) -> int:
     """Register all tools with a FastMCP instance."""
     return await registry.register_with_fastmcp(mcp, tool_filter)
 
 
-def get_tool(name: str) -> Optional[Callable]:
+def get_tool(name: str) -> Callable | None:
     """Get a tool from the global registry."""
     return registry.get_tool(name)
 
 
-def get_metadata(name: str) -> Optional[ToolMetadata]:
+def get_metadata(name: str) -> ToolMetadata | None:
     """Get tool metadata from the global registry."""
     return registry.get_metadata(name)
 
 
 def list_tools(
-    category: Optional[str] = None,
-    include_deprecated: bool = True,
-    include_experimental: bool = True
-) -> List[str]:
+    category: str | None = None, include_deprecated: bool = True, include_experimental: bool = True
+) -> list[str]:
     """List tools from the global registry."""
     return registry.list_tools(category, include_deprecated, include_experimental)
 
 
-def get_registry_stats() -> Dict[str, Any]:
+def get_registry_stats() -> dict[str, Any]:
     """Get statistics about the global registry."""
     return registry.get_registry_stats()
 
 
 # Tool filters for FastMCP registration
+
 
 def production_tools_filter(tool_name: str, metadata: ToolMetadata) -> bool:
     """Filter for production-ready tools only."""
@@ -545,19 +499,20 @@ def safe_tools_filter(tool_name: str, metadata: ToolMetadata) -> bool:
     return not metadata.requires_auth and not metadata.rate_limited
 
 
-def category_filter(allowed_categories: List[str]) -> Callable[[str, ToolMetadata], bool]:
+def category_filter(allowed_categories: list[str]) -> Callable[[str, ToolMetadata], bool]:
     """Create a filter for specific categories."""
+
     def filter_func(tool_name: str, metadata: ToolMetadata) -> bool:
         return metadata.category.value in allowed_categories
+
     return filter_func
 
 
 # Registration utilities for FastMCP integration
 
+
 async def setup_fastmcp_with_all_tools(
-    mcp: FastMCP,
-    include_experimental: bool = False,
-    include_deprecated: bool = False
+    mcp: FastMCP, include_experimental: bool = False, include_deprecated: bool = False
 ) -> int:
     """Set up a FastMCP instance with all available tools.
 
@@ -589,7 +544,7 @@ async def setup_fastmcp_with_all_tools(
         "FastMCP setup completed",
         tools_registered=count,
         include_experimental=include_experimental,
-        include_deprecated=include_deprecated
+        include_deprecated=include_deprecated,
     )
 
     return count
@@ -611,8 +566,7 @@ async def setup_fastmcp_minimal(mcp: FastMCP) -> int:
 
     # Register only safe, production-ready tools
     def minimal_filter(tool_name: str, metadata: ToolMetadata) -> bool:
-        return (production_tools_filter(tool_name, metadata) and
-                safe_tools_filter(tool_name, metadata))
+        return production_tools_filter(tool_name, metadata) and safe_tools_filter(tool_name, metadata)
 
     count = await register_with_fastmcp(mcp, minimal_filter)
 

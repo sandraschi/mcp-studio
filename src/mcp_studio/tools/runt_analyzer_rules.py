@@ -5,20 +5,23 @@ MCP repository SOTA compliance. Rules are defined declaratively and can be
 easily modified or extended without touching evaluation logic.
 """
 
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any
 
 
 class RuleSeverity(Enum):
     """Severity levels for rule violations."""
+
     CRITICAL = "critical"  # Makes repo a runt
-    WARNING = "warning"    # Adds to recommendations
-    INFO = "info"          # Minor suggestion
+    WARNING = "warning"  # Adds to recommendations
+    INFO = "info"  # Minor suggestion
 
 
 class RuleCategory(Enum):
     """Categories for organizing rules."""
+
     VERSION = "version"
     TOOLS = "tools"
     STRUCTURE = "structure"
@@ -31,44 +34,45 @@ class RuleCategory(Enum):
 @dataclass
 class Rule:
     """A single SOTA compliance rule."""
+
     id: str
     name: str
     category: RuleCategory
     severity: RuleSeverity
     description: str
     recommendation: str
-    
+
     # Rule evaluation
-    check: Callable[[Dict[str, Any]], bool]
-    
+    check: Callable[[dict[str, Any]], bool]
+
     # Scoring
     score_deduction: int = 0  # Points to deduct from SOTA score
-    score_condition: Optional[Callable[[Dict[str, Any]], int]] = None  # Dynamic deduction
-    
+    score_condition: Callable[[dict[str, Any]], int] | None = None  # Dynamic deduction
+
     # Condition for when rule applies
-    condition: Optional[Callable[[Dict[str, Any]], bool]] = None  # Only check if condition is True
-    
+    condition: Callable[[dict[str, Any]], bool] | None = None  # Only check if condition is True
+
     # Message formatting
-    message_template: Optional[str] = None  # Custom message format
-    
-    def evaluate(self, info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    message_template: str | None = None  # Custom message format
+
+    def evaluate(self, info: dict[str, Any]) -> dict[str, Any] | None:
         """Evaluate rule against repo info.
-        
+
         Returns:
             Dict with violation details if rule fails, None if passes
         """
         # Check if rule applies
         if self.condition and not self.condition(info):
             return None
-        
+
         # Check if rule is violated
         if not self.check(info):
             return None
-        
+
         # Rule violated - return violation details
         message = self._format_message(info)
         score_deduction = self._calculate_deduction(info)
-        
+
         return {
             "rule_id": self.id,
             "rule_name": self.name,
@@ -78,8 +82,8 @@ class Rule:
             "recommendation": self.recommendation,
             "score_deduction": score_deduction,
         }
-    
-    def _format_message(self, info: Dict[str, Any]) -> str:
+
+    def _format_message(self, info: dict[str, Any]) -> str:
         """Format violation message."""
         if self.message_template:
             try:
@@ -87,8 +91,8 @@ class Rule:
             except KeyError:
                 pass
         return self.description
-    
-    def _calculate_deduction(self, info: Dict[str, Any]) -> int:
+
+    def _calculate_deduction(self, info: dict[str, Any]) -> int:
         """Calculate score deduction for this violation."""
         if self.score_condition:
             return self.score_condition(info)
@@ -99,43 +103,44 @@ class Rule:
 # RULE DEFINITIONS
 # ============================================================================
 
-def _version_check(info: Dict[str, Any]) -> bool:
+
+def _version_check(info: dict[str, Any]) -> bool:
     """Check if FastMCP version is too old."""
     version = info.get("fastmcp_version")
     if not version:
         return True  # No version = violation
-    
+
     try:
-        version_parts = [int(x) for x in version.split('.')[:2]]
-        threshold_parts = [int(x) for x in "2.12.0".split('.')[:2]]
+        version_parts = [int(x) for x in version.split(".")[:2]]
+        threshold_parts = [int(x) for x in "2.12.0".split(".")[:2]]
         return version_parts < threshold_parts
     except Exception:
         return True  # Invalid version = violation
 
 
-def _portmanteau_needed(info: Dict[str, Any]) -> bool:
+def _portmanteau_needed(info: dict[str, Any]) -> bool:
     """Check if portmanteau pattern is needed but missing."""
     tool_count = info.get("tool_count", 0)
     has_portmanteau = info.get("has_portmanteau", False)
     return tool_count > 15 and not has_portmanteau
 
 
-def _tool_count_condition(info: Dict[str, Any]) -> bool:
+def _tool_count_condition(info: dict[str, Any]) -> bool:
     """Rule only applies if repo has tools."""
     return info.get("tool_count", 0) > 0
 
 
-def _large_repo_condition(info: Dict[str, Any]) -> bool:
+def _large_repo_condition(info: dict[str, Any]) -> bool:
     """Rule only applies to larger repos."""
     return info.get("tool_count", 0) >= 10
 
 
-def _many_prints_condition(info: Dict[str, Any]) -> bool:
+def _many_prints_condition(info: dict[str, Any]) -> bool:
     """Check if there are many print statements."""
     return info.get("print_statement_count", 0) > 5
 
 
-def _dynamic_print_deduction(info: Dict[str, Any]) -> int:
+def _dynamic_print_deduction(info: dict[str, Any]) -> int:
     """Calculate deduction based on print count."""
     count = info.get("print_statement_count", 0)
     if count > 5:
@@ -145,7 +150,7 @@ def _dynamic_print_deduction(info: Dict[str, Any]) -> int:
     return 0
 
 
-def _dynamic_lazy_error_deduction(info: Dict[str, Any]) -> int:
+def _dynamic_lazy_error_deduction(info: dict[str, Any]) -> int:
     """Calculate deduction based on lazy error count."""
     count = info.get("lazy_error_msg_count", 0)
     if count >= 5:
@@ -156,7 +161,7 @@ def _dynamic_lazy_error_deduction(info: Dict[str, Any]) -> int:
 
 
 # Rule registry
-SOTA_RULES: List[Rule] = [
+SOTA_RULES: list[Rule] = [
     # Version Rules
     Rule(
         id="fastmcp_version",
@@ -169,7 +174,6 @@ SOTA_RULES: List[Rule] = [
         score_deduction=20,
         message_template="FastMCP {fastmcp_version} < 2.12.0",
     ),
-    
     # Tool Rules
     Rule(
         id="portmanteau_missing",
@@ -182,7 +186,6 @@ SOTA_RULES: List[Rule] = [
         score_deduction=25,
         message_template="{tool_count} tools without portmanteau (threshold: 15)",
     ),
-    
     Rule(
         id="help_tool_missing",
         name="Help Tool",
@@ -194,7 +197,6 @@ SOTA_RULES: List[Rule] = [
         condition=_tool_count_condition,
         score_deduction=10,
     ),
-    
     Rule(
         id="status_tool_missing",
         name="Status Tool",
@@ -206,7 +208,6 @@ SOTA_RULES: List[Rule] = [
         condition=_tool_count_condition,
         score_deduction=10,
     ),
-    
     # CI/CD Rules
     Rule(
         id="ci_missing",
@@ -219,7 +220,6 @@ SOTA_RULES: List[Rule] = [
         condition=_large_repo_condition,
         score_deduction=20,
     ),
-    
     Rule(
         id="ci_too_many",
         name="CI Workflow Count",
@@ -231,7 +231,6 @@ SOTA_RULES: List[Rule] = [
         score_deduction=5,
         message_template="{ci_workflows} CI workflows (recommend: 1)",
     ),
-    
     # Structure Rules
     Rule(
         id="dxt_missing",
@@ -243,7 +242,6 @@ SOTA_RULES: List[Rule] = [
         check=lambda info: not info.get("has_dxt", False),
         score_deduction=10,
     ),
-    
     Rule(
         id="tests_missing",
         name="Test Directory",
@@ -255,7 +253,6 @@ SOTA_RULES: List[Rule] = [
         condition=_large_repo_condition,
         score_deduction=15,
     ),
-    
     Rule(
         id="unit_tests_missing",
         name="Unit Tests",
@@ -267,7 +264,6 @@ SOTA_RULES: List[Rule] = [
         condition=lambda info: info.get("has_tests", False),
         score_deduction=5,
     ),
-    
     Rule(
         id="integration_tests_missing",
         name="Integration Tests",
@@ -279,7 +275,6 @@ SOTA_RULES: List[Rule] = [
         condition=lambda info: info.get("has_tests", False),
         score_deduction=5,
     ),
-    
     Rule(
         id="test_count_low",
         name="Test Coverage",
@@ -292,7 +287,6 @@ SOTA_RULES: List[Rule] = [
         score_deduction=0,  # Info only
         message_template="Only {test_file_count} test files (recommend: 5+)",
     ),
-    
     # Quality Rules
     Rule(
         id="ruff_missing",
@@ -304,7 +298,6 @@ SOTA_RULES: List[Rule] = [
         check=lambda info: not info.get("has_ruff", False),
         score_deduction=10,
     ),
-    
     Rule(
         id="logging_missing",
         name="Proper Logging",
@@ -315,7 +308,6 @@ SOTA_RULES: List[Rule] = [
         check=lambda info: not info.get("has_proper_logging", False),
         score_deduction=10,
     ),
-    
     Rule(
         id="print_statements",
         name="Print Statements",
@@ -327,7 +319,6 @@ SOTA_RULES: List[Rule] = [
         score_condition=_dynamic_print_deduction,
         message_template="{print_statement_count} print() calls in non-test code",
     ),
-    
     Rule(
         id="print_statements_many",
         name="Excessive Print Statements",
@@ -339,7 +330,6 @@ SOTA_RULES: List[Rule] = [
         score_deduction=10,
         message_template="{print_statement_count} print() calls (too many)",
     ),
-    
     Rule(
         id="bare_except",
         name="Bare Except Clauses",
@@ -351,7 +341,6 @@ SOTA_RULES: List[Rule] = [
         score_deduction=10,
         message_template="{bare_except_count} bare except clauses",
     ),
-    
     Rule(
         id="lazy_errors",
         name="Non-Informative Errors",
@@ -363,7 +352,6 @@ SOTA_RULES: List[Rule] = [
         score_condition=_dynamic_lazy_error_deduction,
         message_template="{lazy_error_msg_count} non-informative error messages",
     ),
-    
     # Documentation Rules
     Rule(
         id="docstrings_missing",
@@ -376,7 +364,6 @@ SOTA_RULES: List[Rule] = [
         condition=_tool_count_condition,
         score_deduction=10,
     ),
-    
     Rule(
         id="pytest_config_missing",
         name="Pytest Configuration",
@@ -387,7 +374,6 @@ SOTA_RULES: List[Rule] = [
         check=lambda info: not info.get("has_pytest_config", False),
         score_deduction=5,
     ),
-    
     Rule(
         id="coverage_config_missing",
         name="Coverage Configuration",
@@ -401,32 +387,32 @@ SOTA_RULES: List[Rule] = [
 ]
 
 
-def evaluate_rules(info: Dict[str, Any]) -> Dict[str, Any]:
+def evaluate_rules(info: dict[str, Any]) -> dict[str, Any]:
     """Evaluate all rules against repo info.
-    
+
     Returns:
         Dict with violations, score deduction, and runt status
     """
-    violations: List[Dict[str, Any]] = []
-    critical_violations: List[Dict[str, Any]] = []
+    violations: list[dict[str, Any]] = []
+    critical_violations: list[dict[str, Any]] = []
     total_deduction = 0
-    
+
     for rule in SOTA_RULES:
         violation = rule.evaluate(info)
         if violation:
             violations.append(violation)
             total_deduction += violation["score_deduction"]
-            
+
             if rule.severity == RuleSeverity.CRITICAL:
                 critical_violations.append(violation)
-    
+
     # Determine runt status
     is_runt = len(critical_violations) > 0
-    
+
     # Build runt reasons and recommendations
     runt_reasons = [v["message"] for v in violations]
     recommendations = [v["recommendation"] for v in violations]
-    
+
     # Remove duplicates while preserving order
     seen_reasons = set()
     unique_reasons = []
@@ -434,14 +420,14 @@ def evaluate_rules(info: Dict[str, Any]) -> Dict[str, Any]:
         if reason not in seen_reasons:
             seen_reasons.add(reason)
             unique_reasons.append(reason)
-    
+
     seen_recs = set()
     unique_recommendations = []
     for rec in recommendations:
         if rec not in seen_recs:
             seen_recs.add(rec)
             unique_recommendations.append(rec)
-    
+
     return {
         "violations": violations,
         "critical_violations": critical_violations,
@@ -454,13 +440,13 @@ def evaluate_rules(info: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def calculate_sota_score(info: Dict[str, Any], base_score: int = 100) -> int:
+def calculate_sota_score(info: dict[str, Any], base_score: int = 100) -> int:
     """Calculate SOTA compliance score.
-    
+
     Args:
         info: Repository information
         base_score: Starting score (default: 100)
-    
+
     Returns:
         Score from 0-100
     """
@@ -469,14 +455,14 @@ def calculate_sota_score(info: Dict[str, Any], base_score: int = 100) -> int:
     return max(0, min(100, score))
 
 
-def get_rules_by_category(category: Optional[RuleCategory] = None) -> List[Rule]:
+def get_rules_by_category(category: RuleCategory | None = None) -> list[Rule]:
     """Get rules, optionally filtered by category."""
     if category:
         return [r for r in SOTA_RULES if r.category == category]
     return SOTA_RULES.copy()
 
 
-def get_rule_by_id(rule_id: str) -> Optional[Rule]:
+def get_rule_by_id(rule_id: str) -> Rule | None:
     """Get a specific rule by ID."""
     for rule in SOTA_RULES:
         if rule.id == rule_id:
