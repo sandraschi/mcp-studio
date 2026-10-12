@@ -3,6 +3,7 @@
 Creates new SOTA-compliant MCP servers with all required components.
 """
 
+import asyncio
 import shutil
 import sys
 from pathlib import Path
@@ -83,7 +84,7 @@ async def _generate_frontend(
 
         # Run the script (reduced logging to debug to reduce spam)
         logger.debug(f"Calling fullstack builder: {' '.join(cmd)}")
-        result = subprocess.run(
+        result = await asyncio.to_thread(subprocess.run,
             cmd,
             cwd=str(output_path),
             capture_output=True,
@@ -1030,13 +1031,13 @@ SOFTWARE.
             try:
                 import subprocess
 
-                subprocess.run(
+                await asyncio.to_thread(subprocess.run,
                     ["git", "init"], cwd=server_dir, check=True, capture_output=True
                 )
-                subprocess.run(
+                await asyncio.to_thread(subprocess.run,
                     ["git", "add", "."], cwd=server_dir, check=True, capture_output=True
                 )
-                subprocess.run(
+                await asyncio.to_thread(subprocess.run,
                     [
                         "git",
                         "commit",
@@ -1059,12 +1060,12 @@ SOFTWARE.
                 import subprocess
 
                 logger.debug(f"Building MCP bundle for {server_name}...")
-                subprocess.run(
+                await asyncio.to_thread(subprocess.run,
                     [sys.executable, "-m", "pip", "install", "mcpb"],
                     check=True,
                     capture_output=True,
                 )
-                subprocess.run(
+                await asyncio.to_thread(subprocess.run,
                     ["mcpb", "build"], cwd=server_dir, check=True, capture_output=True
                 )
                 mcpb_built = True
