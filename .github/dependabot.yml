@@ -1,50 +1,61 @@
+# Managed by mcp-central-docs/scripts/set_fleet_dependabot.py (GITHUB_TRIAGE_STANDARD.md):
+# weekly, grouped, low noise. Edit the generator, not this file.
 version: 2
 updates:
+
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
       day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "sandraschi"
-    commit-message:
-      prefix: "deps"
+      time: "05:00"
+      timezone: "Europe/Vienna"
+    open-pull-requests-limit: 3
     groups:
-      pip-all:
-        patterns:
-          - "*"
+      pip-updates:
+        applies-to: version-updates
+        patterns: ["*"]
+      pip-security:
+        applies-to: security-updates
+        patterns: ["*"]
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore(deps)"
 
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
       day: "monday"
-      time: "09:00"
-    open-pull-requests-limit: 5
-    reviewers:
-      - "sandraschi"
-    commit-message:
-      prefix: "deps(frontend)"
+      time: "05:00"
+      timezone: "Europe/Vienna"
+    open-pull-requests-limit: 3
     groups:
-      npm-all:
-        patterns:
-          - "*"
+      npm-frontend-updates:
+        applies-to: version-updates
+        patterns: ["*"]
+      npm-frontend-security:
+        applies-to: security-updates
+        patterns: ["*"]
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore(deps)"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "monthly"
+      interval: "weekly"
       day: "monday"
-      time: "09:00"
+      time: "05:00"
+      timezone: "Europe/Vienna"
     open-pull-requests-limit: 3
-    reviewers:
-      - "sandraschi"
-    commit-message:
-      prefix: "ci"
     groups:
-      actions-all:
-        patterns:
-          - "*"
-
+      github-actions-updates:
+        applies-to: version-updates
+        patterns: ["*"]
+      github-actions-security:
+        applies-to: security-updates
+        patterns: ["*"]
+    labels: ["dependencies"]
+    commit-message:
+      prefix: "chore(ci)"
