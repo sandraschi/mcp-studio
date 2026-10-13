@@ -1,0 +1,20 @@
+{
+    "$schema":  "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name":  "io.github.sandraschi/mcp-studio",
+    "description":  "MCP Studio - Management tool for MCP servers (beta): Web dashboard (FastAPI) + MCP server (FastMC...",
+    "version":  "0.2.1-beta",
+    "repository":  {
+                       "url":  "https://github.com/sandraschi/mcp-studio",
+                       "source":  "github"
+                   },
+    "packages":  [
+                     {
+                         "registryType":  "mcpb",
+                         "identifier":  "https://github.com/sandraschi/mcp-studio/releases/download/v0.2.1-beta/mcp-studio-v0.2.1-beta.mcpb",
+                         "fileSha256":  "48b6f5e2c5493d5595e4a5df8109c931393e9790fb2bb6b781441325b22e2a07",
+                         "transport":  {
+                                           "type":  "stdio"
+                                       }
+                     }
+                 ]
+}

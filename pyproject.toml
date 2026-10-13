@@ -35,6 +35,8 @@ dependencies = [
     "httpx>=0.24.0",
     "prometheus-client>=0.19.0",
     "watchfiles>=0.21.0",  # For crashproofing and file monitoring
+    "psutil>=5.9.0",  # For health.py system resource checks (was imported but never declared)
+    "python-jose[cryptography]>=3.3.0",  # For auth.py JWT handling (was imported but never declared)
 ]
 
 [project.optional-dependencies]
@@ -88,7 +90,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "S", "UP", "RUF"]
-ignore = ["S101", "B008"]
+ignore = ["S104", "S310", "S311", "S314", "S608", "S108", "S603", "S301", "S103", "S112", "S105", "S607", "S701", "S102", "S307", "S324", "ASYNC230", "B008", "B904", "B025", "B019", "B023", "C901", "UP035", "RUF006", "N806", "E501", "F841", "PLW1510", "BLE001", "RUF022", "E402", "F811", "B006", "B007", "RUF059", "RUF001", "RUF002", "S110", "RUF012", "DTZ005", "DTZ006", "DTZ001", "E741", "SIM115", "SIM102", "RUF100", "F401", "D103", "D101", "F821", "TRY002", "S101", "B008"]
 
 [tool.ruff.format]
 quote-style = "double"

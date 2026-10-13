@@ -8,7 +8,7 @@
 </p>
 
 
-> 📖 **[Installation Guide](INSTALL.md)** — quick start, manual setup, and troubleshooting
+> 📖 **[Installation Guide](INSTALL.md)** -- quick start, manual setup, and troubleshooting
 
 **By FlowEngineer sandraschi**
 
@@ -112,7 +112,7 @@ Scan `D:/Dev/repos` and instantly identify which MCP repos need work:
 -  **Green** = SOTA compliant (all checks pass)
 
 **Checks performed:**
-- FastMCP version (2.12+ required)
+- FastMCP version (3.4+ required)
 - Portmanteau refactor (if >15 tools)
 - CI/CD workflow presence
 - Ruff linting configuration
