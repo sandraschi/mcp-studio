@@ -167,10 +167,7 @@ import structlog
 from fastmcp import FastMCP
 
 # Initialize FastMCP server
-app = FastMCP(
-    "{pascal_name}",
-    dependencies=["fastmcp[all]>=2.13.1"],
-)
+app = FastMCP("{pascal_name}")
 
 logger = structlog.get_logger(__name__)
 
