@@ -69,3 +69,6 @@ _dashboard/
 # on every pack. Never hand-edit, never commit.
 mcpb/src/
 
+
+frontend/node_modules/
+junk/
