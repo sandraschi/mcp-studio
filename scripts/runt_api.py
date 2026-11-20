@@ -1166,4 +1166,4 @@ if __name__ == "__main__":
     print("🔍 Detail: http://localhost:8888/api/repo/{name}")
     print("📋 Logs: http://localhost:8888/api/logs")
     print("📡 Progress: http://localhost:8888/api/progress")
-    uvicorn.run(app, host="0.0.0.0", port=8888)
+    uvicorn.run(app, host="127.0.0.1", port=8888)

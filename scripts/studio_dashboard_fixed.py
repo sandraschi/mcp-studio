@@ -167,7 +167,7 @@ def main():
         # Start the server
         log(f"Starting MCP Studio on port {port}...")
         uvicorn.run(
-            "studio_dashboard_fixed:app", host="0.0.0.0", port=port, reload=True, log_level="info"
+            "studio_dashboard_fixed:app", host="127.0.0.1", port=port, reload=True, log_level="info"
         )
 
     except Exception as e:

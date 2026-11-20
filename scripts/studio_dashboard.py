@@ -6396,7 +6396,7 @@ if __name__ == "__main__":
             logger.info(f"Server will be accessible at: http://localhost:{actual_port}")
             logger.info(f"API docs will be at: http://localhost:{actual_port}/docs")
 
-            uvicorn.run(app, host="0.0.0.0", port=actual_port, log_level="warning")
+            uvicorn.run(app, host="127.0.0.1", port=actual_port, log_level="warning")
 
         except OSError as e:
             error_msg = f"OSError starting server: {e}"
