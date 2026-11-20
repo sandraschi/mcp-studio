@@ -19,11 +19,11 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .app.core.config import settings
-from .app.core.logging_utils import get_logger, configure_uvicorn_logging
 from .app.api import router as api_router
 from .app.api.endpoints import mcp_servers as mcp_servers_router
 from .app.api.endpoints import repos as repos_router
+from .app.core.config import settings
+from .app.core.logging_utils import configure_uvicorn_logging, get_logger
 from .app.services.mcp_discovery_service import discovery_service, start_discovery, stop_discovery
 
 # Configure logging
@@ -91,7 +91,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     fastapi.middleware.cors.CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS or ["*"],
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -191,6 +191,7 @@ app.include_router(api_router, prefix="/api")
 try:
     logger.info("Attempting to include clients router...")
     from .app.api.clients import router as clients_router
+
     logger.info(f"Clients router has {len(clients_router.routes)} routes before inclusion")
     app.include_router(clients_router, prefix="/api/v1/clients", tags=["clients"])
     logger.info(f"Clients router included with {len(clients_router.routes)} routes at prefix /api/v1/clients")
@@ -206,6 +207,7 @@ static_dir = Path(__file__).parent / "static"
 static_dir.mkdir(exist_ok=True, parents=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+
 @app.get("/static/css/dashboard.css")
 async def serve_dashboard_css():
     """Serve dashboard CSS."""
@@ -213,13 +215,17 @@ async def serve_dashboard_css():
     print(f"CSS route called, file_path: {file_path}, exists: {file_path.exists()}")
     if file_path.exists():
         from fastapi.responses import FileResponse
+
         return FileResponse(file_path)
     from fastapi import HTTPException
+
     raise HTTPException(status_code=404, detail="CSS file not found")
+
 
 @app.get("/test")
 async def test_route():
     return {"message": "test route works"}
+
 
 logger.info(f"Static file routes added for directory: {static_dir}")
 

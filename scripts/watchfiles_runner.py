@@ -25,7 +25,6 @@ Created: 2025-12-17
 """
 
 import asyncio
-import aiohttp
 import json
 import logging
 import os
@@ -34,32 +33,32 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
+
+import aiohttp
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('logs/mcp-studio-watchfiles.log', mode='a')
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("logs/mcp-studio-watchfiles.log", mode="a")],
 )
-logger = logging.getLogger('mcp-studio-watchfiles')
+logger = logging.getLogger("mcp-studio-watchfiles")
+
 
 class CrashproofRunner:
     """Crashproof runner for MCP Studio using watchfiles monitoring."""
 
     def __init__(
         self,
-        command: List[str],
+        command: list[str],
         cwd: str = None,
         max_restarts: int = 10,
         restart_delay: float = 1.0,
         backoff_multiplier: float = 1.5,
         health_check_url: str = None,
         health_check_interval: int = 30,
-        notify_on_crash: bool = True
+        notify_on_crash: bool = True,
     ):
         self.command = command
         self.cwd = cwd or os.getcwd()
@@ -82,11 +81,9 @@ class CrashproofRunner:
         try:
             # Set environment variables for MCP Studio
             env = os.environ.copy()
-            env.update({
-                'PYTHONPATH': str(Path(self.cwd) / 'src'),
-                'MCP_STUDIO_DEBUG': 'true',
-                'MCP_STUDIO_LOG_LEVEL': 'INFO'
-            })
+            env.update(
+                {"PYTHONPATH": str(Path(self.cwd) / "src"), "MCP_STUDIO_DEBUG": "true", "MCP_STUDIO_LOG_LEVEL": "INFO"}
+            )
 
             self.process = await asyncio.create_subprocess_exec(
                 *self.command,
@@ -94,7 +91,7 @@ class CrashproofRunner:
                 env=env,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                preexec_fn=None if os.name == 'nt' else os.setsid
+                preexec_fn=None if os.name == "nt" else os.setsid,
             )
 
             logger.info(f"✓ Started MCP Studio process: {' '.join(self.command)} (PID: {self.process.pid})")
@@ -115,7 +112,7 @@ class CrashproofRunner:
                 async with session.get(self.health_check_url) as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        return data.get('status') == 'healthy'
+                        return data.get("status") == "healthy"
                     return False
         except Exception as e:
             logger.debug(f"Health check failed: {e}")
@@ -143,11 +140,11 @@ class CrashproofRunner:
 
                         # Log crash details
                         crash_info = {
-                            'timestamp': crash_time.isoformat(),
-                            'exit_code': self.process.returncode,
-                            'uptime_before_crash': self.uptime_total,
-                            'restart_attempt': self.restart_count + 1,
-                            'pid': self.process.pid
+                            "timestamp": crash_time.isoformat(),
+                            "exit_code": self.process.returncode,
+                            "uptime_before_crash": self.uptime_total,
+                            "restart_attempt": self.restart_count + 1,
+                            "pid": self.process.pid,
                         }
                         self.crash_log.append(crash_info)
 
@@ -156,7 +153,7 @@ class CrashproofRunner:
                             try:
                                 stderr_data = await self.process.stderr.read()
                                 if stderr_data:
-                                    crash_info['stderr'] = stderr_data.decode('utf-8', errors='ignore').strip()
+                                    crash_info["stderr"] = stderr_data.decode("utf-8", errors="ignore").strip()
                             except:
                                 pass
 
@@ -196,7 +193,7 @@ class CrashproofRunner:
         # Clean up old process
         if self.process:
             try:
-                if os.name == 'nt':
+                if os.name == "nt":
                     self.process.terminate()
                 else:
                     os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
@@ -218,7 +215,7 @@ class CrashproofRunner:
         if not await self.start_process():
             logger.error("Failed to restart MCP Studio - will retry on next monitoring cycle")
 
-    async def notify_crash(self, crash_info: Dict[str, Any]):
+    async def notify_crash(self, crash_info: dict[str, Any]):
         """Send crash notification (extend this for email/SMS/etc)."""
         try:
             # For now, just log the crash details
@@ -228,7 +225,7 @@ class CrashproofRunner:
             logger.error(f"   PID: {crash_info['pid']}")
             logger.error(f"   Timestamp: {crash_info['timestamp']}")
 
-            if 'stderr' in crash_info and crash_info['stderr']:
+            if crash_info.get("stderr"):
                 logger.error(f"   Error Output: {crash_info['stderr'][:200]}...")
 
             # TODO: Add email/SMS notifications here
@@ -241,25 +238,25 @@ class CrashproofRunner:
     async def save_crash_report(self):
         """Save detailed crash report to file."""
         try:
-            report_path = Path('logs') / f"mcp-studio-crash-report-{int(time.time())}.json"
+            report_path = Path("logs") / f"mcp-studio-crash-report-{int(time.time())}.json"
 
             report = {
-                'generated_at': datetime.now().isoformat(),
-                'total_crashes': len(self.crash_log),
-                'total_restarts': self.restart_count,
-                'total_uptime': self.uptime_total,
-                'max_restarts_allowed': self.max_restarts,
-                'crash_events': self.crash_log[-10:],  # Last 10 crashes
-                'system_info': {
-                    'platform': sys.platform,
-                    'python_version': sys.version,
-                    'cwd': self.cwd,
-                    'command': self.command
-                }
+                "generated_at": datetime.now().isoformat(),
+                "total_crashes": len(self.crash_log),
+                "total_restarts": self.restart_count,
+                "total_uptime": self.uptime_total,
+                "max_restarts_allowed": self.max_restarts,
+                "crash_events": self.crash_log[-10:],  # Last 10 crashes
+                "system_info": {
+                    "platform": sys.platform,
+                    "python_version": sys.version,
+                    "cwd": self.cwd,
+                    "command": self.command,
+                },
             }
 
             report_path.parent.mkdir(exist_ok=True)
-            with open(report_path, 'w') as f:
+            with open(report_path, "w") as f:
                 json.dump(report, f, indent=2, default=str)
 
             logger.info(f"💾 Crash report saved to: {report_path}")
@@ -267,17 +264,17 @@ class CrashproofRunner:
         except Exception as e:
             logger.error(f"Error saving crash report: {e}")
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get current runner statistics."""
         return {
-            'process_running': self.process is not None and self.process.returncode is None,
-            'process_pid': self.process.pid if self.process else None,
-            'restart_count': self.restart_count,
-            'max_restarts': self.max_restarts,
-            'total_uptime': self.uptime_total,
-            'crash_count': len(self.crash_log),
-            'start_time': self.start_time.isoformat(),
-            'command': self.command
+            "process_running": self.process is not None and self.process.returncode is None,
+            "process_pid": self.process.pid if self.process else None,
+            "restart_count": self.restart_count,
+            "max_restarts": self.max_restarts,
+            "total_uptime": self.uptime_total,
+            "crash_count": len(self.crash_log),
+            "start_time": self.start_time.isoformat(),
+            "command": self.command,
         }
 
     async def run(self):
@@ -293,7 +290,7 @@ class CrashproofRunner:
             logger.info(f"🛑 Received signal {signum} - shutting down...")
             if self.process:
                 try:
-                    if os.name == 'nt':
+                    if os.name == "nt":
                         self.process.terminate()
                     else:
                         os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
@@ -327,19 +324,19 @@ class CrashproofRunner:
             logger.info("👋 MCP Studio Crashproof Runner stopped")
 
 
-def load_config() -> Dict[str, Any]:
+def load_config() -> dict[str, Any]:
     """Load configuration from environment variables."""
     return {
-        'host': os.getenv('MCP_STUDIO_HOST', '0.0.0.0'),
-        'port': int(os.getenv('MCP_STUDIO_PORT', '7787')),
-        'debug': os.getenv('MCP_STUDIO_DEBUG', 'true').lower() == 'true',
-        'workers': int(os.getenv('MCP_STUDIO_WORKERS', '1')),
-        'log_level': os.getenv('MCP_STUDIO_LOG_LEVEL', 'INFO'),
-        'max_restarts': int(os.getenv('WATCHFILES_MAX_RESTARTS', '10')),
-        'restart_delay': float(os.getenv('WATCHFILES_RESTART_DELAY', '1.0')),
-        'backoff_multiplier': float(os.getenv('WATCHFILES_BACKOFF_MULTIPLIER', '1.5')),
-        'health_check_interval': int(os.getenv('WATCHFILES_HEALTH_CHECK_INTERVAL', '30')),
-        'notify_on_crash': os.getenv('WATCHFILES_NOTIFY_ON_CRASH', 'true').lower() == 'true'
+        "host": os.getenv("MCP_STUDIO_HOST", "127.0.0.1"),
+        "port": int(os.getenv("MCP_STUDIO_PORT", "10724")),
+        "debug": os.getenv("MCP_STUDIO_DEBUG", "true").lower() == "true",
+        "workers": int(os.getenv("MCP_STUDIO_WORKERS", "1")),
+        "log_level": os.getenv("MCP_STUDIO_LOG_LEVEL", "INFO"),
+        "max_restarts": int(os.getenv("WATCHFILES_MAX_RESTARTS", "10")),
+        "restart_delay": float(os.getenv("WATCHFILES_RESTART_DELAY", "1.0")),
+        "backoff_multiplier": float(os.getenv("WATCHFILES_BACKOFF_MULTIPLIER", "1.5")),
+        "health_check_interval": int(os.getenv("WATCHFILES_HEALTH_CHECK_INTERVAL", "30")),
+        "notify_on_crash": os.getenv("WATCHFILES_NOTIFY_ON_CRASH", "true").lower() == "true",
     }
 
 
@@ -349,13 +346,19 @@ async def main():
 
     # Build uvicorn command for MCP Studio
     command = [
-        sys.executable, "-m", "uvicorn",
+        sys.executable,
+        "-m",
+        "uvicorn",
         "mcp_studio.main:app",
-        "--host", config['host'],
-        "--port", str(config['port']),
-        "--reload" if config['debug'] else "--no-reload",
-        "--log-level", config['log_level'].lower(),
-        "--workers", str(config['workers'])
+        "--host",
+        config["host"],
+        "--port",
+        str(config["port"]),
+        "--reload" if config["debug"] else "--no-reload",
+        "--log-level",
+        config["log_level"].lower(),
+        "--workers",
+        str(config["workers"]),
     ]
 
     # Health check URL
@@ -365,12 +368,12 @@ async def main():
     runner = CrashproofRunner(
         command=command,
         cwd=Path(__file__).parent,
-        max_restarts=config['max_restarts'],
-        restart_delay=config['restart_delay'],
-        backoff_multiplier=config['backoff_multiplier'],
+        max_restarts=config["max_restarts"],
+        restart_delay=config["restart_delay"],
+        backoff_multiplier=config["backoff_multiplier"],
         health_check_url=health_url,
-        health_check_interval=config['health_check_interval'],
-        notify_on_crash=config['notify_on_crash']
+        health_check_interval=config["health_check_interval"],
+        notify_on_crash=config["notify_on_crash"],
     )
 
     await runner.run()

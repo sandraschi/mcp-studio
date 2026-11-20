@@ -75,8 +75,8 @@ class Settings(BaseSettings if BaseSettings is not object else object):
     DEBUG: bool = True
 
     # Server
-    HOST: str = "0.0.0.0"  # noqa: S104 - Bind to all interfaces
-    PORT: int = 7787
+    HOST: str = "127.0.0.1"
+    PORT: int = 10724
     RELOAD: bool = True
     WORKERS: int = 1
 
@@ -89,7 +89,15 @@ class Settings(BaseSettings if BaseSettings is not object else object):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
     # CORS
-    BACKEND_CORS_ORIGINS: list[str] = ["*"]  # noqa: RUF012 - pydantic settings field
+    BACKEND_CORS_ORIGINS: list[str] = [  # noqa: RUF012 - pydantic settings field
+        "http://127.0.0.1:10724",
+        "http://localhost:10724",
+        "http://127.0.0.1:10725",
+        "http://localhost:10725",
+        "tauri://localhost",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+    ]
 
     # Database
     DATABASE_URL: str = "sqlite:///./mcp-studio.db"

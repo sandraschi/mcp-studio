@@ -21,6 +21,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+
 def create_api_app() -> FastAPI:
     """Create and configure the API-only FastAPI application."""
 
@@ -30,13 +31,21 @@ def create_api_app() -> FastAPI:
         version="1.0.0",
         docs_url="/docs",
         redoc_url="/redoc",
-        openapi_url="/openapi.json"
+        openapi_url="/openapi.json",
     )
 
     # CORS middleware
     app.add_middleware(
         fastapi.middleware.cors.CORSMiddleware,
-        allow_origins=["*"],  # Configure for production
+        allow_origins=[
+            "http://127.0.0.1:10724",
+            "http://localhost:10724",
+            "http://127.0.0.1:10725",
+            "http://localhost:10725",
+            "tauri://localhost",
+            "http://tauri.localhost",
+            "https://tauri.localhost",
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -44,6 +53,7 @@ def create_api_app() -> FastAPI:
 
     # Add basic API endpoints directly
     print("[DEBUG] Adding API endpoints...")
+
     @app.get("/api/v1/test")
     async def api_test():
         """API test endpoint."""
@@ -56,16 +66,13 @@ def create_api_app() -> FastAPI:
         return {
             "status": "no_data",
             "message": "No scan data yet. Click 'START REPO SCAN' to analyze repositories.",
-            "scan_url": "/api/v1/repos/run_scan/"
+            "scan_url": "/api/v1/repos/run_scan/",
         }
 
     @app.post("/api/v1/repos/run_scan/")
     async def run_scan():
         """Start repository scan."""
-        return {
-            "status": "scan_started",
-            "message": "Repository scan started in background."
-        }
+        return {"status": "scan_started", "message": "Repository scan started in background."}
 
     # Health check endpoint
     @app.get("/health")
@@ -79,11 +86,7 @@ def create_api_app() -> FastAPI:
         """Handle validation errors."""
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={
-                "error": "Validation Error",
-                "details": exc.errors(),
-                "body": exc.body
-            },
+            content={"error": "Validation Error", "details": exc.errors(), "body": exc.body},
         )
 
     return app
@@ -101,13 +104,7 @@ def main():
 
     print(f"[API SERVER] Starting on http://localhost:{port}")
 
-    uvicorn.run(
-        "backend.api_server:app",
-        host="0.0.0.0",
-        port=port,
-        reload=True,
-        log_level="info"
-    )
+    uvicorn.run("backend.api_server:app", host="127.0.0.1", port=port, reload=True, log_level="info")
 
 
 if __name__ == "__main__":

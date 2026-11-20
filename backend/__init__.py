@@ -19,12 +19,7 @@ from fastmcp import FastMCP
 
 from .app.core.config import settings
 from .app.core.logging import configure_logging
-from .tools.registry import (
-    initialize_registry,
-    setup_fastmcp_with_all_tools,
-    setup_fastmcp_minimal,
-    get_registry_stats
-)
+from .tools.registry import get_registry_stats, initialize_registry, setup_fastmcp_minimal, setup_fastmcp_with_all_tools
 
 # Configure logging early
 configure_logging()
@@ -59,7 +54,7 @@ def create_app() -> FastMCP:
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.BACKEND_CORS_ORIGINS or ["*"],
+        allow_origins=settings.BACKEND_CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -67,6 +62,7 @@ def create_app() -> FastMCP:
 
     # Include API routers
     from .app.api import router as api_router
+
     app.include_router(api_router, prefix="/api")
 
     # Mount static files
@@ -100,7 +96,7 @@ def create_mcp_server(
     name: str = "MCP Studio Server",
     include_experimental: bool = False,
     include_deprecated: bool = False,
-    minimal_mode: bool = False
+    minimal_mode: bool = False,
 ) -> FastMCP:
     """Create and configure a FastMCP server with MCP Studio tools.
 
@@ -121,31 +117,26 @@ def create_mcp_server(
         name=name,
         minimal_mode=minimal_mode,
         include_experimental=include_experimental,
-        include_deprecated=include_deprecated
+        include_deprecated=include_deprecated,
     )
 
     # Create FastMCP server
     mcp = FastMCP(
-        name=name,
-        version=__version__,
-        instructions="MCP Studio - Tools for managing MCP servers and infrastructure"
+        name=name, version=__version__, instructions="MCP Studio - Tools for managing MCP servers and infrastructure"
     )
 
     # Store configuration for later setup
     mcp._mcp_studio_config = {
-        'include_experimental': include_experimental,
-        'include_deprecated': include_deprecated,
-        'minimal_mode': minimal_mode
+        "include_experimental": include_experimental,
+        "include_deprecated": include_deprecated,
+        "minimal_mode": minimal_mode,
     }
 
     return mcp
 
 
 async def setup_tools(
-    mcp: FastMCP,
-    include_experimental: bool = None,
-    include_deprecated: bool = None,
-    minimal_mode: bool = None
+    mcp: FastMCP, include_experimental: bool = None, include_deprecated: bool = None, minimal_mode: bool = None
 ) -> int:
     """Set up MCP tools for a FastMCP server instance.
 
@@ -159,21 +150,21 @@ async def setup_tools(
         Number of tools registered
     """
     # Get configuration from server or use provided values
-    config = getattr(mcp, '_mcp_studio_config', {})
+    config = getattr(mcp, "_mcp_studio_config", {})
 
     if include_experimental is None:
-        include_experimental = config.get('include_experimental', False)
+        include_experimental = config.get("include_experimental", False)
     if include_deprecated is None:
-        include_deprecated = config.get('include_deprecated', False)
+        include_deprecated = config.get("include_deprecated", False)
     if minimal_mode is None:
-        minimal_mode = config.get('minimal_mode', False)
+        minimal_mode = config.get("minimal_mode", False)
 
     logger.info(
         "Setting up MCP Studio tools",
-        server_name=getattr(mcp, 'name', 'Unknown'),
+        server_name=getattr(mcp, "name", "Unknown"),
         minimal_mode=minimal_mode,
         include_experimental=include_experimental,
-        include_deprecated=include_deprecated
+        include_deprecated=include_deprecated,
     )
 
     try:
@@ -181,25 +172,17 @@ async def setup_tools(
             count = await setup_fastmcp_minimal(mcp)
         else:
             count = await setup_fastmcp_with_all_tools(
-                mcp,
-                include_experimental=include_experimental,
-                include_deprecated=include_deprecated
+                mcp, include_experimental=include_experimental, include_deprecated=include_deprecated
             )
 
         logger.info(
-            "MCP Studio tools setup completed",
-            tools_registered=count,
-            server_name=getattr(mcp, 'name', 'Unknown')
+            "MCP Studio tools setup completed", tools_registered=count, server_name=getattr(mcp, "name", "Unknown")
         )
 
         return count
 
     except Exception as e:
-        logger.error(
-            "Failed to setup MCP Studio tools",
-            error=str(e),
-            exc_info=True
-        )
+        logger.error("Failed to setup MCP Studio tools", error=str(e), exc_info=True)
         return 0
 
 
@@ -210,7 +193,7 @@ def run(
     mcp_name: str = "MCP Studio Server",
     include_experimental: bool = False,
     include_deprecated: bool = False,
-    minimal_mode: bool = False
+    minimal_mode: bool = False,
 ) -> None:
     """Run MCP Studio in different modes.
 
@@ -229,6 +212,7 @@ def run(
             app = create_app()
 
             import uvicorn
+
             uvicorn.run(
                 app,
                 host=host or settings.HOST,
@@ -244,7 +228,7 @@ def run(
                     name=mcp_name,
                     include_experimental=include_experimental,
                     include_deprecated=include_deprecated,
-                    minimal_mode=minimal_mode
+                    minimal_mode=minimal_mode,
                 )
 
                 # Setup tools
@@ -269,6 +253,7 @@ def run(
 
 # Convenience functions for common use cases
 
+
 def create_minimal_server(name: str = "MCP Studio Minimal") -> FastMCP:
     """Create a minimal MCP server with safe tools only."""
     return create_mcp_server(name=name, minimal_mode=True)
@@ -276,20 +261,12 @@ def create_minimal_server(name: str = "MCP Studio Minimal") -> FastMCP:
 
 def create_full_server(name: str = "MCP Studio Full") -> FastMCP:
     """Create a full MCP server with all tools including experimental."""
-    return create_mcp_server(
-        name=name,
-        include_experimental=True,
-        include_deprecated=False
-    )
+    return create_mcp_server(name=name, include_experimental=True, include_deprecated=False)
 
 
 def create_development_server(name: str = "MCP Studio Dev") -> FastMCP:
     """Create a development MCP server with all tools for testing."""
-    return create_mcp_server(
-        name=name,
-        include_experimental=True,
-        include_deprecated=True
-    )
+    return create_mcp_server(name=name, include_experimental=True, include_deprecated=True)
 
 
 # Example usage and CLI integration
@@ -297,43 +274,13 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="MCP Studio - Manage MCP servers")
-    parser.add_argument(
-        "--mode",
-        choices=["web", "mcp"],
-        default="web",
-        help="Run mode: web interface or MCP server"
-    )
-    parser.add_argument(
-        "--host",
-        default=None,
-        help="Host to bind to (web mode only)"
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=None,
-        help="Port to bind to (web mode only)"
-    )
-    parser.add_argument(
-        "--name",
-        default="MCP Studio Server",
-        help="MCP server name (mcp mode only)"
-    )
-    parser.add_argument(
-        "--experimental",
-        action="store_true",
-        help="Include experimental tools"
-    )
-    parser.add_argument(
-        "--deprecated",
-        action="store_true",
-        help="Include deprecated tools"
-    )
-    parser.add_argument(
-        "--minimal",
-        action="store_true",
-        help="Use minimal tool set"
-    )
+    parser.add_argument("--mode", choices=["web", "mcp"], default="web", help="Run mode: web interface or MCP server")
+    parser.add_argument("--host", default=None, help="Host to bind to (web mode only)")
+    parser.add_argument("--port", type=int, default=None, help="Port to bind to (web mode only)")
+    parser.add_argument("--name", default="MCP Studio Server", help="MCP server name (mcp mode only)")
+    parser.add_argument("--experimental", action="store_true", help="Include experimental tools")
+    parser.add_argument("--deprecated", action="store_true", help="Include deprecated tools")
+    parser.add_argument("--minimal", action="store_true", help="Use minimal tool set")
 
     args = parser.parse_args()
 
@@ -344,5 +291,5 @@ if __name__ == "__main__":
         mcp_name=args.name,
         include_experimental=args.experimental,
         include_deprecated=args.deprecated,
-        minimal_mode=args.minimal
+        minimal_mode=args.minimal,
     )
