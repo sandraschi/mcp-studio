@@ -22,11 +22,12 @@ import re
 import subprocess
 import sys
 import time
+import traceback
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-import traceback
+
 import httpx  # type: ignore[import-untyped]
 
 # Load environment variables from .env
@@ -50,10 +51,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info(f"Logging initialized. Log file: {LOG_FILE}")
 
+import uvicorn  # type: ignore[import-untyped]
 from fastapi import FastAPI, HTTPException, Request  # type: ignore[import-untyped]
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore[import-untyped]
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse  # type: ignore[import-untyped]
-import uvicorn  # type: ignore[import-untyped]
 
 # FastMCP client imports
 try:
@@ -96,10 +97,7 @@ MCP_CLIENT_CONFIGS = {
     ],
     "windsurf-ide": [
         # Windsurf IDE (Codeium) - multiple possible locations
-        Path(os.environ.get("APPDATA", ""))
-        / "Codeium"
-        / "Windsurf"
-        / "mcp_config.json",  # Primary location
+        Path(os.environ.get("APPDATA", "")) / "Codeium" / "Windsurf" / "mcp_config.json",  # Primary location
         Path(os.environ.get("APPDATA", ""))
         / "Windsurf"
         / "User"
@@ -269,7 +267,21 @@ No worries mate, we'll sort your code out!""",
 # ═══════════════════════════════════════════════════════════════════════════════
 
 app = FastAPI(title="MCP Studio", version=VERSION)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:10724",
+        "http://localhost:10724",
+        "http://127.0.0.1:10725",
+        "http://localhost:10725",
+        "tauri://localhost",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Global state
 state = {
@@ -294,7 +306,7 @@ state = {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def discover_mcp_clients() -> Dict[str, List[Dict]]:
+def discover_mcp_clients() -> dict[str, list[dict]]:
     """
     Discover MCP servers from all known client configurations.
 
@@ -347,7 +359,7 @@ def discover_mcp_clients() -> Dict[str, List[Dict]]:
                 continue
 
             try:
-                with open(check_path, "r", encoding="utf-8") as f:
+                with open(check_path, encoding="utf-8") as f:
                     config = json.load(f)
 
                 # Different clients use different JSON structures
@@ -405,7 +417,7 @@ def discover_mcp_clients() -> Dict[str, List[Dict]]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
-def fast_py_glob(directory: Path, max_depth: int = 3) -> List[Path]:
+def fast_py_glob(directory: Path, max_depth: int = 3) -> list[Path]:
     """Fast python file glob with depth limit and skip dirs."""
     results = []
 
@@ -422,18 +434,10 @@ def fast_py_glob(directory: Path, max_depth: int = 3) -> List[Path]:
                 name_lower = item.name.lower()
                 if item.is_dir():
                     # Skip venv, cache, and hidden dirs
-                    if (
-                        name_lower in SKIP_DIRS
-                        or item.name.startswith(".")
-                        or item.name.endswith(".egg-info")
-                    ):
+                    if name_lower in SKIP_DIRS or item.name.startswith(".") or item.name.endswith(".egg-info"):
                         continue
                     _walk(item, depth + 1)
-                elif (
-                    item.suffix == ".py"
-                    and "test" not in name_lower
-                    and name_lower != "__init__.py"
-                ):
+                elif item.suffix == ".py" and "test" not in name_lower and name_lower != "__init__.py":
                     # Skip backup/development files
                     if any(x in name_lower for x in ["_fixed", "_backup", "_old", "_dev", "_wip"]):
                         continue
@@ -445,7 +449,7 @@ def fast_py_glob(directory: Path, max_depth: int = 3) -> List[Path]:
     return results
 
 
-def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
+def analyze_repo(repo_path: Path) -> dict[str, Any] | None:
     """Analyze a single MCP repository - COPIED FROM WORKING runt_api.py."""
     info = {
         "name": repo_path.name,
@@ -520,20 +524,14 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         r"@(?:(?:app|mcp|self(?:\.(?:app|mcp))?(?:_server\.mcp)?|server)\.)?tool(?:\s*\(|(?=\s*(?:\r?\n|def\s)))",
         re.MULTILINE,
     )
-    nonconforming_pattern = re.compile(
-        r"def register_\w+_tool\s*\(|\.add_tool\s*\(|register_tool\s*\("
-    )
+    nonconforming_pattern = re.compile(r"def register_\w+_tool\s*\(|\.add_tool\s*\(|register_tool\s*\(")
     tool_count = 0
 
     pkg_name = repo_path.name.replace("-", "_")
     # Try multiple package name variations
     pkg_name_short = pkg_name.replace("_mcp", "").replace("mcp_", "")
     # Also try inserting underscore before mcp (calibremcp -> calibre_mcp)
-    pkg_name_underscore = (
-        pkg_name.replace("mcp", "_mcp")
-        if "mcp" in pkg_name and "_mcp" not in pkg_name
-        else pkg_name
-    )
+    pkg_name_underscore = pkg_name.replace("mcp", "_mcp") if "mcp" in pkg_name and "_mcp" not in pkg_name else pkg_name
 
     # Find the tools directory and its __init__.py
     tools_init_paths = [
@@ -635,9 +633,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             # This distinguishes it from general register_tools functions (like blender-mcp)
             has_register_tools = "def register_tools" in init_text
             has_portmanteau_imports = (
-                "from .manage_" in init_text
-                or "from .query_" in init_text
-                or "from .analyze_" in init_text
+                "from .manage_" in init_text or "from .query_" in init_text or "from .analyze_" in init_text
             )
             uses_portmanteau_pattern = has_register_tools and has_portmanteau_imports
             # Check for PORTMANTEAU_MODULES list pattern (pywinauto-mcp style)
@@ -712,9 +708,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         py_files_to_scan = None  # Will filter by imported_tool_modules
     # If PORTMANTEAU_MODULES list found, only count those files
     elif portmanteau_modules:
-        py_files_to_scan = [
-            tools_dir / f"{m}.py" for m in portmanteau_modules if (tools_dir / f"{m}.py").exists()
-        ]
+        py_files_to_scan = [tools_dir / f"{m}.py" for m in portmanteau_modules if (tools_dir / f"{m}.py").exists()]
         search_dirs = []
     # If has portmanteau/ subdir with actual tools, ONLY count from there
     elif portmanteau_dir:
@@ -723,9 +717,9 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         for pf in portmanteau_dir.glob("*.py"):
             if pf.name != "__init__.py":
                 try:
-                    if "@mcp.tool" in pf.read_text(
+                    if "@mcp.tool" in pf.read_text(encoding="utf-8", errors="ignore") or "@app.tool" in pf.read_text(
                         encoding="utf-8", errors="ignore"
-                    ) or "@app.tool" in pf.read_text(encoding="utf-8", errors="ignore"):
+                    ):
                         has_tools = True
                         break
                 except Exception:
@@ -734,10 +728,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
             search_dirs = [portmanteau_dir]
             # Also include plugins/ subdirs that DON'T have a corresponding portmanteau
             if plugins_dir:
-                portmanteau_names = {
-                    p.stem.replace("_management", "")
-                    for p in portmanteau_dir.glob("*_management.py")
-                }
+                portmanteau_names = {p.stem.replace("_management", "") for p in portmanteau_dir.glob("*_management.py")}
                 for plugin_subdir in plugins_dir.iterdir():
                     if plugin_subdir.is_dir() and plugin_subdir.name not in portmanteau_names:
                         search_dirs.append(plugin_subdir)
@@ -763,8 +754,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     or filename.startswith("query_")
                     or filename.startswith("analyze_")
                     or filename.endswith("_portmanteau")
-                    or filename
-                    in {"test_calibre_connection", "calibre_ocr_tool"}  # Known entry points
+                    or filename in {"test_calibre_connection", "calibre_ocr_tool"}  # Known entry points
                 )
                 if not is_portmanteau_entry:
                     continue
@@ -788,9 +778,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
 
                 path_str = str(py_file).lower()
                 is_portmanteau_file = (
-                    "portmanteau" in path_str
-                    or path_str.endswith("_tool.py")
-                    or path_str.endswith("_tools.py")
+                    "portmanteau" in path_str or path_str.endswith("_tool.py") or path_str.endswith("_tools.py")
                 )
 
                 if is_portmanteau_file:
@@ -864,9 +852,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                     pass  # Non-critical file read error
 
     if has_server_tools and has_tools_dir_tools:
-        info["runt_reasons"].append(
-            "Tools split between server.py and tools/ (incomplete refactor)"
-        )
+        info["runt_reasons"].append("Tools split between server.py and tools/ (incomplete refactor)")
         info["issues"].append("Split tools (server.py + tools/)")
         info["recommendations"].append("Move all tools to tools/ directory, keep server.py clean")
 
@@ -962,11 +948,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
 
     # Check for MCPB packaging (manifest.json)
     has_mcpb = (repo_path / "manifest.json").exists()
-    has_dxt = (
-        (repo_path / "dxt").exists() or (repo_path / "dxt").is_dir()
-        if (repo_path / "dxt").exists()
-        else False
-    )
+    has_dxt = (repo_path / "dxt").exists() or (repo_path / "dxt").is_dir() if (repo_path / "dxt").exists() else False
     info["has_mcpb"] = has_mcpb
     info["has_dxt"] = has_dxt
 
@@ -981,18 +963,14 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
         info["recommendations"].append("Migrate from DXT to MCPB (manifest.json)")
 
     # Check for README
-    has_readme = any(
-        (repo_path / f).exists() for f in ["README.md", "README.rst", "README.txt", "README"]
-    )
+    has_readme = any((repo_path / f).exists() for f in ["README.md", "README.rst", "README.txt", "README"])
     if not has_readme:
         info["runt_reasons"].append("No README")
         info["issues"].append("No README")
         info["recommendations"].append("Add README.md with usage instructions")
 
     # Check for LICENSE
-    has_license = any(
-        (repo_path / f).exists() for f in ["LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING"]
-    )
+    has_license = any((repo_path / f).exists() for f in ["LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING"])
     if not has_license:
         info["runt_reasons"].append("No LICENSE file")
         info["issues"].append("No LICENSE")
@@ -1060,9 +1038,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     server_lines = 0
     if monolithic_server:
         try:
-            server_lines = len(
-                monolithic_server.read_text(encoding="utf-8", errors="ignore").splitlines()
-            )
+            server_lines = len(monolithic_server.read_text(encoding="utf-8", errors="ignore").splitlines())
         except Exception:
             pass  # Server file line count failed
     if server_lines > 1000:
@@ -1088,11 +1064,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     src_dir = repo_path / "src"
     if src_dir.exists():
         for subdir in src_dir.iterdir():
-            if (
-                subdir.is_dir()
-                and not subdir.name.startswith(".")
-                and not subdir.name.startswith("_")
-            ):
+            if subdir.is_dir() and not subdir.name.startswith(".") and not subdir.name.startswith("_"):
                 dual_search_dirs.append(subdir)
 
     # Look for MCP server file
@@ -1115,11 +1087,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
                         if "FastAPI" in content or "fastapi" in content:
                             has_fastapi_server = True
                             # Check for health endpoint
-                            if (
-                                "/health" in content
-                                or '@app.get("/health")' in content
-                                or "health" in content.lower()
-                            ):
+                            if "/health" in content or '@app.get("/health")' in content or "health" in content.lower():
                                 has_health_endpoint = True
                             break
                     except Exception:
@@ -1177,9 +1145,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     if tool_count >= 3 and not info["has_proper_docstrings"]:
         info["runt_reasons"].append("Missing proper docstrings (Args/Returns)")
         info["issues"].append("Poor docstrings")
-        info["recommendations"].append(
-            "Add multiline docstrings with Args, Returns, Examples sections"
-        )
+        info["recommendations"].append("Add multiline docstrings with Args, Returns, Examples sections")
     elif info["has_proper_docstrings"]:
         info["features"].append("Good docstrings")
 
@@ -1289,7 +1255,7 @@ def analyze_repo(repo_path: Path) -> Optional[Dict[str, Any]]:
     return info
 
 
-def scan_repos() -> List[Dict[str, Any]]:
+def scan_repos() -> list[dict[str, Any]]:
     """Scan all repositories for MCP servers."""
     results = []
 
@@ -1352,10 +1318,10 @@ def scan_repos() -> List[Dict[str, Any]]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Cache for Cursor config
-_cursor_config_cache: Optional[Dict] = None
+_cursor_config_cache: dict | None = None
 
 
-def load_cursor_config() -> Dict[str, Dict]:
+def load_cursor_config() -> dict[str, dict]:
     """Load Cursor MCP config from ~/.cursor/mcp.json"""
     global _cursor_config_cache
     if _cursor_config_cache is not None:
@@ -1386,7 +1352,7 @@ def load_cursor_config() -> Dict[str, Dict]:
     return _cursor_config_cache
 
 
-def find_cursor_config_for_repo(repo_name: str, repo_path: Path) -> Optional[Dict]:
+def find_cursor_config_for_repo(repo_name: str, repo_path: Path) -> dict | None:
     """Find matching Cursor MCP server config for a repository."""
     configs = load_cursor_config()
     repo_path_str = str(repo_path).replace("\\", "/").lower()
@@ -1402,7 +1368,7 @@ def find_cursor_config_for_repo(repo_name: str, repo_path: Path) -> Optional[Dic
     return None
 
 
-def parse_readme_config(repo_path: Path) -> Optional[Dict]:
+def parse_readme_config(repo_path: Path) -> dict | None:
     """Parse README to find MCP server configuration JSON snippets."""
     readme_files = [
         repo_path / "README.md",
@@ -1423,9 +1389,7 @@ def parse_readme_config(repo_path: Path) -> Optional[Dict]:
 
             # Pattern 1: JSON code blocks with mcpServers
             # Matches ```json ... "mcpServers": {...} ... ```
-            json_block_pattern = (
-                r'```(?:json|javascript)?\s*\n(.*?"mcpServers"\s*:\s*\{[^`]*?\})\s*```'
-            )
+            json_block_pattern = r'```(?:json|javascript)?\s*\n(.*?"mcpServers"\s*:\s*\{[^`]*?\})\s*```'
             matches = re.finditer(json_block_pattern, content, re.DOTALL | re.IGNORECASE)
 
             for match in matches:
@@ -1450,7 +1414,9 @@ def parse_readme_config(repo_path: Path) -> Optional[Dict]:
                 except json.JSONDecodeError:
                     # Try to extract just the server config part
                     # Look for patterns like: "server-name": { "command": "...", "args": [...] }
-                    server_pattern = r'"([^"]+)"\s*:\s*\{[^}]*"command"\s*:\s*"([^"]+)"[^}]*"args"\s*:\s*\[([^\]]*?)\][^}]*\}'
+                    server_pattern = (
+                        r'"([^"]+)"\s*:\s*\{[^}]*"command"\s*:\s*"([^"]+)"[^}]*"args"\s*:\s*\[([^\]]*?)\][^}]*\}'
+                    )
                     server_match = re.search(server_pattern, json_str, re.DOTALL)
                     if server_match:
                         server_id = server_match.group(1)
@@ -1468,9 +1434,7 @@ def parse_readme_config(repo_path: Path) -> Optional[Dict]:
                         env = {}
                         env_match = re.search(r'"env"\s*:\s*\{([^}]*?)\}', json_str, re.DOTALL)
                         if env_match:
-                            for env_pair in re.finditer(
-                                r'"([^"]+)"\s*:\s*"([^"]+)"', env_match.group(1)
-                            ):
+                            for env_pair in re.finditer(r'"([^"]+)"\s*:\s*"([^"]+)"', env_match.group(1)):
                                 env[env_pair.group(1)] = env_pair.group(2)
 
                         return {
@@ -1513,7 +1477,7 @@ def parse_readme_config(repo_path: Path) -> Optional[Dict]:
     return None
 
 
-def parse_pyproject_entrypoint(repo_path: Path) -> Optional[Dict]:
+def parse_pyproject_entrypoint(repo_path: Path) -> dict | None:
     """Parse pyproject.toml to find the MCP server entrypoint."""
     pyproject = repo_path / "pyproject.toml"
     if not pyproject.exists():
@@ -1527,9 +1491,7 @@ def parse_pyproject_entrypoint(repo_path: Path) -> Optional[Dict]:
             import re
 
             # Match patterns like: server = "package.module:main"
-            match = re.search(
-                r'\[project\.scripts\][^\[]*?(\w+)\s*=\s*["\']([^"\']+)["\']', content, re.DOTALL
-            )
+            match = re.search(r'\[project\.scripts\][^\[]*?(\w+)\s*=\s*["\']([^"\']+)["\']', content, re.DOTALL)
             if match:
                 script_name, entry = match.groups()
                 # Parse "package.module:main" -> "-m package.module"
@@ -1569,7 +1531,7 @@ def parse_pyproject_entrypoint(repo_path: Path) -> Optional[Dict]:
     return None
 
 
-async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
+async def connect_repo_server(repo_name: str) -> dict[str, Any]:
     """Connect to an MCP server from a repository using Cursor config or pyproject.toml."""
     repo_path = REPOS_DIR / repo_name
 
@@ -1612,9 +1574,7 @@ async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
 
         if not cursor_config:
             result["status"] = "error"
-            result["error"] = (
-                f"No config found for {repo_name}. Add to Cursor mcp.json or define in pyproject.toml"
-            )
+            result["error"] = f"No config found for {repo_name}. Add to Cursor mcp.json or define in pyproject.toml"
             return result
 
         # Extract config
@@ -1685,7 +1645,7 @@ async def connect_repo_server(repo_name: str) -> Dict[str, Any]:
     return result
 
 
-async def connect_config_server(client: str, server_id: str, server_config: Dict) -> Dict[str, Any]:
+async def connect_config_server(client: str, server_id: str, server_config: dict) -> dict[str, Any]:
     """Connect to an MCP server from client configuration."""
     connection_id = f"{client}:{server_id}"
 
@@ -1847,7 +1807,7 @@ async def create_server(client_name: str, server_data: dict):
 
     try:
         # Read existing config
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
 
         # Determine config structure
@@ -1889,7 +1849,7 @@ async def create_server(client_name: str, server_data: dict):
 
     except Exception as e:
         log(f"❌ Error adding server: {e}")
-        raise HTTPException(500, f"Failed to add server: {str(e)}")
+        raise HTTPException(500, f"Failed to add server: {e!s}")
 
 
 @app.put("/api/clients/{client_name}/servers/{server_id}")
@@ -1925,7 +1885,7 @@ async def update_server(client_name: str, server_id: str, server_data: dict):
         raise HTTPException(404, f"Config file not found: {config_path}")
 
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
 
         # Determine config structure
@@ -1966,7 +1926,7 @@ async def update_server(client_name: str, server_id: str, server_data: dict):
         raise
     except Exception as e:
         log(f"❌ Error updating server: {e}")
-        raise HTTPException(500, f"Failed to update server: {str(e)}")
+        raise HTTPException(500, f"Failed to update server: {e!s}")
 
 
 @app.delete("/api/clients/{client_name}/servers/{server_id}")
@@ -2002,7 +1962,7 @@ async def delete_server(client_name: str, server_id: str):
         raise HTTPException(404, f"Config file not found: {config_path}")
 
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             config = json.load(f)
 
         # Determine config structure
@@ -2032,7 +1992,7 @@ async def delete_server(client_name: str, server_id: str):
         raise
     except Exception as e:
         log(f"❌ Error deleting server: {e}")
-        raise HTTPException(500, f"Failed to delete server: {str(e)}")
+        raise HTTPException(500, f"Failed to delete server: {e!s}")
 
 
 @app.get("/api/repos")
@@ -2041,7 +2001,7 @@ async def get_repo_analysis():
     return scan_repos()
 
 
-def detect_installation_methods(repo_path: Path) -> Dict[str, Any]:
+def detect_installation_methods(repo_path: Path) -> dict[str, Any]:
     """Detect available installation methods for an MCP server."""
     methods = {
         "mcpb": False,
@@ -2063,7 +2023,7 @@ def detect_installation_methods(repo_path: Path) -> Dict[str, Any]:
     package_json = repo_path / "package.json"
     if package_json.exists():
         try:
-            with open(package_json, "r", encoding="utf-8") as f:
+            with open(package_json, encoding="utf-8") as f:
                 pkg = json.load(f)
 
             # Check for bin field (npx support)
@@ -2085,7 +2045,7 @@ def detect_installation_methods(repo_path: Path) -> Dict[str, Any]:
     return methods
 
 
-def get_client_config_hints(client_name: str) -> Dict[str, str]:
+def get_client_config_hints(client_name: str) -> dict[str, str]:
     """Get installation hints for different MCP clients."""
     hints = {
         "claude-desktop": {
@@ -2130,7 +2090,7 @@ def get_client_config_hints(client_name: str) -> Dict[str, str]:
     )
 
 
-def detect_installation_methods(repo_path: Path) -> Dict[str, Any]:
+def detect_installation_methods(repo_path: Path) -> dict[str, Any]:
     """Detect available installation methods for an MCP server."""
     methods = {
         "mcpb": False,
@@ -2152,7 +2112,7 @@ def detect_installation_methods(repo_path: Path) -> Dict[str, Any]:
     package_json = repo_path / "package.json"
     if package_json.exists():
         try:
-            with open(package_json, "r", encoding="utf-8") as f:
+            with open(package_json, encoding="utf-8") as f:
                 pkg = json.load(f)
 
             # Check for bin field (npx support)
@@ -2174,7 +2134,7 @@ def detect_installation_methods(repo_path: Path) -> Dict[str, Any]:
     return methods
 
 
-def get_client_config_hints(client_name: str) -> Dict[str, str]:
+def get_client_config_hints(client_name: str) -> dict[str, str]:
     """Get installation hints for different MCP clients."""
     hints = {
         "claude-desktop": {
@@ -2463,7 +2423,7 @@ async def execute_tool_endpoint(request: Request):
 
     except Exception as e:
         log(f"❌ Tool execution failed: {e}")
-        raise HTTPException(500, f"Execution failed: {str(e)}")
+        raise HTTPException(500, f"Execution failed: {e!s}")
 
 
 @app.get("/api/progress")
@@ -2532,9 +2492,7 @@ async def ai_search_web(query: str, num_results: int = 5):
             resp = await client.get(
                 "https://html.duckduckgo.com/html/",
                 params={"q": query},
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                },
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
             )
 
             if resp.status_code != 200:
@@ -2844,10 +2802,7 @@ async def ai_chat(request: Request):
             context_parts.append(f"FILE: {file_path}\n```\n{file_result['content'][:10000]}\n```")
         elif "items" in file_result:
             items_str = "\n".join(
-                [
-                    f"  {'📁' if i['type'] == 'dir' else '📄'} {i['name']}"
-                    for i in file_result["items"][:50]
-                ]
+                [f"  {'📁' if i['type'] == 'dir' else '📄'} {i['name']}" for i in file_result["items"][:50]]
             )
             context_parts.append(f"DIRECTORY: {file_path}\n{items_str}")
 
@@ -2855,17 +2810,13 @@ async def ai_chat(request: Request):
     if web_search:
         search_result = await ai_search_web(web_search)
         if "results" in search_result:
-            results_str = "\n".join(
-                [f"- [{r['title']}]({r['url']}): {r['snippet']}" for r in search_result["results"]]
-            )
+            results_str = "\n".join([f"- [{r['title']}]({r['url']}): {r['snippet']}" for r in search_result["results"]])
             context_parts.append(f"WEB SEARCH for '{web_search}':\n{results_str}")
 
     # Add repo list context if requested
     if include_repo_context:
         repos_result = await ai_list_repos()
-        repos_str = "\n".join(
-            [f"- {r['name']} ({r.get('type', 'unknown')})" for r in repos_result["repos"][:30]]
-        )
+        repos_str = "\n".join([f"- {r['name']} ({r.get('type', 'unknown')})" for r in repos_result["repos"][:30]])
         context_parts.append(f"AVAILABLE REPOS in {repos_result['base_path']}:\n{repos_str}")
 
     # Get system prompt from database (use selected preprompt or default)
@@ -2883,9 +2834,7 @@ async def ai_chat(request: Request):
         else:
             log(f"⚠️ Preprompt not found: {preprompt_name}, using default")
             # Fallback to builtin
-            system_prompt = PREPROMPTS.get("dev", {}).get(
-                "prompt", "You are a helpful AI assistant."
-            )
+            system_prompt = PREPROMPTS.get("dev", {}).get("prompt", "You are a helpful AI assistant.")
     except Exception as e:
         log(f"❌ Error loading preprompt: {e}")
         import traceback
@@ -2925,9 +2874,7 @@ async def ai_chat(request: Request):
                 "response": response,
                 "context_used": list(context_parts) if context_parts else None,
                 "preprompt_used": preprompt_name,
-                "preprompt_found": preprompt_data is not None
-                if "preprompt_data" in locals()
-                else False,
+                "preprompt_found": preprompt_data is not None if "preprompt_data" in locals() else False,
             }
 
     except httpx.TimeoutException:
@@ -5936,9 +5883,7 @@ def is_port_available(port: int) -> bool:
 
 def find_available_port(start_port: int, max_attempts: int = 10) -> int:
     """Find an available port starting from start_port."""
-    logger.info(
-        f"Searching for available port starting from {start_port} (max {max_attempts} attempts)"
-    )
+    logger.info(f"Searching for available port starting from {start_port} (max {max_attempts} attempts)")
     for i in range(max_attempts):
         port = start_port + i
         try:
@@ -5948,14 +5893,12 @@ def find_available_port(start_port: int, max_attempts: int = 10) -> int:
         except Exception as e:
             logger.warning(f"Error checking port {port}: {e}")
             continue
-    error_msg = (
-        f"Could not find available port in range {start_port}-{start_port + max_attempts - 1}"
-    )
+    error_msg = f"Could not find available port in range {start_port}-{start_port + max_attempts - 1}"
     logger.error(error_msg)
     raise RuntimeError(error_msg)
 
 
-def get_port_owner_info(port: int) -> Optional[Dict[str, Any]]:
+def get_port_owner_info(port: int) -> dict[str, Any] | None:
     """Get information about what process is using a port (Windows)."""
     if sys.platform != "win32":
         logger.debug("get_port_owner_info only works on Windows")
@@ -6108,27 +6051,23 @@ if __name__ == "__main__":
 
                 if port_info:
                     log(f"   Port {PORT} is being used by:")
-                    log(
-                        f"   • Process: {port_info.get('name', 'Unknown')} (PID: {port_info.get('pid', 'Unknown')})"
-                    )
+                    log(f"   • Process: {port_info.get('name', 'Unknown')} (PID: {port_info.get('pid', 'Unknown')})")
                     log(f"   • Path: {port_info.get('path', 'Unknown')}")
                     logger.error(
                         f"Port {PORT} used by: {port_info.get('name', 'Unknown')} (PID: {port_info.get('pid', 'Unknown')})"
                     )
 
-                log(f"\n💡 Solutions:")
-                log(f"   1. Stop the conflicting process:")
+                log("\n💡 Solutions:")
+                log("   1. Stop the conflicting process:")
                 if port_info and port_info.get("pid"):
                     log(f"      Stop-Process -Id {port_info['pid']} -Force")
                 else:
-                    log(
-                        f"      Get-NetTCPConnection -LocalPort {PORT} | Select-Object OwningProcess"
-                    )
-                    log(f"      Then: Stop-Process -Id <PID> -Force")
-                log(f"   2. Use a different port:")
-                log(f"      Set environment variable: $env:PORT=8002")
-                log(f"      Or edit .env file: PORT=8002")
-                log(f"   3. Auto-find available port (attempting now)...")
+                    log(f"      Get-NetTCPConnection -LocalPort {PORT} | Select-Object OwningProcess")
+                    log("      Then: Stop-Process -Id <PID> -Force")
+                log("   2. Use a different port:")
+                log("      Set environment variable: $env:PORT=8002")
+                log("      Or edit .env file: PORT=8002")
+                log("   3. Auto-find available port (attempting now)...")
 
                 try:
                     logger.info("Attempting to find available port...")
@@ -6139,7 +6078,7 @@ if __name__ == "__main__":
                 except RuntimeError as e:
                     logger.error(f"Failed to find available port: {e}", exc_info=True)
                     log(f"❌ {e}")
-                    log(f"   Please manually specify a port or stop conflicting processes.")
+                    log("   Please manually specify a port or stop conflicting processes.")
                     sys.exit(1)
             else:
                 logger.info(f"Port {PORT} is available")
@@ -6171,7 +6110,7 @@ if __name__ == "__main__":
             logger.info(f"Server will be accessible at: http://localhost:{actual_port}")
             logger.info(f"API docs will be at: http://localhost:{actual_port}/docs")
 
-            uvicorn.run(app, host="0.0.0.0", port=actual_port, log_level="warning")
+            uvicorn.run(app, host="127.0.0.1", port=actual_port, log_level="warning")
 
         except OSError as e:
             error_msg = f"OSError starting server: {e}"
@@ -6179,19 +6118,17 @@ if __name__ == "__main__":
 
             if "address already in use" in str(e).lower() or "10048" in str(e):
                 log(f"❌ PORT CONFLICT: Port {actual_port} is already in use!")
-                log(f"   Another process started using the port after we checked.")
+                log("   Another process started using the port after we checked.")
                 logger.error(f"Port {actual_port} conflict detected after initial check")
-                log(f"   Solutions:")
-                log(f"   1. Stop the conflicting process:")
-                log(
-                    f"      Get-NetTCPConnection -LocalPort {actual_port} | Select-Object OwningProcess"
-                )
-                log(f"      Then: Stop-Process -Id <PID> -Force")
-                log(f"   2. Use a different port:")
+                log("   Solutions:")
+                log("   1. Stop the conflicting process:")
+                log(f"      Get-NetTCPConnection -LocalPort {actual_port} | Select-Object OwningProcess")
+                log("      Then: Stop-Process -Id <PID> -Force")
+                log("   2. Use a different port:")
                 log(f"      Set environment variable: $env:PORT={actual_port + 1}")
             else:
                 log(f"❌ Server startup error: {e}")
-            logger.error(f"Server startup failed. Exiting.")
+            logger.error("Server startup failed. Exiting.")
             sys.exit(1)
 
         except KeyboardInterrupt:

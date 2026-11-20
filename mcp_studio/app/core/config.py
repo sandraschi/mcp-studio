@@ -75,8 +75,8 @@ class Settings(BaseSettings if BaseSettings is not object else object):
     DEBUG: bool = True
 
     # Server
-    HOST: str = "0.0.0.0"  # noqa: S104 - Bind to all interfaces
-    PORT: int = 7787
+    HOST: str = "127.0.0.1"
+    PORT: int = 10724
     RELOAD: bool = True
     WORKERS: int = 1
 

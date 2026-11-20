@@ -75,7 +75,7 @@ class Settings(BaseSettings if BaseSettings is not object else object):  # type:
     DEBUG: bool = True
 
     # Server (reservoir port 10724 per WEBAPP_PORTS.md)
-    HOST: str = "0.0.0.0"
+    HOST: str = "127.0.0.1"
     PORT: int = 10724
     RELOAD: bool = True
     WORKERS: int = 1

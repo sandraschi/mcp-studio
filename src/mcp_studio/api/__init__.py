@@ -27,7 +27,15 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=[
+        "http://127.0.0.1:10724",
+        "http://localhost:10724",
+        "http://127.0.0.1:10725",
+        "http://localhost:10725",
+        "tauri://localhost",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -69,4 +77,4 @@ async def global_exception_handler(request: Any, exc: Any) -> Any:
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=7787)
+    uvicorn.run(app, host="127.0.0.1", port=10724)

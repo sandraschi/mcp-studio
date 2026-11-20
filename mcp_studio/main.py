@@ -19,11 +19,11 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .app.core.config import settings
-from .app.core.logging_utils import get_logger, configure_uvicorn_logging
 from .app.api import router as api_router
 from .app.api.endpoints import mcp_servers as mcp_servers_router
 from .app.api.endpoints import repos as repos_router
+from .app.core.config import settings
+from .app.core.logging_utils import configure_uvicorn_logging, get_logger
 from .app.services.mcp_discovery_service import discovery_service, start_discovery, stop_discovery
 
 # Configure logging
@@ -91,7 +91,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     fastapi.middleware.cors.CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS or ["*"],
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -191,6 +191,7 @@ app.include_router(api_router, prefix="/api")
 try:
     logger.info("Attempting to include clients router...")
     from .app.api.clients import router as clients_router
+
     logger.info(f"Clients router has {len(clients_router.routes)} routes before inclusion")
     app.include_router(clients_router, prefix="/api/v1/clients", tags=["clients"])
     logger.info(f"Clients router included with {len(clients_router.routes)} routes at prefix /api/v1/clients")

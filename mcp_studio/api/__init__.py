@@ -3,11 +3,13 @@ MCP Studio API Package
 
 This package contains the FastAPI application and API endpoints for MCP Studio.
 """
-from fastapi import FastAPI, Depends, HTTPException, status
+
+import logging
+from typing import Any, Dict, List, Optional
+
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
-from typing import List, Dict, Any, Optional
-import logging
 
 # Initialize logging
 logger = logging.getLogger("mcp.api")
@@ -19,13 +21,21 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json"
+    openapi_url="/api/openapi.json",
 )
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=[
+        "http://127.0.0.1:10724",
+        "http://localhost:10724",
+        "http://127.0.0.1:10725",
+        "http://localhost:10725",
+        "tauri://localhost",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,7 +48,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 API_PREFIX = "/api/v1"
 
 # Include routers
-from . import auth, tools, server, files, data, development
+from . import auth, data, development, files, server, tools
 
 # Include API routers
 app.include_router(auth.router, prefix=f"{API_PREFIX}/auth", tags=["Authentication"])
@@ -48,19 +58,23 @@ app.include_router(files.router, prefix=f"{API_PREFIX}/files", tags=["Files"])
 app.include_router(data.router, prefix=f"{API_PREFIX}/data", tags=["Data"])
 app.include_router(development.router, prefix=f"{API_PREFIX}/dev", tags=["Development"])
 
+
 # Health check endpoint
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "version": "0.1.0"}
 
+
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
     """Global exception handler."""
-    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
+    logger.error(f"Unhandled exception: {exc!s}", exc_info=True)
     return {"detail": "Internal server error"}, 500
+
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=7787)
+
+    uvicorn.run(app, host="127.0.0.1", port=10724)
