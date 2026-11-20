@@ -18,7 +18,7 @@ def refactor_dashboard():
     content = content.replace(old_import, new_import)
 
     # 2. Add templates initialization
-    old_app_init = 'app = FastAPI(title="MCP Studio", version=VERSION)\napp.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])'
+    old_app_init = 'app = FastAPI(title="MCP Studio", version=VERSION)\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=["tauri://localhost", "https://tauri.localhost"],\n    allow_origin_regex=r"https?://(?:localhost|127\\.0\\.0\\.1)(?::\\d+)?$",\n    allow_methods=["*"],\n    allow_headers=["*"],\n)'
     new_app_init = (
         old_app_init
         + '\n\n# Templates configuration\ntemplates = Jinja2Templates(directory="mcp_studio/templates")'

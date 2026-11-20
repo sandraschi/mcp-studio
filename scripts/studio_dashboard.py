@@ -310,7 +310,13 @@ No worries mate, we'll sort your code out!""",
 # ═══════════════════════════════════════════════════════════════════════════════
 
 app = FastAPI(title="MCP Studio", version=VERSION)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["tauri://localhost", "https://tauri.localhost"],
+    allow_origin_regex=r"https?://(?:localhost|127\.0\.0\.1)(?::\d+)?$",
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Global state
 state = {
